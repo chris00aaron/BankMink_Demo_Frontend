@@ -1,4 +1,5 @@
-import { Shield, LayoutDashboard, FileUp, FileSearch, Activity, Home } from 'lucide-react';
+import { LayoutDashboard, FileUp, FileSearch, Activity, Home } from 'lucide-react';
+import bankMindLogo from '../../assets/logo_BankMind.png';
 
 interface XRAISidebarProps {
   currentScreen: string;
@@ -19,11 +20,11 @@ export function XRAISidebar({ currentScreen, onNavigate, onBackToHome }: XRAISid
       {/* Logo Section */}
       <div className="p-6 border-b border-gray-200">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md">
-            <Shield className="w-6 h-6 text-white" />
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center">
+            <img src={bankMindLogo} alt="BankMind" className="w-full h-full object-contain" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">XRAI Framework</h1>
+            <h1 className="text-xl font-bold text-gray-900">BankMind</h1>
             <p className="text-xs text-gray-500">Fraud Detection System</p>
           </div>
         </div>
@@ -47,15 +48,15 @@ export function XRAISidebar({ currentScreen, onNavigate, onBackToHome }: XRAISid
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = currentScreen === item.id;
-          
+
           return (
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
               className={`
                 w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all
-                ${isActive 
-                  ? 'bg-blue-50 text-blue-600 border border-blue-200 shadow-sm' 
+                ${isActive
+                  ? 'bg-blue-50 text-blue-600 border border-blue-200 shadow-sm'
                   : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border border-transparent'
                 }
               `}

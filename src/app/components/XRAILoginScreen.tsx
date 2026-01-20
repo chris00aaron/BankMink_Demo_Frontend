@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Shield, Lock, User, Eye, EyeOff } from 'lucide-react';
+import bankMindLogo from '../../assets/logo_BankMind.png';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -35,11 +36,11 @@ export function XRAILoginScreen({ onLogin, loginError }: XRAILoginScreenProps) {
         <div className="backdrop-blur-xl bg-white/80 rounded-2xl border border-gray-200 shadow-2xl p-8">
           {/* Logo and Title */}
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 mb-4 shadow-lg shadow-blue-500/20">
-              <Shield className="w-8 h-8 text-white" />
+            <div className="inline-flex items-center justify-center mb-4">
+              <img src={bankMindLogo} alt="BankMind Logo" className="w-24 h-auto" />
             </div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">XRAI Framework</h1>
-            <p className="text-gray-600 text-sm">Sistema de Inteligencia Empresarial</p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">BankMind</h1>
+            <p className="text-gray-600 text-sm">INTELIGENCIA FINANCIERA EN TIEMPO REAL</p>
           </div>
 
           {/* Login Form */}

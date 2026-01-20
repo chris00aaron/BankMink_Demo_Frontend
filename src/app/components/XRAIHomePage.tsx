@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Shield, TrendingUp, Activity, FileCheck, BarChart3, Brain, ArrowRight, Sparkles, ChevronDown, Users, FileText, TrendingDown, AlertTriangle, DollarSign } from 'lucide-react';
 import { useAuth, ServiceType } from '@/app/contexts/AuthContext';
+import bankMindLogo from '../../assets/logo_BankMind.png';
 
 interface XRAIHomePageProps {
   onNavigateToService: (service: ServiceType) => void;
@@ -18,35 +19,36 @@ export function XRAIHomePage({ onNavigateToService, onLogout }: XRAIHomePageProp
     icon: typeof Shield;
     color: string;
   }> = [
-    {
-      id: 'morosidad-detalle',
-      title: 'Morosidad Detalle',
-      description: 'Análisis detallado de patrones de morosidad y predicción de incumplimiento de pagos',
-      icon: TrendingDown,
-      color: 'red'
-    },
-    {
-      id: 'anomalias-transaccionales',
-      title: 'Anomalías Transaccionales',
-      description: 'Sistema avanzado de ML con XGBoost e Isolation Forest para identificar transacciones fraudulentas en tiempo real',
-      icon: Shield,
-      color: 'blue'
-    },
-    {
-      id: 'demanda-efectivo',
-      title: 'Demanda Efectivo',
-      description: 'Predicción de demanda de efectivo en cajeros automáticos y sucursales bancarias',
-      icon: DollarSign,
-      color: 'green'
-    },
-    {
-      id: 'fuga-demanda',
-      title: 'Fuga Demanda',
-      description: 'Detección temprana de clientes con riesgo de abandonar productos o servicios bancarios',
-      icon: AlertTriangle,
-      color: 'orange'
-    }
-  ];
+      // ... (rest of services array if needed, but we focus on import and markup)
+      {
+        id: 'morosidad-detalle',
+        title: 'Morosidad Detalle',
+        description: 'Análisis detallado de patrones de morosidad y predicción de incumplimiento de pagos',
+        icon: TrendingDown,
+        color: 'red'
+      },
+      {
+        id: 'anomalias-transaccionales',
+        title: 'Anomalías Transaccionales',
+        description: 'Sistema avanzado de ML con XGBoost e Isolation Forest para identificar transacciones fraudulentas en tiempo real',
+        icon: Shield,
+        color: 'blue'
+      },
+      {
+        id: 'demanda-efectivo',
+        title: 'Demanda Efectivo',
+        description: 'Predicción de demanda de efectivo en cajeros automáticos y sucursales bancarias',
+        icon: DollarSign,
+        color: 'green'
+      },
+      {
+        id: 'fuga-demanda',
+        title: 'Fuga Demanda',
+        description: 'Detección temprana de clientes con riesgo de abandonar productos o servicios bancarios',
+        icon: AlertTriangle,
+        color: 'orange'
+      }
+    ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50">
@@ -56,14 +58,14 @@ export function XRAIHomePage({ onNavigateToService, onLogout }: XRAIHomePageProp
           <div className="flex items-center justify-between">
             {/* Logo */}
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center shadow-lg shadow-blue-500/30">
-                <Sparkles className="w-6 h-6 text-white" />
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center">
+                <img src={bankMindLogo} alt="BankMind" className="w-full h-full object-contain" />
               </div>
               <div>
                 <h1 className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-                  XRAI Framework
+                  BankMind
                 </h1>
-                <p className="text-xs text-gray-500">AI-Powered Business Intelligence</p>
+                <p className="text-xs text-gray-500">INTELIGENCIA FINANCIERA EN TIEMPO REAL</p>
               </div>
             </div>
 
@@ -71,18 +73,18 @@ export function XRAIHomePage({ onNavigateToService, onLogout }: XRAIHomePageProp
             <div className="hidden md:flex items-center gap-8">
               {/* Servicios Dropdown */}
               <div className="relative">
-                <button 
+                <button
                   onClick={() => setShowServicesDropdown(!showServicesDropdown)}
                   className="flex items-center gap-1 text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors"
                 >
                   Servicios
                   <ChevronDown className={`w-4 h-4 transition-transform ${showServicesDropdown ? 'rotate-180' : ''}`} />
                 </button>
-                
+
                 {showServicesDropdown && (
                   <>
-                    <div 
-                      className="fixed inset-0 z-10" 
+                    <div
+                      className="fixed inset-0 z-10"
                       onClick={() => setShowServicesDropdown(false)}
                     ></div>
                     <div className="absolute top-full mt-2 left-0 w-72 bg-white rounded-xl shadow-xl border border-gray-200 py-2 z-20">
@@ -112,13 +114,13 @@ export function XRAIHomePage({ onNavigateToService, onLogout }: XRAIHomePageProp
               {/* Admin-only menu items */}
               {isAdmin() && (
                 <>
-                  <button 
+                  <button
                     onClick={() => onNavigateToService('auditoria')}
                     className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors"
                   >
                     Auditoría
                   </button>
-                  <button 
+                  <button
                     onClick={() => onNavigateToService('gestion-usuarios')}
                     className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors"
                   >
@@ -160,18 +162,18 @@ export function XRAIHomePage({ onNavigateToService, onLogout }: XRAIHomePageProp
               <Sparkles className="w-4 h-4 text-blue-600" />
               <span className="text-sm font-medium text-blue-700">Plataforma de IA Empresarial</span>
             </div>
-            
+
             <h2 className="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 bg-clip-text text-transparent leading-tight">
               Inteligencia Artificial para<br />Decisiones Empresariales
             </h2>
-            
+
             <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-10 leading-relaxed">
-              Potencia tu negocio con nuestra suite completa de herramientas de análisis predictivo, 
+              Potencia tu negocio con nuestra suite completa de herramientas de análisis predictivo,
               detección de fraude y business intelligence impulsadas por IA de última generación.
             </p>
 
             <div className="flex items-center justify-center gap-4">
-              <button 
+              <button
                 onClick={() => onNavigateToService('anomalias-transaccionales')}
                 className="px-8 py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 transition-all flex items-center gap-2 group"
               >
@@ -222,7 +224,7 @@ export function XRAIHomePage({ onNavigateToService, onLogout }: XRAIHomePageProp
               Suite Completa de Servicios
             </h3>
             <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Accede a nuestras herramientas empresariales de inteligencia artificial 
+              Accede a nuestras herramientas empresariales de inteligencia artificial
               diseñadas para transformar tus operaciones
             </p>
           </div>
@@ -257,7 +259,7 @@ export function XRAIHomePage({ onNavigateToService, onLogout }: XRAIHomePageProp
                     {service.description}
                   </p>
 
-                  <button 
+                  <button
                     className="flex items-center gap-2 font-semibold text-sm text-blue-600 group-hover:gap-3 transition-all"
                   >
                     Acceder Ahora
@@ -310,7 +312,7 @@ export function XRAIHomePage({ onNavigateToService, onLogout }: XRAIHomePageProp
       {/* Footer */}
       <footer className="bg-white border-t border-gray-200 py-12 px-6">
         <div className="max-w-7xl mx-auto text-center text-gray-500 text-sm">
-          <p className="mb-2">© 2026 XRAI Framework. Todos los derechos reservados.</p>
+          <p className="mb-2">© 2026 BankMind. Todos los derechos reservados.</p>
           <p>Plataforma de Inteligencia Artificial Empresarial de Nueva Generación</p>
         </div>
       </footer>
