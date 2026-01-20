@@ -1,5 +1,5 @@
 import { LayoutDashboard, FileUp, FileSearch, Activity, Home } from 'lucide-react';
-import bankMindLogo from '../../assets/logo_BankMind.png';
+import bankMindLogo from '@shared/assets/logo_BankMind.png';
 
 interface XRAISidebarProps {
   currentScreen: string;

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Shield, TrendingUp, Activity, FileCheck, BarChart3, Brain, ArrowRight, Sparkles, ChevronDown, Users, FileText, TrendingDown, AlertTriangle, DollarSign } from 'lucide-react';
 import { useAuth, ServiceType } from '@shared/contexts/AuthContext';
-import bankMindLogo from '../../assets/logo_BankMind.png';
+import bankMindLogo from '@shared/assets/logo_BankMind.png';
 
 interface XRAIHomePageProps {
   onNavigateToService: (service: ServiceType) => void;
