@@ -14,6 +14,9 @@ export default defineConfig({
     alias: {
       // Alias @ to the src directory
       '@': path.resolve(__dirname, './src'),
+      '@shared': path.resolve(__dirname, './src/shared'),
+      '@modules': path.resolve(__dirname, './src/modules'),
+      '@admin': path.resolve(__dirname, './src/admin'),
     },
   },
 })

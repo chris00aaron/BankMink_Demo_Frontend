@@ -1,6 +1,6 @@
 import { LucideIcon, Construction, ArrowLeft } from 'lucide-react';
 import { Button } from './ui/button';
-import { useAuth } from '@/app/contexts/AuthContext';
+import { useAuth } from '@shared/contexts/AuthContext';
 
 interface ServicePlaceholderProps {
   serviceName: string;
@@ -23,7 +23,7 @@ export function ServicePlaceholder({ serviceName, icon: Icon, description, onBac
 
           {/* Service Name */}
           <h1 className="text-3xl font-bold text-gray-900 mb-4">{serviceName}</h1>
-          
+
           {/* Description */}
           <p className="text-lg text-gray-600 mb-8 leading-relaxed">
             {description}

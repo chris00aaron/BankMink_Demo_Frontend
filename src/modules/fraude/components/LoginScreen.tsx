@@ -1,16 +1,16 @@
 import { useState } from 'react';
 import { Shield, Lock, User, Eye, EyeOff } from 'lucide-react';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Checkbox } from './ui/checkbox';
+import { Button } from '@shared/components/ui/button';
+import { Input } from '@shared/components/ui/input';
+import { Label } from '@shared/components/ui/label';
+import { Checkbox } from '@shared/components/ui/checkbox';
 
 interface XRAILoginScreenProps {
   onLogin: (username: string, password: string, rememberPassword: boolean) => void;
   loginError?: string;
 }
 
-export function XRAILoginScreen({ onLogin, loginError }: XRAILoginScreenProps) {
+export function LoginScreen({ onLogin, loginError }: XRAILoginScreenProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);

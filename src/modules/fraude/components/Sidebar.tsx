@@ -6,7 +6,7 @@ interface XRAISidebarProps {
   onBackToHome?: () => void;
 }
 
-export function XRAISidebar({ currentScreen, onNavigate, onBackToHome }: XRAISidebarProps) {
+export function Sidebar({ currentScreen, onNavigate, onBackToHome }: XRAISidebarProps) {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'batch', label: 'Predicción por Lotes', icon: FileUp },
@@ -47,15 +47,15 @@ export function XRAISidebar({ currentScreen, onNavigate, onBackToHome }: XRAISid
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = currentScreen === item.id;
-          
+
           return (
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
               className={`
                 w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all
-                ${isActive 
-                  ? 'bg-blue-50 text-blue-600 border border-blue-200 shadow-sm' 
+                ${isActive
+                  ? 'bg-blue-50 text-blue-600 border border-blue-200 shadow-sm'
                   : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border border-transparent'
                 }
               `}

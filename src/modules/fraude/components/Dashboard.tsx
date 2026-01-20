@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { AlertTriangle, CheckCircle, TrendingUp, Activity, MapPin } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 
-export function XRAIDashboard() {
+export function Dashboard() {
   const [riskRate, setRiskRate] = useState(3.2);
   const [fraudPoints, setFraudPoints] = useState<Array<{ id: number; lat: number; lng: number; severity: 'high' | 'medium' | 'low' }>>([]);
 
@@ -108,7 +108,7 @@ export function XRAIDashboard() {
             <MapPin className="w-5 h-5 text-blue-600" />
             <h2 className="text-xl font-semibold text-gray-900">Mapa de Fraude en Tiempo Real</h2>
           </div>
-          
+
           <div className="relative w-full h-80 bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
             {/* World Map Overlay (simplified) */}
             <div className="absolute inset-0 opacity-10">
@@ -125,7 +125,7 @@ export function XRAIDashboard() {
                 medium: { bg: 'bg-orange-500', glow: 'shadow-orange-500/50' },
                 low: { bg: 'bg-yellow-500', glow: 'shadow-yellow-500/50' },
               };
-              
+
               return (
                 <div
                   key={point.id}
@@ -162,7 +162,7 @@ export function XRAIDashboard() {
         {/* Transaction Distribution Chart */}
         <div className="backdrop-blur-xl bg-white/90 rounded-xl border border-gray-200 p-6 shadow-lg">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Transacciones: Legítimas vs. Fraude</h2>
-          
+
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
@@ -179,7 +179,7 @@ export function XRAIDashboard() {
                   <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
               </Pie>
-              <Tooltip 
+              <Tooltip
                 contentStyle={{
                   backgroundColor: '#ffffff',
                   border: '1px solid #e5e7eb',
@@ -187,8 +187,8 @@ export function XRAIDashboard() {
                   color: '#1f2937',
                 }}
               />
-              <Legend 
-                verticalAlign="bottom" 
+              <Legend
+                verticalAlign="bottom"
                 height={36}
                 wrapperStyle={{ color: '#6b7280' }}
               />
@@ -211,10 +211,10 @@ export function XRAIDashboard() {
             </p>
           </div>
         </div>
-        
+
         {/* Progress Bar */}
         <div className="mt-6 h-3 bg-gray-100 rounded-full overflow-hidden">
-          <div 
+          <div
             className={`h-full transition-all duration-500 ${riskRate > 5 ? 'bg-red-500' : 'bg-emerald-500'}`}
             style={{ width: `${Math.min(riskRate * 10, 100)}%` }}
           ></div>

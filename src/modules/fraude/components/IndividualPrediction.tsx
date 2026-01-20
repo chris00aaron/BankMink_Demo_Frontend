@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { DollarSign, Tag, Store, MapPin, Brain, Activity, TrendingUp } from 'lucide-react';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Button } from '@shared/components/ui/button';
+import { Input } from '@shared/components/ui/input';
+import { Label } from '@shared/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/components/ui/select';
 
 interface PredictionResult {
   xgboost: number;
@@ -12,7 +12,7 @@ interface PredictionResult {
   confidence: number;
 }
 
-export function XRAIIndividualPrediction() {
+export function IndividualPrediction() {
   const [formData, setFormData] = useState({
     amount: '',
     category: '',
@@ -217,24 +217,22 @@ export function XRAIIndividualPrediction() {
             {result ? (
               <div className="space-y-6">
                 {/* Final Verdict */}
-                <div className={`p-6 rounded-xl border-2 ${
-                  result.finalPrediction === 'legitimate' 
-                    ? 'bg-emerald-50 border-emerald-300' 
-                    : result.finalPrediction === 'fraud'
+                <div className={`p-6 rounded-xl border-2 ${result.finalPrediction === 'legitimate'
+                  ? 'bg-emerald-50 border-emerald-300'
+                  : result.finalPrediction === 'fraud'
                     ? 'bg-red-50 border-red-300'
                     : 'bg-orange-50 border-orange-300'
-                }`}>
+                  }`}>
                   <div className="text-center">
                     <p className="text-sm text-gray-600 mb-2">Veredicto Final</p>
-                    <p className={`text-3xl font-bold mb-2 ${
-                      result.finalPrediction === 'legitimate' 
-                        ? 'text-emerald-600' 
-                        : result.finalPrediction === 'fraud'
+                    <p className={`text-3xl font-bold mb-2 ${result.finalPrediction === 'legitimate'
+                      ? 'text-emerald-600'
+                      : result.finalPrediction === 'fraud'
                         ? 'text-red-600'
                         : 'text-orange-600'
-                    }`}>
-                      {result.finalPrediction === 'legitimate' ? 'LEGÍTIMA' : 
-                       result.finalPrediction === 'fraud' ? 'FRAUDE' : 'REVISAR'}
+                      }`}>
+                      {result.finalPrediction === 'legitimate' ? 'LEGÍTIMA' :
+                        result.finalPrediction === 'fraud' ? 'FRAUDE' : 'REVISAR'}
                     </p>
                     <p className="text-sm text-gray-700">
                       Confianza: {result.confidence}%
@@ -254,7 +252,7 @@ export function XRAIIndividualPrediction() {
                       <span className="text-sm font-bold text-blue-600">{result.xgboost}%</span>
                     </div>
                     <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-                      <div 
+                      <div
                         className="h-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-500"
                         style={{ width: `${result.xgboost}%` }}
                       ></div>
@@ -271,7 +269,7 @@ export function XRAIIndividualPrediction() {
                       <span className="text-sm font-bold text-purple-600">{result.isolationForest}%</span>
                     </div>
                     <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-                      <div 
+                      <div
                         className="h-full bg-gradient-to-r from-purple-500 to-purple-600 transition-all duration-500"
                         style={{ width: `${result.isolationForest}%` }}
                       ></div>
@@ -283,11 +281,11 @@ export function XRAIIndividualPrediction() {
                 <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
                   <p className="text-sm font-medium text-gray-900 mb-2">Recomendación</p>
                   <p className="text-xs text-gray-600">
-                    {result.finalPrediction === 'legitimate' 
-                      ? 'La transacción presenta patrones normales. Se recomienda aprobar.' 
+                    {result.finalPrediction === 'legitimate'
+                      ? 'La transacción presenta patrones normales. Se recomienda aprobar.'
                       : result.finalPrediction === 'fraud'
-                      ? 'Se detectaron anomalías significativas. Se recomienda rechazar y revisar manualmente.'
-                      : 'La transacción presenta algunos indicadores inusuales. Se recomienda revisión adicional.'}
+                        ? 'Se detectaron anomalías significativas. Se recomienda rechazar y revisar manualmente.'
+                        : 'La transacción presenta algunos indicadores inusuales. Se recomienda revisión adicional.'}
                   </p>
                 </div>
               </div>

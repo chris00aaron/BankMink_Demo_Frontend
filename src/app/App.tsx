@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { AuthProvider, useAuth, ServiceType } from './contexts/AuthContext';
-import { XRAISidebar } from './components/XRAISidebar';
-import { XRAILoginScreen } from './components/XRAILoginScreen';
-import { XRAIHomePage } from './components/XRAIHomePage';
-import { XRAIDashboard } from './components/XRAIDashboard';
-import { XRAIBatchPrediction } from './components/XRAIBatchPrediction';
-import { XRAIIndividualPrediction } from './components/XRAIIndividualPrediction';
-import { XRAIRiskAnalysis } from './components/XRAIRiskAnalysis';
-import { ServicePlaceholder } from './components/ServicePlaceholder';
-import { AuditoriaModule } from './components/AuditoriaModule';
-import { GestionUsuariosModule } from './components/GestionUsuariosModule';
 import { TrendingDown, AlertTriangle, DollarSign } from 'lucide-react';
+import { AuthProvider, useAuth, ServiceType } from '@shared/contexts/AuthContext';
+import {
+  FraudeSidebar,
+  FraudeLoginScreen,
+  FraudeHomePage,
+  Dashboard,
+  BatchPrediction,
+  IndividualPrediction,
+  RiskAnalysis
+} from '@modules/fraude';
+import { ServicePlaceholder } from '@shared/components/ServicePlaceholder';
+import { AuditoriaModule } from '@admin/auditoria/AuditoriaModule';
+import { GestionUsuariosModule } from '@admin/usuarios/GestionUsuariosModule';
 
 function AppContent() {
   const { user, isAuthenticated, login, logout, hasAccessToService, isAdmin } = useAuth();
@@ -29,7 +31,7 @@ function AppContent() {
   };
 
   // Redirect operarios to their service after login
-  React.useEffect(() => {
+  useEffect(() => {
     if (isAuthenticated && user) {
       if (!isAdmin()) {
         // Map user role to service
@@ -45,13 +47,13 @@ function AppContent() {
         }
       } else {
         // Admin goes to home
-        if (currentView !== 'home' && 
-            currentView !== 'auditoria' && 
-            currentView !== 'gestion-usuarios' &&
-            currentView !== 'morosidad-detalle' &&
-            currentView !== 'anomalias-transaccionales' &&
-            currentView !== 'demanda-efectivo' &&
-            currentView !== 'fuga-demanda') {
+        if (currentView !== 'home' &&
+          currentView !== 'auditoria' &&
+          currentView !== 'gestion-usuarios' &&
+          currentView !== 'morosidad-detalle' &&
+          currentView !== 'anomalias-transaccionales' &&
+          currentView !== 'demanda-efectivo' &&
+          currentView !== 'fuga-demanda') {
           setCurrentView('home');
         }
       }
@@ -84,12 +86,12 @@ function AppContent() {
 
   // Pantalla de Login
   if (!isAuthenticated) {
-    return <XRAILoginScreen onLogin={handleLogin} loginError={loginError} />;
+    return <FraudeLoginScreen onLogin={handleLogin} loginError={loginError} />;
   }
 
   // Página Principal (HomePage) - Solo para admin
   if (currentView === 'home' && isAdmin()) {
-    return <XRAIHomePage onNavigateToService={handleNavigateToService} onLogout={handleLogout} />;
+    return <FraudeHomePage onNavigateToService={handleNavigateToService} onLogout={handleLogout} />;
   }
 
   // Módulo de Auditoría - Solo admin
@@ -143,8 +145,8 @@ function AppContent() {
     return (
       <div className="min-h-screen bg-gray-50 flex">
         {/* Sidebar */}
-        <XRAISidebar 
-          currentScreen={currentScreen} 
+        <FraudeSidebar
+          currentScreen={currentScreen}
           onNavigate={handleNavigate}
           onBackToHome={isAdmin() ? handleBackToHome : undefined}
         />
@@ -153,10 +155,10 @@ function AppContent() {
         <div className="flex-1 ml-64">
           {/* Page Content */}
           <main className="p-8">
-            {currentScreen === 'dashboard' && <XRAIDashboard />}
-            {currentScreen === 'batch' && <XRAIBatchPrediction />}
-            {currentScreen === 'individual' && <XRAIIndividualPrediction />}
-            {currentScreen === 'risk-analysis' && <XRAIRiskAnalysis />}
+            {currentScreen === 'dashboard' && <Dashboard />}
+            {currentScreen === 'batch' && <BatchPrediction />}
+            {currentScreen === 'individual' && <IndividualPrediction />}
+            {currentScreen === 'risk-analysis' && <RiskAnalysis />}
           </main>
         </div>
       </div>
@@ -164,7 +166,7 @@ function AppContent() {
   }
 
   // Fallback a home
-  return <XRAIHomePage onNavigateToService={handleNavigateToService} onLogout={handleLogout} />;
+  return <FraudeHomePage onNavigateToService={handleNavigateToService} onLogout={handleLogout} />;
 }
 
 export default function App() {

@@ -20,7 +20,7 @@ interface Alert {
   factors: RiskFactor[];
 }
 
-export function XRAIRiskAnalysis() {
+export function RiskAnalysis() {
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
   const [alerts, setAlerts] = useState<Alert[]>([]);
 
@@ -174,8 +174,8 @@ export function XRAIRiskAnalysis() {
                   onClick={() => setSelectedAlert(alert)}
                   className={`
                     w-full text-left p-4 rounded-lg border transition-all
-                    ${selectedAlert?.id === alert.id 
-                      ? 'bg-blue-50 border-blue-200 shadow-sm' 
+                    ${selectedAlert?.id === alert.id
+                      ? 'bg-blue-50 border-blue-200 shadow-sm'
                       : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
                     }
                   `}
@@ -208,15 +208,14 @@ export function XRAIRiskAnalysis() {
                   <div>
                     <div className="flex items-center gap-3 mb-2">
                       <h2 className="text-2xl font-bold text-gray-900">{selectedAlert.id}</h2>
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium border ${
-                        selectedAlert.riskScore >= 75 
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium border ${selectedAlert.riskScore >= 75
                           ? 'text-red-600 bg-red-50 border-red-200'
                           : selectedAlert.riskScore >= 50
-                          ? 'text-orange-600 bg-orange-50 border-orange-200'
-                          : 'text-yellow-600 bg-yellow-50 border-yellow-200'
-                      }`}>
-                        {selectedAlert.riskScore >= 75 ? 'Alto Riesgo' : 
-                         selectedAlert.riskScore >= 50 ? 'Riesgo Medio' : 'Bajo Riesgo'}
+                            ? 'text-orange-600 bg-orange-50 border-orange-200'
+                            : 'text-yellow-600 bg-yellow-50 border-yellow-200'
+                        }`}>
+                        {selectedAlert.riskScore >= 75 ? 'Alto Riesgo' :
+                          selectedAlert.riskScore >= 50 ? 'Riesgo Medio' : 'Bajo Riesgo'}
                       </span>
                     </div>
                     <p className="text-sm text-gray-600">Transacción: {selectedAlert.transactionId}</p>
@@ -252,44 +251,41 @@ export function XRAIRiskAnalysis() {
                   {selectedAlert.factors.map((factor) => {
                     const Icon = factor.icon;
                     return (
-                      <div 
+                      <div
                         key={factor.id}
                         className="p-5 rounded-lg bg-gray-50 border border-gray-200 hover:border-gray-300 transition-all"
                       >
                         <div className="flex items-start gap-4">
-                          <div className={`p-3 rounded-lg ${
-                            factor.severity === 'high' ? 'bg-red-100' :
-                            factor.severity === 'medium' ? 'bg-orange-100' :
-                            'bg-yellow-100'
-                          }`}>
-                            <Icon className={`w-5 h-5 ${
-                              factor.severity === 'high' ? 'text-red-600' :
-                              factor.severity === 'medium' ? 'text-orange-600' :
-                              'text-yellow-600'
-                            }`} />
+                          <div className={`p-3 rounded-lg ${factor.severity === 'high' ? 'bg-red-100' :
+                              factor.severity === 'medium' ? 'bg-orange-100' :
+                                'bg-yellow-100'
+                            }`}>
+                            <Icon className={`w-5 h-5 ${factor.severity === 'high' ? 'text-red-600' :
+                                factor.severity === 'medium' ? 'text-orange-600' :
+                                  'text-yellow-600'
+                              }`} />
                           </div>
-                          
+
                           <div className="flex-1">
                             <div className="flex items-center justify-between mb-2">
                               <h4 className="text-base font-semibold text-gray-900">{factor.title}</h4>
                               <div className="flex items-center gap-2">
                                 <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getSeverityColor(factor.severity)}`}>
-                                  {factor.severity === 'high' ? 'Alta' : 
-                                   factor.severity === 'medium' ? 'Media' : 'Baja'}
+                                  {factor.severity === 'high' ? 'Alta' :
+                                    factor.severity === 'medium' ? 'Media' : 'Baja'}
                                 </span>
                                 <span className="text-sm font-bold text-gray-900">+{factor.score}pts</span>
                               </div>
                             </div>
                             <p className="text-sm text-gray-600">{factor.description}</p>
-                            
+
                             {/* Score Bar */}
                             <div className="mt-3 h-2 bg-gray-100 rounded-full overflow-hidden">
-                              <div 
-                                className={`h-full transition-all duration-500 ${
-                                  factor.severity === 'high' ? 'bg-red-500' :
-                                  factor.severity === 'medium' ? 'bg-orange-500' :
-                                  'bg-yellow-500'
-                                }`}
+                              <div
+                                className={`h-full transition-all duration-500 ${factor.severity === 'high' ? 'bg-red-500' :
+                                    factor.severity === 'medium' ? 'bg-orange-500' :
+                                      'bg-yellow-500'
+                                  }`}
                                 style={{ width: `${(factor.score / 50) * 100}%` }}
                               ></div>
                             </div>
@@ -307,11 +303,11 @@ export function XRAIRiskAnalysis() {
                     <div>
                       <p className="text-sm font-medium text-gray-900 mb-1">Recomendación del Sistema</p>
                       <p className="text-xs text-gray-600">
-                        {selectedAlert.riskScore >= 75 
-                          ? 'Esta transacción presenta múltiples indicadores de alto riesgo. Se recomienda bloquear y contactar al cliente para verificación.' 
+                        {selectedAlert.riskScore >= 75
+                          ? 'Esta transacción presenta múltiples indicadores de alto riesgo. Se recomienda bloquear y contactar al cliente para verificación.'
                           : selectedAlert.riskScore >= 50
-                          ? 'La transacción muestra señales de alerta moderadas. Se recomienda revisión manual antes de aprobar.'
-                          : 'La transacción tiene algunos indicadores menores. Monitorear pero se puede proceder con precaución.'}
+                            ? 'La transacción muestra señales de alerta moderadas. Se recomienda revisión manual antes de aprobar.'
+                            : 'La transacción tiene algunos indicadores menores. Monitorear pero se puede proceder con precaución.'}
                       </p>
                     </div>
                   </div>

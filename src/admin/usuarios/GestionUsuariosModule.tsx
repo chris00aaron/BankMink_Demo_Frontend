@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Users, Search, Plus, Edit, Trash2, Shield, ArrowLeft } from 'lucide-react';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Badge } from './ui/badge';
+import { Button } from '@shared/components/ui/button';
+import { Input } from '@shared/components/ui/input';
+import { Badge } from '@shared/components/ui/badge';
 
 interface GestionUsuariosModuleProps {
   onBack: () => void;

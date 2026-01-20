@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Upload, FileText, CheckCircle, AlertTriangle, Loader2, Database } from 'lucide-react';
-import { Button } from './ui/button';
+import { Button } from '@shared/components/ui/button';
 
 interface BatchTransaction {
   id: string;
@@ -12,7 +12,7 @@ interface BatchTransaction {
   prediction: 'legitimate' | 'fraud' | 'review';
 }
 
-export function XRAIBatchPrediction() {
+export function BatchPrediction() {
   const [isDragging, setIsDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -32,7 +32,7 @@ export function XRAIBatchPrediction() {
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    
+
     const droppedFile = e.dataTransfer.files[0];
     if (droppedFile && droppedFile.name.endsWith('.csv')) {
       setFile(droppedFile);
@@ -74,7 +74,7 @@ export function XRAIBatchPrediction() {
             if (idx === currentIndex) {
               const confidence = Math.random() * 100;
               let prediction: 'legitimate' | 'fraud' | 'review';
-              
+
               if (confidence > 85) {
                 prediction = 'legitimate';
               } else if (confidence < 50) {
@@ -95,7 +95,7 @@ export function XRAIBatchPrediction() {
             return t;
           })
         );
-        
+
         currentIndex++;
         setProgress(Math.round((currentIndex / mockData.length) * 100));
       } else {
@@ -145,8 +145,8 @@ export function XRAIBatchPrediction() {
           onDrop={handleDrop}
           className={`
             relative border-2 border-dashed rounded-xl p-12 text-center transition-all
-            ${isDragging 
-              ? 'border-blue-500 bg-blue-50' 
+            ${isDragging
+              ? 'border-blue-500 bg-blue-50'
               : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'
             }
           `}
@@ -163,7 +163,7 @@ export function XRAIBatchPrediction() {
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-50">
               <Upload className="w-8 h-8 text-blue-600" />
             </div>
-            
+
             {file ? (
               <div className="space-y-2">
                 <div className="flex items-center justify-center gap-2 text-gray-900">
@@ -205,7 +205,7 @@ export function XRAIBatchPrediction() {
               <span className="text-blue-600 font-medium">{progress}%</span>
             </div>
             <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div 
+              <div
                 className="h-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300"
                 style={{ width: `${progress}%` }}
               ></div>
@@ -250,8 +250,8 @@ export function XRAIBatchPrediction() {
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {transactions.map((transaction) => (
-                  <tr 
-                    key={transaction.id} 
+                  <tr
+                    key={transaction.id}
                     className="hover:bg-gray-50 transition-colors"
                   >
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -271,10 +271,9 @@ export function XRAIBatchPrediction() {
                         <div className="flex items-center gap-2">
                           <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden max-w-[100px]">
                             <div
-                              className={`h-full ${
-                                transaction.confidence > 85 ? 'bg-emerald-500' : 
+                              className={`h-full ${transaction.confidence > 85 ? 'bg-emerald-500' :
                                 transaction.confidence < 50 ? 'bg-red-500' : 'bg-orange-500'
-                              }`}
+                                }`}
                               style={{ width: `${transaction.confidence}%` }}
                             ></div>
                           </div>
@@ -292,8 +291,8 @@ export function XRAIBatchPrediction() {
                       {transaction.status === 'completed' ? (
                         <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${getPredictionColor(transaction.prediction)}`}>
                           {getPredictionIcon(transaction.prediction)}
-                          {transaction.prediction === 'legitimate' ? 'Legítima' : 
-                           transaction.prediction === 'fraud' ? 'Fraude' : 'Revisar'}
+                          {transaction.prediction === 'legitimate' ? 'Legítima' :
+                            transaction.prediction === 'fraud' ? 'Fraude' : 'Revisar'}
                         </span>
                       ) : transaction.status === 'processing' ? (
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border text-blue-600 bg-blue-50 border-blue-200">

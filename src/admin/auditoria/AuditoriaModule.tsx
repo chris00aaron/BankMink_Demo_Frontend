@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { FileText, Search, Filter, Download, Calendar, User, Activity, ArrowLeft } from 'lucide-react';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
+import { Button } from '@shared/components/ui/button';
+import { Input } from '@shared/components/ui/input';
 
 interface AuditoriaModuleProps {
   onBack: () => void;
@@ -212,11 +212,10 @@ export function AuditoriaModule({ onBack }: AuditoriaModuleProps) {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span
-                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                          log.status === 'success'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-red-100 text-red-700'
-                        }`}
+                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${log.status === 'success'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-700'
+                          }`}
                       >
                         {log.status === 'success' ? 'Exitoso' : 'Fallido'}
                       </span>
