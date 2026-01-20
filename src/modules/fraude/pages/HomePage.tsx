@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Shield, TrendingUp, Activity, FileCheck, BarChart3, Brain, ArrowRight, Sparkles, ChevronDown, Users, FileText, TrendingDown, AlertTriangle, DollarSign } from 'lucide-react';
 import { useAuth, ServiceType } from '@shared/contexts/AuthContext';
+import bankMindLogo from '../../assets/logo_BankMind.png';
 
 interface XRAIHomePageProps {
   onNavigateToService: (service: ServiceType) => void;
@@ -56,14 +57,14 @@ export function HomePage({ onNavigateToService, onLogout }: XRAIHomePageProps) {
           <div className="flex items-center justify-between">
             {/* Logo */}
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center shadow-lg shadow-blue-500/30">
-                <Sparkles className="w-6 h-6 text-white" />
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center">
+                <img src={bankMindLogo} alt="BankMind" className="w-full h-full object-contain" />
               </div>
               <div>
                 <h1 className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-                  XRAI Framework
+                  BankMind
                 </h1>
-                <p className="text-xs text-gray-500">AI-Powered Business Intelligence</p>
+                <p className="text-xs text-gray-500">INTELIGENCIA FINANCIERA EN TIEMPO REAL</p>
               </div>
             </div>
 
@@ -310,7 +311,7 @@ export function HomePage({ onNavigateToService, onLogout }: XRAIHomePageProps) {
       {/* Footer */}
       <footer className="bg-white border-t border-gray-200 py-12 px-6">
         <div className="max-w-7xl mx-auto text-center text-gray-500 text-sm">
-          <p className="mb-2">© 2026 XRAI Framework. Todos los derechos reservados.</p>
+          <p className="mb-2">© 2026 BankMind. Todos los derechos reservados.</p>
           <p>Plataforma de Inteligencia Artificial Empresarial de Nueva Generación</p>
         </div>
       </footer>
