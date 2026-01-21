@@ -1,100 +1,224 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
 
-export type UserRole = 
-  | 'admin' 
-  | 'operario-morosidad' 
-  | 'operario-anomalias' 
-  | 'operario-demanda-efectivo' 
+// API Base URL - ajustar según tu entorno
+const API_BASE_URL = 'http://localhost:8000/api';
+
+export type UserRole =
+  | 'admin'
+  | 'operario-morosidad'
+  | 'operario-anomalias'
+  | 'operario-demanda-efectivo'
   | 'operario-fuga-demanda';
 
-export type ServiceType = 
-  | 'morosidad-detalle' 
-  | 'anomalias-transaccionales' 
-  | 'demanda-efectivo' 
+export type ServiceType =
+  | 'morosidad-detalle'
+  | 'anomalias-transaccionales'
+  | 'demanda-efectivo'
   | 'fuga-demanda'
   | 'auditoria'
   | 'gestion-usuarios';
 
 export interface User {
-  username: string;
-  role: UserRole;
-  name: string;
+  id: number;
+  email: string;
+  fullName: string;
+  dni?: string;
+  phone?: string;
+  role: string;
+  roleName?: string;
+}
+
+interface MfaState {
+  required: boolean;
+  token: string;
+  phoneHint: string;
 }
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  login: (username: string, password: string, rememberPassword: boolean) => boolean;
-  logout: () => void;
+  isLoading: boolean;
+  mfaState: MfaState | null;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  verifyOtp: (code: string) => Promise<{ success: boolean; error?: string }>;
+  resendOtp: () => Promise<{ success: boolean; error?: string }>;
+  logout: () => Promise<void>;
+  forgotPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
   hasAccessToService: (service: ServiceType) => boolean;
   isAdmin: () => boolean;
+  cancelMfa: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-/**
- * CREDENCIALES DE ACCESO:
- * 
- * ADMINISTRADOR:
- * - Usuario: admin
- * - Contraseña: admin123
- * - Acceso: Todos los servicios + Auditoría + Gestión de Usuarios
- * 
- * OPERARIOS:
- * - Usuario: op-morosidad | Contraseña: mora123 | Servicio: Morosidad Detalle
- * - Usuario: op-anomalias | Contraseña: anom123 | Servicio: Anomalías Transaccionales
- * - Usuario: op-demanda | Contraseña: dema123 | Servicio: Demanda Efectivo
- * - Usuario: op-fuga | Contraseña: fuga123 | Servicio: Fuga Demanda
- */
-
-// Usuarios de prueba
-const mockUsers: Record<string, { password: string; role: UserRole; name: string }> = {
-  'admin': { password: 'admin123', role: 'admin', name: 'Administrador' },
-  'op-morosidad': { password: 'mora123', role: 'operario-morosidad', name: 'Operario Morosidad' },
-  'op-anomalias': { password: 'anom123', role: 'operario-anomalias', name: 'Operario Anomalías' },
-  'op-demanda': { password: 'dema123', role: 'operario-demanda-efectivo', name: 'Operario Demanda Efectivo' },
-  'op-fuga': { password: 'fuga123', role: 'operario-fuga-demanda', name: 'Operario Fuga Demanda' },
+// Mapeo de roles del backend a roles del frontend
+const roleMapping: Record<string, UserRole> = {
+  'ADMIN': 'admin',
+  'OPERARIO_MOROSIDAD': 'operario-morosidad',
+  'OPERARIO_ANOMALIAS': 'operario-anomalias',
+  'OPERARIO_DEMANDA_EFECTIVO': 'operario-demanda-efectivo',
+  'OPERARIO_FUGA_DEMANDA': 'operario-fuga-demanda',
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [mfaState, setMfaState] = useState<MfaState | null>(null);
+  const [lastLoginCredentials, setLastLoginCredentials] = useState<{ email: string; password: string } | null>(null);
 
-  const login = (username: string, password: string, rememberPassword: boolean): boolean => {
-    const mockUser = mockUsers[username];
-    
-    if (mockUser && mockUser.password === password) {
-      const newUser: User = {
-        username,
-        role: mockUser.role,
-        name: mockUser.name,
-      };
-      setUser(newUser);
-      
-      if (rememberPassword) {
-        localStorage.setItem('xrai-remember', 'true');
-      }
-      
-      return true;
+  // Función helper para hacer requests a la API
+  const apiRequest = useCallback(async (
+    endpoint: string,
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
+    body?: unknown
+  ) => {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include', // Importante para cookies httpOnly
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Error en la solicitud');
     }
-    
-    return false;
-  };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('xrai-remember');
-  };
+    return data;
+  }, []);
 
-  const isAdmin = (): boolean => {
-    return user?.role === 'admin';
-  };
+  // Paso 1: Login con email y contraseña
+  const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    setIsLoading(true);
+    try {
+      const response = await apiRequest('/auth/login', 'POST', { email, password });
 
-  const hasAccessToService = (service: ServiceType): boolean => {
+      if (response.success && response.data?.requiresMfa) {
+        // Guardar credenciales para poder reenviar OTP
+        setLastLoginCredentials({ email, password });
+
+        // MFA requerido - mostrar pantalla de OTP
+        setMfaState({
+          required: true,
+          token: response.data.mfaToken,
+          phoneHint: response.data.phoneHint,
+        });
+        return { success: true };
+      }
+
+      return { success: false, error: response.message || 'Error inesperado' };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Error de conexión';
+      return { success: false, error: message };
+    } finally {
+      setIsLoading(false);
+    }
+  }, [apiRequest]);
+
+  // Paso 2: Verificar código OTP
+  const verifyOtp = useCallback(async (code: string): Promise<{ success: boolean; error?: string }> => {
+    if (!mfaState?.token) {
+      return { success: false, error: 'Sesión de MFA no válida' };
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await apiRequest('/auth/verify-otp', 'POST', {
+        mfaToken: mfaState.token,
+        code,
+      });
+
+      if (response.success && response.data?.user) {
+        const userData = response.data.user;
+
+        // Mapear rol del backend al frontend
+        const mappedRole = roleMapping[userData.role?.toUpperCase()] || 'operario-morosidad';
+
+        setUser({
+          ...userData,
+          role: mappedRole,
+        });
+
+        // Limpiar estado MFA
+        setMfaState(null);
+        setLastLoginCredentials(null);
+
+        // Guardar token en localStorage para refresh (backup)
+        if (response.data.accessToken) {
+          localStorage.setItem('bankmind-token', response.data.accessToken);
+        }
+
+        return { success: true };
+      }
+
+      return { success: false, error: response.message || 'Código incorrecto' };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Error de verificación';
+      return { success: false, error: message };
+    } finally {
+      setIsLoading(false);
+    }
+  }, [mfaState, apiRequest]);
+
+  // Reenviar código OTP
+  const resendOtp = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+    if (!lastLoginCredentials) {
+      return { success: false, error: 'No hay credenciales para reenviar' };
+    }
+
+    // Volver a hacer login para generar nuevo OTP
+    return login(lastLoginCredentials.email, lastLoginCredentials.password);
+  }, [lastLoginCredentials, login]);
+
+  // Cancelar flujo MFA y volver al login
+  const cancelMfa = useCallback(() => {
+    setMfaState(null);
+    setLastLoginCredentials(null);
+  }, []);
+
+  // Cerrar sesión
+  const logout = useCallback(async () => {
+    try {
+      await apiRequest('/auth/logout', 'POST');
+    } catch {
+      // Ignorar errores de logout
+    } finally {
+      setUser(null);
+      setMfaState(null);
+      setLastLoginCredentials(null);
+      localStorage.removeItem('bankmind-token');
+    }
+  }, [apiRequest]);
+
+  // Solicitar cambio de contraseña
+  const forgotPassword = useCallback(async (email: string): Promise<{ success: boolean; error?: string }> => {
+    setIsLoading(true);
+    try {
+      await apiRequest('/auth/forgot-password', 'POST', { email });
+      return { success: true };
+    } catch (error) {
+      // Siempre retornar éxito para no revelar si el email existe
+      return { success: true };
+    } finally {
+      setIsLoading(false);
+    }
+  }, [apiRequest]);
+
+  // Verificar si es admin
+  const isAdmin = useCallback((): boolean => {
+    return user?.role === 'admin' || user?.role?.toLowerCase() === 'admin';
+  }, [user]);
+
+  // Verificar acceso a servicios
+  const hasAccessToService = useCallback((service: ServiceType): boolean => {
     if (!user) return false;
-    
+
     // Administradores tienen acceso a todo
-    if (user.role === 'admin') return true;
-    
+    if (isAdmin()) return true;
+
     // Operarios solo tienen acceso a su servicio
     const serviceRoleMap: Record<ServiceType, UserRole[]> = {
       'morosidad-detalle': ['operario-morosidad'],
@@ -104,19 +228,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       'auditoria': [], // Solo admin
       'gestion-usuarios': [], // Solo admin
     };
-    
-    return serviceRoleMap[service]?.includes(user.role) || false;
-  };
+
+    return serviceRoleMap[service]?.includes(user.role as UserRole) || false;
+  }, [user, isAdmin]);
 
   return (
     <AuthContext.Provider
       value={{
         user,
         isAuthenticated: !!user,
+        isLoading,
+        mfaState,
         login,
+        verifyOtp,
+        resendOtp,
         logout,
+        forgotPassword,
         hasAccessToService,
         isAdmin,
+        cancelMfa,
       }}
     >
       {children}

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { TrendingDown, AlertTriangle, DollarSign } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { AlertTriangle, DollarSign } from 'lucide-react';
 import { AuthProvider, useAuth, ServiceType } from '@shared/contexts/AuthContext';
 import {
   FraudeSidebar,
@@ -14,22 +14,80 @@ import { HomePage } from './pages/HomePage';
 import { ServicePlaceholder } from '@shared/components/ServicePlaceholder';
 import { AuditoriaModule } from '@admin/auditoria/AuditoriaModule';
 import { GestionUsuariosModule } from '@admin/usuarios/GestionUsuariosModule';
+import { OtpVerificationScreen } from '@shared/components/OtpVerificationScreen';
+import { ForgotPasswordScreen } from '@shared/components/ForgotPasswordScreen';
+
+type AuthScreen = 'login' | 'otp' | 'forgot-password';
 
 function AppContent() {
-  const { user, isAuthenticated, login, logout, hasAccessToService, isAdmin } = useAuth();
+  const {
+    user,
+    isAuthenticated,
+    isLoading,
+    mfaState,
+    login,
+    verifyOtp,
+    resendOtp,
+    logout,
+    forgotPassword,
+    hasAccessToService,
+    isAdmin,
+    cancelMfa
+  } = useAuth();
+
   const [currentView, setCurrentView] = useState<'home' | ServiceType>('home');
   const [currentScreen, setCurrentScreen] = useState('dashboard');
   const [morosidadScreen, setMorosidadScreen] = useState('dashboard');
   const [loginError, setLoginError] = useState('');
+  const [otpError, setOtpError] = useState('');
+  const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
 
-  const handleLogin = (username: string, password: string, rememberPassword: boolean) => {
-    const success = login(username, password, rememberPassword);
-    if (success) {
+  // Manejar cambio a pantalla OTP cuando se requiere MFA
+  useEffect(() => {
+    if (mfaState?.required) {
+      setAuthScreen('otp');
       setLoginError('');
-      setCurrentView('home'); // Temporarily set to home, will be updated by useEffect
-    } else {
-      setLoginError('Usuario o contraseña incorrectos');
     }
+  }, [mfaState]);
+
+  const handleLogin = async (username: string, password: string, _rememberPassword: boolean) => {
+    const result = await login(username, password);
+    if (!result.success && result.error) {
+      setLoginError(result.error);
+    } else {
+      setLoginError('');
+    }
+  };
+
+  const handleVerifyOtp = async (code: string) => {
+    const result = await verifyOtp(code);
+    if (!result.success && result.error) {
+      setOtpError(result.error);
+    } else {
+      setOtpError('');
+      setAuthScreen('login');
+    }
+  };
+
+  const handleResendOtp = async () => {
+    const result = await resendOtp();
+    if (!result.success && result.error) {
+      setOtpError(result.error);
+    } else {
+      setOtpError('');
+    }
+  };
+
+  const handleForgotPassword = async (email: string) => {
+    await forgotPassword(email);
+    // El componente ForgotPasswordScreen maneja su propio estado de éxito
+  };
+
+  const handleBackToLogin = () => {
+    setAuthScreen('login');
+    setLoginError('');
+    setOtpError('');
+    cancelMfa();
   };
 
   // Redirect operarios to their service after login
@@ -62,10 +120,11 @@ function AppContent() {
     }
   }, [isAuthenticated, user]);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     setCurrentView('home');
     setCurrentScreen('dashboard');
+    setAuthScreen('login');
   };
 
   const handleNavigate = (screen: string) => {
@@ -95,7 +154,39 @@ function AppContent() {
 
   // Pantalla de Login
   if (!isAuthenticated) {
-    return <FraudeLoginScreen onLogin={handleLogin} loginError={loginError} />;
+    // Pantalla de verificación OTP
+    if (authScreen === 'otp' && mfaState) {
+      return (
+        <OtpVerificationScreen
+          phoneHint={mfaState.phoneHint}
+          onVerify={handleVerifyOtp}
+          onResendCode={handleResendOtp}
+          onBack={handleBackToLogin}
+          error={otpError}
+          isLoading={isLoading}
+        />
+      );
+    }
+
+    // Pantalla de olvidé mi contraseña
+    if (authScreen === 'forgot-password') {
+      return (
+        <ForgotPasswordScreen
+          onSubmit={handleForgotPassword}
+          onBack={handleBackToLogin}
+        />
+      );
+    }
+
+    // Pantalla de login principal
+    return (
+      <FraudeLoginScreen
+        onLogin={handleLogin}
+        onForgotPassword={() => setAuthScreen('forgot-password')}
+        loginError={loginError}
+        isLoading={isLoading}
+      />
+    );
   }
 
   // Página Principal (HomePage) - Solo para admin
