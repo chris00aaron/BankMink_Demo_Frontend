@@ -1,0 +1,88 @@
+import { FileSearch, Home, TrendingDown, LayoutDashboard, AlertTriangle } from 'lucide-react';
+import bankMindLogo from '@shared/assets/logo_BankMind.png';
+
+interface MorosidadSidebarProps {
+    currentScreen: string;
+    onNavigate: (screen: string) => void;
+    onBackToHome?: () => void;
+}
+
+export function Sidebar({ currentScreen, onNavigate, onBackToHome }: MorosidadSidebarProps) {
+    const menuItems = [
+        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { id: 'individual', label: 'Predicción Individual', icon: FileSearch },
+        { id: 'batch', label: 'Predicción por Lotes', icon: TrendingDown },
+        { id: 'alerts', label: 'Alertas Tempranas', icon: AlertTriangle },
+    ];
+
+    return (
+        <div className="fixed left-0 top-0 h-screen w-64 bg-white border-r border-gray-200 flex flex-col shadow-lg">
+            {/* Logo Section */}
+            <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center">
+                        <img src={bankMindLogo} alt="BankMind" className="w-full h-full object-contain" />
+                    </div>
+                    <div>
+                        <h1 className="text-xl font-bold text-gray-900">BankMind</h1>
+                        <p className="text-xs text-gray-500">Módulo de Morosidad</p>
+                    </div>
+                </div>
+            </div>
+
+            {/* Back to Home Button */}
+            {onBackToHome && (
+                <div className="px-4 pt-4">
+                    <button
+                        onClick={onBackToHome}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-gray-600 hover:bg-blue-50 hover:text-blue-600 border border-gray-200 hover:border-blue-200"
+                    >
+                        <Home className="w-5 h-5" />
+                        <span className="text-sm font-medium">Página Principal</span>
+                    </button>
+                </div>
+            )}
+
+            {/* Navigation Menu */}
+            <nav className="flex-1 p-4 space-y-2">
+                <div className="mb-2 px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    Análisis
+                </div>
+                {menuItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = currentScreen === item.id;
+
+                    return (
+                        <button
+                            key={item.id}
+                            onClick={() => onNavigate(item.id)}
+                            className={`
+                w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all
+                ${isActive
+                                    ? 'bg-blue-50 text-blue-600 border border-blue-200 shadow-sm'
+                                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border border-transparent'
+                                }
+              `}
+                        >
+                            <Icon className="w-5 h-5" />
+                            <span className="text-sm font-medium">{item.label}</span>
+                        </button>
+                    );
+                })}
+            </nav>
+
+            {/* Footer Section */}
+            <div className="p-4 border-t border-gray-200">
+                <div className="px-4 py-3 rounded-lg bg-gray-50 backdrop-blur-sm border border-gray-200">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <TrendingDown className="w-4 h-4 text-blue-600" />
+                            <p className="text-xs font-medium text-gray-700">Morosidad</p>
+                        </div>
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}

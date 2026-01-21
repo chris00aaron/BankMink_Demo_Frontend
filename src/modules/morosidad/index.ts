@@ -1,3 +1,5 @@
-// Módulo de Morosidad - Preparado para expansión
-// Agregar exports cuando se implementen componentes
-export { };
+export { DashboardPage as Dashboard } from './pages/DashboardPage';
+export { ClientPredictionPage as ClientPrediction } from './pages/ClientPredictionPage';
+export { BatchPredictionPage as BatchPrediction } from './pages/BatchPredictionPage';
+export { EarlyWarningsPage as EarlyWarnings } from './pages/EarlywarningsPage';
+export { Sidebar as MorosidadSidebar } from './components/Sidebar';

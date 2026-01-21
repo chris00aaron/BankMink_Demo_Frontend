@@ -4,12 +4,13 @@ import { AuthProvider, useAuth, ServiceType } from '@shared/contexts/AuthContext
 import {
   FraudeSidebar,
   FraudeLoginScreen,
-  FraudeHomePage,
-  Dashboard,
+  Dashboard as FraudeDashboard,
   BatchPrediction,
   IndividualPrediction,
   RiskAnalysis
 } from '@modules/fraude';
+import { ClientPrediction, Dashboard as MorosidadDashboard, MorosidadSidebar, BatchPrediction as MorosidadBatchPrediction, EarlyWarnings } from '@modules/morosidad';
+import { HomePage } from './pages/HomePage';
 import { ServicePlaceholder } from '@shared/components/ServicePlaceholder';
 import { AuditoriaModule } from '@admin/auditoria/AuditoriaModule';
 import { GestionUsuariosModule } from '@admin/usuarios/GestionUsuariosModule';
@@ -18,6 +19,7 @@ function AppContent() {
   const { user, isAuthenticated, login, logout, hasAccessToService, isAdmin } = useAuth();
   const [currentView, setCurrentView] = useState<'home' | ServiceType>('home');
   const [currentScreen, setCurrentScreen] = useState('dashboard');
+  const [morosidadScreen, setMorosidadScreen] = useState('dashboard');
   const [loginError, setLoginError] = useState('');
 
   const handleLogin = (username: string, password: string, rememberPassword: boolean) => {
@@ -70,12 +72,19 @@ function AppContent() {
     setCurrentScreen(screen);
   };
 
+  const handleMorosidadNavigate = (screen: string) => {
+    setMorosidadScreen(screen);
+  };
+
   const handleNavigateToService = (service: ServiceType) => {
     // Verificar si el usuario tiene acceso al servicio
     if (hasAccessToService(service)) {
       setCurrentView(service);
       if (service === 'anomalias-transaccionales') {
         setCurrentScreen('dashboard');
+      }
+      if (service === 'morosidad-detalle') {
+        setMorosidadScreen('dashboard');
       }
     }
   };
@@ -91,7 +100,7 @@ function AppContent() {
 
   // Página Principal (HomePage) - Solo para admin
   if (currentView === 'home' && isAdmin()) {
-    return <FraudeHomePage onNavigateToService={handleNavigateToService} onLogout={handleLogout} />;
+    return <HomePage onNavigateToService={handleNavigateToService} onLogout={handleLogout} />;
   }
 
   // Módulo de Auditoría - Solo admin
@@ -107,12 +116,22 @@ function AppContent() {
   // Servicio: Morosidad Detalle
   if (currentView === 'morosidad-detalle') {
     return (
-      <ServicePlaceholder
-        serviceName="Morosidad Detalle"
-        icon={TrendingDown}
-        description="Análisis detallado de patrones de morosidad y predicción de incumplimiento de pagos"
-        onBack={handleBackToHome}
-      />
+      <div className="min-h-screen bg-gray-50 flex">
+        <MorosidadSidebar
+          currentScreen={morosidadScreen}
+          onNavigate={handleMorosidadNavigate}
+          onBackToHome={handleBackToHome}
+        />
+        <div className="flex-1 ml-64">
+          {/* Page Content */}
+          <main className="p-8">
+            {morosidadScreen === 'dashboard' && <MorosidadDashboard />}
+            {morosidadScreen === 'individual' && <ClientPrediction />}
+            {morosidadScreen === 'batch' && <MorosidadBatchPrediction />}
+            {morosidadScreen === 'alerts' && <EarlyWarnings />}
+          </main>
+        </div>
+      </div>
     );
   }
 
@@ -155,7 +174,7 @@ function AppContent() {
         <div className="flex-1 ml-64">
           {/* Page Content */}
           <main className="p-8">
-            {currentScreen === 'dashboard' && <Dashboard />}
+            {currentScreen === 'dashboard' && <FraudeDashboard />}
             {currentScreen === 'batch' && <BatchPrediction />}
             {currentScreen === 'individual' && <IndividualPrediction />}
             {currentScreen === 'risk-analysis' && <RiskAnalysis />}
@@ -166,7 +185,7 @@ function AppContent() {
   }
 
   // Fallback a home
-  return <FraudeHomePage onNavigateToService={handleNavigateToService} onLogout={handleLogout} />;
+  return <HomePage onNavigateToService={handleNavigateToService} onLogout={handleLogout} />;
 }
 
 export default function App() {
