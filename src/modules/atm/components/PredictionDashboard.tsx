@@ -1,427 +1,230 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@shared/components/ui-atm/card";
-import { Badge } from "@shared/components/ui-atm/badge";
-import { ModelMetrics } from "@shared/components/ModelMetrics";
-import { HistoricalAccuracy } from "@shared/components/HistoricalAccuracy";
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  AlertTriangle, 
-  CheckCircle2, 
-  Calendar,
-  Clock,
-  Target,
-  Brain,
-  Activity,
-  DollarSign
-} from "lucide-react";
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  Legend, 
-  ResponsiveContainer,
-  Area,
-  AreaChart,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  Radar
-} from "recharts";
-import { Progress } from "@shared/components/ui-atm/progress";
+import { ATMTable } from "@/shared/components/ATMTable";
+import { DemandChart } from "@/shared/components/DemandChart";
+import { KPICard } from "@/shared/components/KPICard";
+import { LocationAnalysis } from "@/shared/components/LocationAnalysis";
+import { WeeklyDemandChart } from "@/shared/components/WeeklyDemandChart";
+import { SelectContent, SelectItem, SelectTrigger, SelectValue } from "@radix-ui/react-select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@radix-ui/react-tabs";
+import { Button } from "@shared/components/ui-atm/button";
+import { Select } from "@shared/components/ui-atm/select";
+import { Banknote, Brain, Calculator, DollarSign, Download, LayoutDashboard, RefreshCw, TrendingUp } from "lucide-react";
+import { Activity, useState } from "react";
 
-export function PredictionDashboard() {
-  // Datos de predicción por hora para hoy
-  const hourlyPrediction = [
-    { hora: "00:00", real: 12000, predicho: 13200, confianza: 92 },
-    { hora: "03:00", real: 8000, predicho: 8500, confianza: 94 },
-    { hora: "06:00", real: 25000, predicho: 24500, confianza: 88 },
-    { hora: "09:00", real: 85000, predicho: 87000, confianza: 85 },
-    { hora: "12:00", real: 125000, predicho: 128000, confianza: 82 },
-    { hora: "15:00", real: 95000, predicho: 93000, confianza: 86 },
-    { hora: "18:00", real: 110000, predicho: 112000, confianza: 84 },
-    { hora: "21:00", real: 65000, predicho: 67000, confianza: 90 },
-  ];
-
-  // Datos de predicción semanal
-  const weeklyPrediction = [
-    { dia: "Lun", predicho: 320000, rangoMin: 295000, rangoMax: 345000 },
-    { dia: "Mar", predicho: 285000, rangoMin: 265000, rangoMax: 305000 },
-    { dia: "Mié", predicho: 340000, rangoMin: 315000, rangoMax: 365000 },
-    { dia: "Jue", predicho: 315000, rangoMin: 290000, rangoMax: 340000 },
-    { dia: "Vie", predicho: 425000, rangoMin: 395000, rangoMax: 455000 },
-    { dia: "Sáb", predicho: 380000, rangoMin: 350000, rangoMax: 410000 },
-    { dia: "Dom", predicho: 195000, rangoMin: 175000, rangoMax: 215000 },
-  ];
-
-  // Precisión del modelo por métrica
-  const modelAccuracy = [
-    { metrica: "Precisión Global", valor: 87 },
-    { metrica: "Días Laborales", valor: 92 },
-    { metrica: "Fines de Semana", valor: 78 },
-    { metrica: "Días Festivos", valor: 83 },
-    { metrica: "Horas Pico", valor: 85 },
-    { metrica: "Horas Valle", valor: 94 },
-  ];
-
-  // Factores de influencia
-  const influenceFactors = [
-    { factor: "Día de Pago", impacto: 42, tipo: "temporal" },
-    { factor: "Día de Semana", impacto: 35, tipo: "temporal" },
-    { factor: "Ubicación", impacto: 28, tipo: "geográfico" },
-    { factor: "Eventos", impacto: 25, tipo: "especial" },
-    { factor: "Clima", impacto: 15, tipo: "ambiental" },
-    { factor: "Competencia", impacto: 12, tipo: "mercado" },
-  ];
-
-  // KPIs de predicción
-  const predictionKPIs = [
+// Datos mock para KPIs
+  const kpis = [
     {
-      title: "Retiros Predichos Hoy",
-      value: "$2.65M",
-      change: 12.3,
-      confidence: 87,
+      title: "Demanda Total Hoy",
+      value: "$2.4M",
+      change: 12.5,
       icon: DollarSign,
-      color: "blue"
+      trend: "up" as const
     },
     {
-      title: "Precisión del Modelo",
-      value: "87%",
-      change: 2.5,
-      confidence: 95,
-      icon: Target,
-      color: "green"
+      title: "Retiros Totales",
+      value: "$1.8M",
+      change: 8.3,
+      icon: TrendingUp,
+      trend: "up" as const
     },
     {
-      title: "Alertas Activas",
-      value: "3",
-      change: -25,
-      confidence: 92,
-      icon: AlertTriangle,
-      color: "orange"
+      title: "Depósitos Totales",
+      value: "$620K",
+      change: -3.2,
+      icon: Banknote,
+      trend: "down" as const
     },
     {
-      title: "Cajeros Optimizados",
-      value: "24/28",
-      change: 8.5,
-      confidence: 89,
-      icon: CheckCircle2,
-      color: "purple"
+      title: "Transacciones",
+      value: "3,247",
+      change: 15.8,
+      icon: Activity,
+      trend: "up" as const
     }
   ];
 
-  // Recomendaciones de reabastecimiento
-  const refillRecommendations = [
+  // Datos para el gráfico de demanda por hora
+  const hourlyData = [
+    { hour: "00:00", retiros: 12000, depositos: 5000, prediccion: 13000 },
+    { hour: "03:00", retiros: 8000, depositos: 3000, prediccion: 8500 },
+    { hour: "06:00", retiros: 25000, depositos: 8000, prediccion: 27000 },
+    { hour: "09:00", retiros: 85000, depositos: 32000, prediccion: 88000 },
+    { hour: "12:00", retiros: 125000, depositos: 45000, prediccion: 130000 },
+    { hour: "15:00", retiros: 95000, depositos: 38000, prediccion: 98000 },
+    { hour: "18:00", retiros: 110000, depositos: 42000, prediccion: 115000 },
+    { hour: "21:00", retiros: 65000, depositos: 28000, prediccion: 67000 },
+  ];
+
+  // Datos para el gráfico semanal
+  const weeklyData = [
+    { dia: "Lun", demanda: 320000, promedio: 310000 },
+    { dia: "Mar", demanda: 285000, promedio: 295000 },
+    { dia: "Mié", demanda: 340000, promedio: 325000 },
+    { dia: "Jue", demanda: 315000, promedio: 320000 },
+    { dia: "Vie", demanda: 425000, promedio: 405000 },
+    { dia: "Sáb", demanda: 380000, promedio: 375000 },
+    { dia: "Dom", demanda: 195000, promedio: 210000 },
+  ];
+
+  // Datos de cajeros automáticos
+  const atmData = [
     {
-      atmId: "ATM-001",
+      id: "ATM-001",
       ubicacion: "Centro Comercial Plaza Norte",
-      prioridad: "alta",
-      recomendacion: "Reabastecer antes de 12:00 PM",
-      cantidadSugerida: "$145,000",
-      riesgoQuiebre: 85
+      tipo: "Centro Comercial",
+      nivelEfectivo: 18,
+      demandaProximoDia: 145000,
+      estado: "critico" as const,
+      ultimaRecarga: "Hace 2 días"
     },
     {
-      atmId: "ATM-005",
-      ubicacion: "Estación de Tren Central",
-      prioridad: "alta",
-      recomendacion: "Reabastecer antes de 2:00 PM",
-      cantidadSugerida: "$127,000",
-      riesgoQuiebre: 78
+      id: "ATM-002",
+      ubicacion: "Banco Central - Sucursal Principal",
+      tipo: "Banco",
+      nivelEfectivo: 72,
+      demandaProximoDia: 98000,
+      estado: "normal" as const,
+      ultimaRecarga: "Hace 5 horas"
     },
     {
-      atmId: "ATM-003",
+      id: "ATM-003",
       ubicacion: "Aeropuerto Internacional",
-      prioridad: "media",
-      recomendacion: "Reabastecer mañana AM",
-      cantidadSugerida: "$186,000",
-      riesgoQuiebre: 45
+      tipo: "Aeropuerto",
+      nivelEfectivo: 35,
+      demandaProximoDia: 186000,
+      estado: "alerta" as const,
+      ultimaRecarga: "Hace 1 día"
     },
     {
-      atmId: "ATM-006",
+      id: "ATM-004",
+      ubicacion: "Universidad Nacional",
+      tipo: "Universidad",
+      nivelEfectivo: 88,
+      demandaProximoDia: 52000,
+      estado: "normal" as const,
+      ultimaRecarga: "Hace 3 horas"
+    },
+    {
+      id: "ATM-005",
+      ubicacion: "Estación de Tren Central",
+      tipo: "Transporte",
+      nivelEfectivo: 22,
+      demandaProximoDia: 127000,
+      estado: "critico" as const,
+      ultimaRecarga: "Hace 2 días"
+    },
+    {
+      id: "ATM-006",
       ubicacion: "Centro Comercial Mega Plaza",
-      prioridad: "baja",
-      recomendacion: "Reabastecer en 2-3 días",
-      cantidadSugerida: "$132,000",
-      riesgoQuiebre: 22
+      tipo: "Centro Comercial",
+      nivelEfectivo: 58,
+      demandaProximoDia: 132000,
+      estado: "normal" as const,
+      ultimaRecarga: "Hace 8 horas"
     }
   ];
 
-  const getPrioridadColor = (prioridad: string) => {
-    switch (prioridad) {
-      case "alta": return "bg-red-500";
-      case "media": return "bg-yellow-500";
-      case "baja": return "bg-green-500";
-      default: return "bg-gray-500";
-    }
-  };
+  // Datos por tipo de ubicación
+  const locationData = [
+    { tipo: "Centro Comercial", demanda: 425000, cajeros: 8 },
+    { tipo: "Banco", demanda: 380000, cajeros: 12 },
+    { tipo: "Aeropuerto", demanda: 285000, cajeros: 4 },
+    { tipo: "Universidad", demanda: 165000, cajeros: 5 },
+    { tipo: "Transporte", demanda: 220000, cajeros: 6 },
+    { tipo: "Otros", demanda: 125000, cajeros: 3 }
+  ];
 
-  const getPrioridadBadge = (prioridad: string) => {
-    switch (prioridad) {
-      case "alta": return <Badge variant="destructive">Alta</Badge>;
-      case "media": return <Badge className="bg-yellow-500 hover:bg-yellow-600">Media</Badge>;
-      case "baja": return <Badge className="bg-green-500 hover:bg-green-600">Baja</Badge>;
-      default: return <Badge variant="outline">Normal</Badge>;
-    }
-  };
+  export function PredictionDashboard() {
+    const [selectedDate, setSelectedDate] = useState("2026-01-05");
+    const [activeView, setActiveView] = useState("general");
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h2 className="text-3xl font-bold mb-2">Dashboard de Predicción de Retiros</h2>
-        <p className="text-muted-foreground">
-          Análisis predictivo avanzado con inteligencia artificial para optimización de efectivo
-        </p>
-      </div>
-
-      {/* KPIs de Predicción */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {predictionKPIs.map((kpi, index) => (
-          <Card key={index}>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className={`p-3 rounded-lg bg-${kpi.color}-100`}>
-                  <kpi.icon className={`h-6 w-6 text-${kpi.color}-600`} />
-                </div>
-                <Badge variant="outline" className="text-xs">
-                  Confianza: {kpi.confidence}%
-                </Badge>
+    return (
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <header className="bg-white border-b sticky top-0 z-10">
+          <div className="container mx-auto px-6 py-4">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div>
+                <p className="text-muted-foreground mt-1">
+                  Monitoreo y predicción en tiempo real
+                </p>
               </div>
-              <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">{kpi.title}</p>
-                <p className="text-2xl font-bold">{kpi.value}</p>
-                <div className="flex items-center text-sm">
-                  {kpi.change >= 0 ? (
-                    <TrendingUp className="h-4 w-4 text-green-600 mr-1" />
-                  ) : (
-                    <TrendingDown className="h-4 w-4 text-red-600 mr-1" />
-                  )}
-                  <span className={kpi.change >= 0 ? "text-green-600" : "text-red-600"}>
-                    {Math.abs(kpi.change)}%
-                  </span>
-                  <span className="text-muted-foreground ml-1">vs promedio</span>
-                </div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <Select value={selectedDate} onValueChange={setSelectedDate}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="2026-01-05">5 Enero 2026</SelectItem>
+                    <SelectItem value="2026-01-04">4 Enero 2026</SelectItem>
+                    <SelectItem value="2026-01-03">3 Enero 2026</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" size="icon">
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="icon">
+                  <Download className="h-4 w-4" />
+                </Button>
               </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Gráficos principales */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* Predicción por Hora */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5" />
-              Predicción vs Real - Hoy
-            </CardTitle>
-            <CardDescription>
-              Comparación de retiros predichos y reales por hora
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={hourlyPrediction}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="hora" />
-                <YAxis />
-                <Tooltip 
-                  formatter={(value: number) => `$${value.toLocaleString()}`}
-                />
-                <Legend />
-                <Area 
-                  type="monotone" 
-                  dataKey="real" 
-                  stackId="1"
-                  stroke="#3b82f6" 
-                  fill="#3b82f6"
-                  fillOpacity={0.6}
-                  name="Retiros Reales"
-                />
-                <Area 
-                  type="monotone" 
-                  dataKey="predicho" 
-                  stackId="2"
-                  stroke="#10b981" 
-                  fill="#10b981"
-                  fillOpacity={0.4}
-                  name="Retiros Predichos"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Predicción Semanal con Rangos */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              Predicción Semanal con Rangos de Confianza
-            </CardTitle>
-            <CardDescription>
-              Retiros predichos para la próxima semana
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={weeklyPrediction}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="dia" />
-                <YAxis />
-                <Tooltip 
-                  formatter={(value: number) => `$${value.toLocaleString()}`}
-                />
-                <Legend />
-                <Bar dataKey="rangoMin" fill="#dbeafe" name="Mínimo" />
-                <Bar dataKey="predicho" fill="#3b82f6" name="Predicción" />
-                <Bar dataKey="rangoMax" fill="#1e40af" name="Máximo" />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Segunda fila de gráficos */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* Precisión del Modelo */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Brain className="h-5 w-5" />
-              Precisión del Modelo Predictivo
-            </CardTitle>
-            <CardDescription>
-              Métricas de rendimiento del modelo de ML
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <RadarChart data={modelAccuracy}>
-                <PolarGrid />
-                <PolarAngleAxis dataKey="metrica" />
-                <PolarRadiusAxis angle={90} domain={[0, 100]} />
-                <Radar 
-                  name="Precisión %" 
-                  dataKey="valor" 
-                  stroke="#8b5cf6" 
-                  fill="#8b5cf6" 
-                  fillOpacity={0.6} 
-                />
-                <Tooltip />
-              </RadarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Factores de Influencia */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Activity className="h-5 w-5" />
-              Factores que Influyen en la Predicción
-            </CardTitle>
-            <CardDescription>
-              Impacto de diferentes variables en el modelo
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {influenceFactors.map((factor, index) => (
-                <div key={index} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm">{factor.factor}</span>
-                      <Badge variant="outline" className="text-xs">{factor.tipo}</Badge>
-                    </div>
-                    <span className="text-sm font-semibold">{factor.impacto}%</span>
-                  </div>
-                  <Progress value={factor.impacto} className="h-2" />
-                </div>
-              ))}
             </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Recomendaciones de Reabastecimiento */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Target className="h-5 w-5" />
-            Recomendaciones de Reabastecimiento
-          </CardTitle>
-          <CardDescription>
-            Sugerencias basadas en predicciones y riesgo de quiebre de stock
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left p-3">Prioridad</th>
-                  <th className="text-left p-3">ID Cajero</th>
-                  <th className="text-left p-3">Ubicación</th>
-                  <th className="text-left p-3">Recomendación</th>
-                  <th className="text-left p-3">Cantidad Sugerida</th>
-                  <th className="text-left p-3">Riesgo de Quiebre</th>
-                </tr>
-              </thead>
-              <tbody>
-                {refillRecommendations.map((rec, index) => (
-                  <tr key={index} className="border-b hover:bg-muted/50 transition-colors">
-                    <td className="p-3">
-                      {getPrioridadBadge(rec.prioridad)}
-                    </td>
-                    <td className="p-3">
-                      <span className="font-mono">{rec.atmId}</span>
-                    </td>
-                    <td className="p-3">
-                      <span className="text-sm">{rec.ubicacion}</span>
-                    </td>
-                    <td className="p-3">
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">{rec.recomendacion}</span>
-                      </div>
-                    </td>
-                    <td className="p-3">
-                      <span className="font-semibold">{rec.cantidadSugerida}</span>
-                    </td>
-                    <td className="p-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
-                          <div 
-                            className={`h-full ${getPrioridadColor(rec.prioridad)} transition-all`}
-                            style={{ width: `${rec.riesgoQuiebre}%` }}
-                          />
-                        </div>
-                        <span className="text-sm font-medium">{rec.riesgoQuiebre}%</span>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
-        </CardContent>
-      </Card>
+        </header>
 
-      {/* Métricas del Modelo y Evolución */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <ModelMetrics 
-          accuracy={87}
-          precision={89}
-          recall={85}
-          f1Score={87}
-        />
-        <HistoricalAccuracy />
+        {/* Main Content */}
+        <main className="container mx-auto px-6 py-8">
+          <Tabs value={activeView} onValueChange={setActiveView} className="space-y-6">
+            <TabsList className="grid w-full max-w-2xl grid-cols-3">
+              <TabsTrigger value="general" className="flex items-center gap-2">
+                <LayoutDashboard className="h-4 w-4" />
+                Dashboard General
+              </TabsTrigger>
+              <TabsTrigger value="prediction" className="flex items-center gap-2">
+                <Brain className="h-4 w-4" />
+                Predicción de Retiros
+              </TabsTrigger>
+              <TabsTrigger value="simulator" className="flex items-center gap-2">
+                <Calculator className="h-4 w-4" />
+                Simulador
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="general" className="space-y-8">
+              {/* KPIs */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {kpis.map((kpi, index) => (
+                  <KPICard key={index} 
+                  title={kpi.title}
+                  value={kpi.value}
+                  change={kpi.change}
+                  trend={kpi.trend}
+                  icon={kpi.icon}
+                  />
+                ))}
+              </div>
+
+              {/* Charts Row 1 */}
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <DemandChart data={hourlyData} />
+                <WeeklyDemandChart data={weeklyData} />
+              </div>
+
+              {/* ATM Table */}
+              <ATMTable atms={atmData} />
+
+              {/* Location Analysis */}
+              <LocationAnalysis data={locationData} />
+            </TabsContent>
+          </Tabs>
+        </main>
+
+        {/* Footer */}
+        <footer className="bg-white border-t mt-12">
+          <div className="container mx-auto px-6 py-4">
+            <p className="text-sm text-muted-foreground text-center">
+              Dashboard de Gestión de Cajeros Automáticos © 2026 - Actualizado en tiempo real
+            </p>
+          </div>
+        </footer>
       </div>
-    </div>
-  );
+    );
 }

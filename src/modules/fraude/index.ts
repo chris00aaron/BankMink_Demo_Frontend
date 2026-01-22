@@ -4,5 +4,3 @@ export { BatchPrediction } from './components/BatchPrediction';
 export { IndividualPrediction } from './components/IndividualPrediction';
 export { RiskAnalysis } from './components/RiskAnalysis';
 export { Sidebar as FraudeSidebar } from './components/Sidebar';
-export { LoginScreen as FraudeLoginScreen } from '../auth/pages/LoginScreen';
-export { HomePage as FraudeHomePage } from './pages/HomePage';

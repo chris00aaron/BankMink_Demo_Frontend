@@ -1,13 +1,13 @@
 import { LayoutDashboard, FileUp, FileSearch, Activity, Home } from 'lucide-react';
 import bankMindLogo from '@shared/assets/logo_BankMind.png';
 
-interface XRAISidebarProps {
+interface ISidebarProps {
   currentScreen: string;
   onNavigate: (screen: string) => void;
   onBackToHome?: () => void;
 }
 
-export function Sidebar({ currentScreen, onNavigate, onBackToHome }: XRAISidebarProps) {
+export function Sidebar({ currentScreen, onNavigate, onBackToHome }: ISidebarProps) {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'batch', label: 'Predicción por Lotes', icon: FileUp },
