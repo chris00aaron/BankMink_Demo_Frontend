@@ -39,6 +39,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   mfaState: MfaState | null;
+  passwordChangeRequired: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   verifyOtp: (code: string) => Promise<{ success: boolean; error?: string }>;
   resendOtp: () => Promise<{ success: boolean; error?: string }>;
@@ -47,6 +48,7 @@ interface AuthContextType {
   hasAccessToService: (service: ServiceType) => boolean;
   isAdmin: () => boolean;
   cancelMfa: () => void;
+  finalizePasswordChange: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -64,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [mfaState, setMfaState] = useState<MfaState | null>(null);
+  const [passwordChangeRequired, setPasswordChangeRequired] = useState(false);
   const [lastLoginCredentials, setLastLoginCredentials] = useState<{ email: string; password: string } | null>(null);
 
   // Función helper para hacer requests a la API
@@ -96,6 +99,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const response = await apiRequest('/auth/login', 'POST', { email, password });
 
+      // Caso: Cambio de contraseña obligatorio
+      if (response.success && response.data?.requiresPasswordChange) {
+        setPasswordChangeRequired(true);
+        // Guardamos cookie temporalmente para el request de cambio, pero no logueamos al usuario
+        return { success: true };
+      }
+
+      // Caso: MFA requerido
       if (response.success && response.data?.requiresMfa) {
         // Guardar credenciales para poder reenviar OTP
         setLastLoginCredentials({ email, password });
@@ -232,6 +243,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return serviceRoleMap[service]?.includes(user.role as UserRole) || false;
   }, [user, isAdmin]);
 
+  const finalizePasswordChange = useCallback(() => {
+    setPasswordChangeRequired(false);
+    // Redirigir a login ya será automático al cambiar el estado
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -239,6 +255,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!user,
         isLoading,
         mfaState,
+        passwordChangeRequired,
         login,
         verifyOtp,
         resendOtp,
@@ -247,6 +264,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         hasAccessToService,
         isAdmin,
         cancelMfa,
+        finalizePasswordChange,
       }}
     >
       {children}

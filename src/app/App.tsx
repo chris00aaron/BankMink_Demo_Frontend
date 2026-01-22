@@ -17,6 +17,8 @@ import { GestionUsuariosModule } from '@admin/usuarios/GestionUsuariosModule';
 import { OtpVerificationScreen } from '@shared/components/OtpVerificationScreen';
 import { ForgotPasswordScreen } from '@shared/components/ForgotPasswordScreen';
 
+import { ChangePasswordScreen } from '@shared/components/ChangePasswordScreen';
+
 type AuthScreen = 'login' | 'otp' | 'forgot-password';
 
 function AppContent() {
@@ -25,6 +27,8 @@ function AppContent() {
     isAuthenticated,
     isLoading,
     mfaState,
+    passwordChangeRequired,
+    finalizePasswordChange,
     login,
     verifyOtp,
     resendOtp,
@@ -49,6 +53,8 @@ function AppContent() {
       setLoginError('');
     }
   }, [mfaState]);
+
+
 
   const handleLogin = async (username: string, password: string, _rememberPassword: boolean) => {
     const result = await login(username, password);
@@ -119,6 +125,16 @@ function AppContent() {
       }
     }
   }, [isAuthenticated, user]);
+
+  // Si se requiere cambio de contraseña, mostrar pantalla de cambio
+  if (passwordChangeRequired) {
+    return <ChangePasswordScreen onPasswordChanged={() => {
+      finalizePasswordChange();
+      setAuthScreen('login');
+      // Asegurarse de limpiar errores
+      setLoginError('');
+    }} />;
+  }
 
   const handleLogout = async () => {
     await logout();
@@ -211,7 +227,8 @@ function AppContent() {
         <MorosidadSidebar
           currentScreen={morosidadScreen}
           onNavigate={handleMorosidadNavigate}
-          onBackToHome={handleBackToHome}
+          onBackToHome={isAdmin() ? handleBackToHome : undefined}
+          onLogout={handleLogout}
         />
         <div className="flex-1 ml-64">
           {/* Page Content */}
@@ -259,6 +276,7 @@ function AppContent() {
           currentScreen={currentScreen}
           onNavigate={handleNavigate}
           onBackToHome={isAdmin() ? handleBackToHome : undefined}
+          onLogout={handleLogout}
         />
 
         {/* Main Content Area */}

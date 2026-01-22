@@ -1,13 +1,14 @@
-import { FileSearch, Home, TrendingDown, LayoutDashboard, AlertTriangle } from 'lucide-react';
+import { FileSearch, Home, TrendingDown, LayoutDashboard, AlertTriangle, LogOut } from 'lucide-react';
 import bankMindLogo from '@shared/assets/logo_BankMind.png';
 
 interface MorosidadSidebarProps {
     currentScreen: string;
     onNavigate: (screen: string) => void;
     onBackToHome?: () => void;
+    onLogout: () => void;
 }
 
-export function Sidebar({ currentScreen, onNavigate, onBackToHome }: MorosidadSidebarProps) {
+export function Sidebar({ currentScreen, onNavigate, onBackToHome, onLogout }: MorosidadSidebarProps) {
     const menuItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'individual', label: 'Predicción Individual', icon: FileSearch },
@@ -30,7 +31,7 @@ export function Sidebar({ currentScreen, onNavigate, onBackToHome }: MorosidadSi
                 </div>
             </div>
 
-            {/* Back to Home Button */}
+            {/* Back to Home Button - Solo para Admin */}
             {onBackToHome && (
                 <div className="px-4 pt-4">
                     <button
@@ -71,8 +72,18 @@ export function Sidebar({ currentScreen, onNavigate, onBackToHome }: MorosidadSi
                 })}
             </nav>
 
-            {/* Footer Section */}
-            <div className="p-4 border-t border-gray-200">
+            {/* Footer Section with Logout */}
+            <div className="p-4 border-t border-gray-200 space-y-3">
+                {/* Logout Button */}
+                <button
+                    onClick={onLogout}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200"
+                >
+                    <LogOut className="w-5 h-5" />
+                    <span className="text-sm font-medium">Cerrar Sesión</span>
+                </button>
+
+                {/* System Status */}
                 <div className="px-4 py-3 rounded-lg bg-gray-50 backdrop-blur-sm border border-gray-200">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -86,3 +97,4 @@ export function Sidebar({ currentScreen, onNavigate, onBackToHome }: MorosidadSi
         </div>
     );
 }
+
