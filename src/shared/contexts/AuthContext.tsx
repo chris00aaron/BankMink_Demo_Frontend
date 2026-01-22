@@ -40,6 +40,7 @@ interface AuthContextType {
   isLoading: boolean;
   mfaState: MfaState | null;
   passwordChangeRequired: boolean;
+  tempToken: string | null;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   verifyOtp: (code: string) => Promise<{ success: boolean; error?: string }>;
   resendOtp: () => Promise<{ success: boolean; error?: string }>;
@@ -67,19 +68,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [mfaState, setMfaState] = useState<MfaState | null>(null);
   const [passwordChangeRequired, setPasswordChangeRequired] = useState(false);
+  const [tempToken, setTempToken] = useState<string | null>(null);
   const [lastLoginCredentials, setLastLoginCredentials] = useState<{ email: string; password: string } | null>(null);
 
   // Función helper para hacer requests a la API
   const apiRequest = useCallback(async (
     endpoint: string,
     method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
-    body?: unknown
+    body?: unknown,
+    token?: string
   ) => {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method,
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       credentials: 'include', // Importante para cookies httpOnly
       body: body ? JSON.stringify(body) : undefined,
     });
@@ -102,7 +111,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Caso: Cambio de contraseña obligatorio
       if (response.success && response.data?.requiresPasswordChange) {
         setPasswordChangeRequired(true);
-        // Guardamos cookie temporalmente para el request de cambio, pero no logueamos al usuario
+        if (response.data.accessToken) {
+          setTempToken(response.data.accessToken);
+        }
         return { success: true };
       }
 
@@ -256,6 +267,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         mfaState,
         passwordChangeRequired,
+        tempToken,
         login,
         verifyOtp,
         resendOtp,

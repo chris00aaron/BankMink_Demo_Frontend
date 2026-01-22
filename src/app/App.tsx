@@ -46,6 +46,14 @@ function AppContent() {
   const [otpError, setOtpError] = useState('');
   const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
 
+  console.log('App Render State:', {
+    isAuthenticated,
+    passwordChangeRequired,
+    authScreen,
+    mfaRequired: mfaState?.required,
+    currentView
+  });
+
   // Manejar cambio a pantalla OTP cuando se requiere MFA
   useEffect(() => {
     if (mfaState?.required) {

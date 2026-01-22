@@ -3,12 +3,14 @@ import { Lock, Eye, EyeOff, CheckCircle } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
 import bankMindLogo from '@shared/assets/logo_BankMind.png';
+import { useAuth } from '@shared/contexts/AuthContext';
 
 interface ChangePasswordScreenProps {
     onPasswordChanged: () => void;
 }
 
 export function ChangePasswordScreen({ onPasswordChanged }: ChangePasswordScreenProps) {
+    const { tempToken } = useAuth();
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -35,11 +37,17 @@ export function ChangePasswordScreen({ onPasswordChanged }: ChangePasswordScreen
         setLoading(true);
 
         try {
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            };
+
+            if (tempToken) {
+                headers['Authorization'] = `Bearer ${tempToken}`;
+            }
+
             const response = await fetch('http://localhost:8000/api/auth/change-password', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers,
                 credentials: 'include',
                 body: JSON.stringify({
                     newPassword,
