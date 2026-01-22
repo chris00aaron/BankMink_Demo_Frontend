@@ -1,133 +1,91 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
-
-export type UserRole = 
-  | 'admin' 
-  | 'operario-morosidad' 
-  | 'operario-anomalias' 
-  | 'operario-demanda-efectivo' 
-  | 'operario-fuga-demanda';
-
-export type ServiceType = 
-  | 'morosidad-detalle' 
-  | 'anomalias-transaccionales' 
-  | 'demanda-efectivo' 
-  | 'fuga-demanda'
-  | 'auditoria'
-  | 'gestion-usuarios';
-
-export interface User {
-  username: string;
-  role: UserRole;
-  name: string;
-}
-
-interface AuthContextType {
-  user: User | null;
-  isAuthenticated: boolean;
-  login: (username: string, password: string, rememberPassword: boolean) => boolean;
-  logout: () => void;
-  hasAccessToService: (service: ServiceType) => boolean;
-  isAdmin: () => boolean;
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+import { useState, ReactNode, useMemo, useCallback } from 'react';
+import { User, UserRole, ServiceType } from '../types/auth.types';
+import { mockUsers } from '../constants/mockData';
+import { AuthContext } from './AuthContextDefinition';
 
 /**
- * CREDENCIALES DE ACCESO:
- * 
- * ADMINISTRADOR:
- * - Usuario: admin
- * - Contraseña: admin123
- * - Acceso: Todos los servicios + Auditoría + Gestión de Usuarios
- * 
- * OPERARIOS:
- * - Usuario: op-morosidad | Contraseña: mora123 | Servicio: Morosidad Detalle
- * - Usuario: op-anomalias | Contraseña: anom123 | Servicio: Anomalías Transaccionales
- * - Usuario: op-demanda | Contraseña: dema123 | Servicio: Demanda Efectivo
- * - Usuario: op-fuga | Contraseña: fuga123 | Servicio: Fuga Demanda
- */
-
-// Usuarios de prueba
-const mockUsers: Record<string, { password: string; role: UserRole; name: string }> = {
-  'admin': { password: 'admin123', role: 'admin', name: 'Administrador' },
-  'op-morosidad': { password: 'mora123', role: 'operario-morosidad', name: 'Operario Morosidad' },
-  'op-anomalias': { password: 'anom123', role: 'operario-anomalias', name: 'Operario Anomalías' },
-  'op-demanda': { password: 'dema123', role: 'operario-demanda-efectivo', name: 'Operario Demanda Efectivo' },
-  'op-fuga': { password: 'fuga123', role: 'operario-fuga-demanda', name: 'Operario Fuga Demanda' },
-};
-
+ * AuthProvider {funcion} : proveedor de autenticación que envuelve toda la aplicación
+ * children {propiedad} : componentes hijos que pueden acceder al contexto
+*/
 export function AuthProvider({ children }: { children: ReactNode }) {
+   //Esto podra ser usado despues de implementar el backend
+
+  /**
+   * Inicializamos el estado directamente leyendo localStorage
+   * "useState {funcion} : crea un estado que puede ser modificado"
+   * "user {estado} : usuario autenticado"
+   * "setUser {funcion} : modifica el estado del usuario"
+   */
+  /*const [user, setUser] = useState<User | null>(() => {
+    const rememberMe = localStorage.getItem('xrai-remember');
+    if (rememberMe === 'true') {
+      const admin = mockUsers['admin'];
+      return { username: 'admin', role: admin.role, name: admin.name };
+    }
+    return null;
+  });*/
+
   const [user, setUser] = useState<User | null>(null);
 
-  const login = (username: string, password: string, rememberPassword: boolean): boolean => {
-    const mockUser = mockUsers[username];
-    
-    if (mockUser && mockUser.password === password) {
-      const newUser: User = {
-        username,
-        role: mockUser.role,
-        name: mockUser.name,
-      };
-      setUser(newUser);
-      
-      if (rememberPassword) {
-        localStorage.setItem('xrai-remember', 'true');
-      }
-      
+  // 1. Envolvemos las funciones en useCallback, para que no se re-rendericen innecesariamente 
+  // las funciones login y logout no dependen de variables externas
+  const login = useCallback((username: string, password: string, remember: boolean): boolean => {
+    const foundUser = mockUsers[username];
+    if (foundUser && foundUser.password === password) {
+      setUser({ username, role: foundUser.role, name: foundUser.name });
+      if (remember) localStorage.setItem('xrai-remember', 'true');
       return true;
     }
-    
-    return false;
-  };
 
-  const logout = () => {
+    return false;
+  }, []); // Referencia estable, nunca cambia
+
+  // useCallback {funcion} : crea una funcion que puede ser reutilizada
+  const logout = useCallback(() => {
     setUser(null);
     localStorage.removeItem('xrai-remember');
-  };
+  }, []);
 
-  const isAdmin = (): boolean => {
-    return user?.role === 'admin';
-  };
-
-  const hasAccessToService = (service: ServiceType): boolean => {
+  // useCallback {funcion} : crea una funcion que puede ser reutilizada
+  const hasAccessToService = useCallback((service: ServiceType): boolean => {
     if (!user) return false;
-    
-    // Administradores tienen acceso a todo
+
     if (user.role === 'admin') return true;
     
-    // Operarios solo tienen acceso a su servicio
-    const serviceRoleMap: Record<ServiceType, UserRole[]> = {
+    const permissions: Record<ServiceType, UserRole[]> = {
       'morosidad-detalle': ['operario-morosidad'],
       'anomalias-transaccionales': ['operario-anomalias'],
       'demanda-efectivo': ['operario-demanda-efectivo'],
       'fuga-demanda': ['operario-fuga-demanda'],
-      'auditoria': [], // Solo admin
-      'gestion-usuarios': [], // Solo admin
+      'auditoria': [],
+      'gestion-usuarios': [],
     };
     
-    return serviceRoleMap[service]?.includes(user.role) || false;
-  };
+    /**
+     * "Busca la lista de roles permitidos para este servicio. (permissions[service])
+     * Si existe, verifica si el rol del usuario está en la lista. (includes(user.role))
+     * Si no existe la lista o algo es undefined, devuelve false. (?? false)"
+     */
+      return permissions[service]?.includes(user.role) ?? false;
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isAuthenticated: !!user,
-        login,
-        logout,
-        hasAccessToService,
-        isAdmin,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
-}
+  }, [user]); // Se actualiza solo si el usuario cambia
 
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+  /**
+   * useMemo {funcion} : evalua si el usuario tiene permiso para acceder al servicio, memoiza el resultado
+   * "Agrupa el estado y las funciones en un solo objeto. (user, isAuthenticated, isAdmin, login, logout, hasAccessToService)"
+   */
+  const value = useMemo(() => ({
+    user,
+    isAuthenticated: !!user,
+    isAdmin: user?.role === 'admin',
+    login,
+    logout,
+    hasAccessToService
+  }), [user, login, logout, hasAccessToService]);
+
+  /**
+   * "El AuthContext.Provider envuelve toda la aplicación y proporciona el contexto a los componentes hijos."
+   * "value {propiedad} : datos que se van a pasar al contexto"
+   */
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
-import { Shield, TrendingUp, Activity, FileCheck, BarChart3, Brain, ArrowRight, Sparkles, ChevronDown, Users, FileText, TrendingDown, AlertTriangle, DollarSign } from 'lucide-react';
-import { useAuth, ServiceType } from '@shared/contexts/AuthContext';
+import { useState } from 'react';
+import { Shield, Activity, Brain, ArrowRight, Sparkles, ChevronDown, TrendingDown, AlertTriangle, DollarSign } from 'lucide-react';
+import { useAuth } from '@shared/hook/useAuth';
+import { ServiceType } from '@shared/types/index';
 import bankMindLogo from '@shared/assets/logo_BankMind.png';
 
-interface XRAIHomePageProps {
+interface HomePageProps {
   onNavigateToService: (service: ServiceType) => void;
   onLogout: () => void;
 }
 
-export function HomePage({ onNavigateToService, onLogout }: XRAIHomePageProps) {
+export function HomePage({ onNavigateToService, onLogout }: HomePageProps) {
   const { user, isAdmin } = useAuth();
   const [showServicesDropdown, setShowServicesDropdown] = useState(false);
 
@@ -111,7 +112,7 @@ export function HomePage({ onNavigateToService, onLogout }: XRAIHomePageProps) {
               </div>
 
               {/* Admin-only menu items */}
-              {isAdmin() && (
+              {isAdmin && (
                 <>
                   <button
                     onClick={() => onNavigateToService('auditoria')}
@@ -138,7 +139,7 @@ export function HomePage({ onNavigateToService, onLogout }: XRAIHomePageProps) {
               <div className="hidden md:block text-right">
                 <p className="text-sm font-medium text-gray-900">{user?.name}</p>
                 <p className="text-xs text-gray-500">
-                  {isAdmin() ? 'Administrador' : 'Operario'}
+                  {isAdmin ? 'Administrador' : 'Operario'}
                 </p>
               </div>
               <button

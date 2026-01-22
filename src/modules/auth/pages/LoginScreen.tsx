@@ -6,17 +6,28 @@ import { Input } from '@shared/components/ui/input';
 import { Label } from '@shared/components/ui/label';
 import { Checkbox } from '@shared/components/ui/checkbox';
 
-interface XRAILoginScreenProps {
+//Interfaz para las props del componente LoginScreen -> Se define que tipo de datos va a recibir el componente
+interface ILoginScreenProps {
   onLogin: (username: string, password: string, rememberPassword: boolean) => void;
   loginError?: string;
 }
 
-export function LoginScreen({ onLogin, loginError }: XRAILoginScreenProps) {
+/**
+ * @param {function} onLogin Función que se ejecuta cuando se hace clic en el botón de iniciar sesión
+ * @param {string} loginError Error que se muestra si el inicio de sesión falla
+ */
+export function LoginScreen({ onLogin, loginError }: ILoginScreenProps) {
+  //Estado para guardar el usuario
   const [username, setUsername] = useState('');
+  //Estado para guardar la contraseña
   const [password, setPassword] = useState('');
+  //Estado para mostrar u ocultar la contraseña
   const [showPassword, setShowPassword] = useState(false);
+  //Estado para recordar la contraseña
   const [rememberPassword, setRememberPassword] = useState(false);
 
+  //Función que se ejecuta cuando se hace clic en el botón de iniciar sesión
+  //React.FormEvent es el tipo de evento que se produce cuando se envía un formulario
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onLogin(username, password, rememberPassword);
