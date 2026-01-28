@@ -21,9 +21,9 @@ import {
     Heart,
     Cake,
     FileText,
-    BarChart3
+    BarChart3,
+    Loader2
 } from 'lucide-react';
-import { mockClients } from '../utils/mockData';
 import {
     BarChart,
     Bar,
@@ -37,6 +37,8 @@ import {
     Legend,
     ResponsiveContainer
 } from 'recharts';
+import { filterCustomers, predictBatch } from '../services/morosidadService';
+import type { BatchFilters, BatchAccountPrediction } from '../types/morosidad.types';
 
 const COLORS = {
     Crítico: '#dc2626',
@@ -46,7 +48,16 @@ const COLORS = {
 };
 
 export function BatchPredictionPage() {
-    const [filters, setFilters] = useState({
+    const [filters, setFilters] = useState<BatchFilters>({
+        edadMin: undefined,
+        edadMax: undefined,
+        educacion: undefined,
+        estadoCivil: undefined,
+        fechaDesde: undefined,
+        fechaHasta: undefined
+    });
+
+    const [filterInputs, setFilterInputs] = useState({
         edadMin: '',
         edadMax: '',
         educacion: 'all',
@@ -55,37 +66,19 @@ export function BatchPredictionPage() {
         fechaHasta: ''
     });
 
+    const [predictions, setPredictions] = useState<BatchAccountPrediction[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const [showResults, setShowResults] = useState(false);
 
-    // Filtrar clientes basado en los criterios
-    const filteredClients = useMemo(() => {
-        return mockClients.filter(client => {
-            // Filtro por edad
-            if (filters.edadMin && client.edad < parseInt(filters.edadMin)) return false;
-            if (filters.edadMax && client.edad > parseInt(filters.edadMax)) return false;
-
-            // Filtro por educación
-            if (filters.educacion !== 'all' && client.educacion !== filters.educacion) return false;
-
-            // Filtro por estado civil
-            if (filters.estadoCivil !== 'all' && client.estadoCivil !== filters.estadoCivil) return false;
-
-            // Filtro por fecha de registro
-            if (filters.fechaDesde && client.fechaRegistro < filters.fechaDesde) return false;
-            if (filters.fechaHasta && client.fechaRegistro > filters.fechaHasta) return false;
-
-            return true;
-        });
-    }, [filters]);
-
-    // Calcular estadísticas del lote filtrado
+    // Calcular estadísticas del lote
     const batchStats = useMemo(() => {
-        const total = filteredClients.length;
-        const enRiesgo = filteredClients.filter(c => c.probabilidadPago < 50).length;
-        const dineroEnRiesgo = filteredClients
+        const total = predictions.length;
+        const enRiesgo = predictions.filter(c => c.probabilidadPago < 50).length;
+        const dineroEnRiesgo = predictions
             .filter(c => c.probabilidadPago < 50)
-            .reduce((sum, c) => sum + c.montoCuota, 0);
-        const promedioProb = filteredClients.reduce((sum, c) => sum + c.probabilidadPago, 0) / (total || 1);
+            .reduce((sum, c) => sum + (c.ultimaCuota || 0), 0);
+        const promedioProb = predictions.reduce((sum, c) => sum + c.probabilidadPago, 0) / (total || 1);
 
         return {
             total,
@@ -93,20 +86,51 @@ export function BatchPredictionPage() {
             dineroEnRiesgo,
             promedioProb,
             porNivel: {
-                Crítico: filteredClients.filter(c => c.nivelRiesgo === 'Crítico').length,
-                Alto: filteredClients.filter(c => c.nivelRiesgo === 'Alto').length,
-                Medio: filteredClients.filter(c => c.nivelRiesgo === 'Medio').length,
-                Bajo: filteredClients.filter(c => c.nivelRiesgo === 'Bajo').length
+                Crítico: predictions.filter(c => c.nivelRiesgo === 'Crítico').length,
+                Alto: predictions.filter(c => c.nivelRiesgo === 'Alto').length,
+                Medio: predictions.filter(c => c.nivelRiesgo === 'Medio').length,
+                Bajo: predictions.filter(c => c.nivelRiesgo === 'Bajo').length
             }
         };
-    }, [filteredClients]);
+    }, [predictions]);
 
-    const handleApplyFilters = () => {
-        setShowResults(true);
+    const handleApplyFilters = async () => {
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            // Construir filtros para la API
+            const apiFilters: BatchFilters = {};
+            if (filterInputs.edadMin) apiFilters.edadMin = parseInt(filterInputs.edadMin);
+            if (filterInputs.edadMax) apiFilters.edadMax = parseInt(filterInputs.edadMax);
+            if (filterInputs.educacion !== 'all') apiFilters.educacion = filterInputs.educacion;
+            if (filterInputs.estadoCivil !== 'all') apiFilters.estadoCivil = filterInputs.estadoCivil;
+            if (filterInputs.fechaDesde) apiFilters.fechaDesde = filterInputs.fechaDesde;
+            if (filterInputs.fechaHasta) apiFilters.fechaHasta = filterInputs.fechaHasta;
+
+            // 1. Filtrar clientes y obtener recordIds
+            const recordIds = await filterCustomers(apiFilters);
+
+            if (recordIds.length === 0) {
+                setPredictions([]);
+                setShowResults(true);
+                setIsLoading(false);
+                return;
+            }
+
+            // 2. Realizar predicción batch
+            const results = await predictBatch(recordIds);
+            setPredictions(results);
+            setShowResults(true);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Error al procesar la solicitud');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleClearFilters = () => {
-        setFilters({
+        setFilterInputs({
             edadMin: '',
             edadMax: '',
             educacion: 'all',
@@ -114,21 +138,26 @@ export function BatchPredictionPage() {
             fechaDesde: '',
             fechaHasta: ''
         });
+        setPredictions([]);
         setShowResults(false);
+        setError(null);
     };
 
     const exportResults = () => {
         const csv = [
-            ['ID', 'Nombre', 'Edad', 'Educación', 'Estado Civil', 'Probabilidad de Pago', 'Nivel de Riesgo', 'Monto Cuota'].join(','),
-            ...filteredClients.map(c => [
-                c.id,
+            ['RecordID', 'ClienteID', 'Nombre', 'Edad', 'Educación', 'Estado Civil', 'Límite Crédito', 'Balance', 'Probabilidad Pago', 'Nivel Riesgo', 'Última Cuota'].join(','),
+            ...predictions.map(c => [
+                c.recordId,
+                c.idCustomer,
                 c.nombre,
                 c.edad,
                 c.educacion,
                 c.estadoCivil,
-                c.probabilidadPago,
+                c.limitBal,
+                c.balance,
+                c.probabilidadPago.toFixed(2),
                 c.nivelRiesgo,
-                c.montoCuota
+                c.ultimaCuota
             ].join(','))
         ].join('\n');
 
@@ -140,7 +169,7 @@ export function BatchPredictionPage() {
         a.click();
     };
 
-    // Datos para gráfico de distribución por nivel de riesgo
+    // Datos para gráficos
     const riskDistributionData = [
         { nivel: 'Crítico', cantidad: batchStats.porNivel.Crítico },
         { nivel: 'Alto', cantidad: batchStats.porNivel.Alto },
@@ -148,25 +177,23 @@ export function BatchPredictionPage() {
         { nivel: 'Bajo', cantidad: batchStats.porNivel.Bajo }
     ];
 
-    // Datos para gráfico de distribución por educación
     const educationDistribution = useMemo(() => {
         const groups = ['Primaria', 'Secundaria', 'Universitaria', 'Postgrado'];
         return groups.map(edu => ({
             educacion: edu,
-            cantidad: filteredClients.filter(c => c.educacion === edu).length,
-            enRiesgo: filteredClients.filter(c => c.educacion === edu && c.probabilidadPago < 50).length
+            cantidad: predictions.filter(c => c.educacion === edu).length,
+            enRiesgo: predictions.filter(c => c.educacion === edu && c.probabilidadPago < 50).length
         }));
-    }, [filteredClients]);
+    }, [predictions]);
 
-    // Datos para gráfico de distribución por estado civil
     const maritalStatusDistribution = useMemo(() => {
-        const groups = ['Soltero', 'Casado', 'Divorciado', 'Viudo'];
+        const groups = ['Soltero', 'Casado', 'Divorciado'];
         return groups.map(status => ({
             estado: status,
-            cantidad: filteredClients.filter(c => c.estadoCivil === status).length,
-            enRiesgo: filteredClients.filter(c => c.estadoCivil === status && c.probabilidadPago < 50).length
+            cantidad: predictions.filter(c => c.estadoCivil === status).length,
+            enRiesgo: predictions.filter(c => c.estadoCivil === status && c.probabilidadPago < 50).length
         }));
-    }, [filteredClients]);
+    }, [predictions]);
 
     return (
         <div className="space-y-6">
@@ -196,15 +223,15 @@ export function BatchPredictionPage() {
                             <Input
                                 type="number"
                                 placeholder="Min"
-                                value={filters.edadMin}
-                                onChange={(e) => setFilters({ ...filters, edadMin: e.target.value })}
+                                value={filterInputs.edadMin}
+                                onChange={(e) => setFilterInputs({ ...filterInputs, edadMin: e.target.value })}
                                 className="flex-1"
                             />
                             <Input
                                 type="number"
                                 placeholder="Max"
-                                value={filters.edadMax}
-                                onChange={(e) => setFilters({ ...filters, edadMax: e.target.value })}
+                                value={filterInputs.edadMax}
+                                onChange={(e) => setFilterInputs({ ...filterInputs, edadMax: e.target.value })}
                                 className="flex-1"
                             />
                         </div>
@@ -217,8 +244,8 @@ export function BatchPredictionPage() {
                             Nivel de Educación
                         </label>
                         <Select
-                            value={filters.educacion}
-                            onValueChange={(val) => setFilters({ ...filters, educacion: val })}
+                            value={filterInputs.educacion}
+                            onValueChange={(val) => setFilterInputs({ ...filterInputs, educacion: val })}
                         >
                             <SelectTrigger>
                                 <SelectValue placeholder="Seleccionar nivel" />
@@ -240,8 +267,8 @@ export function BatchPredictionPage() {
                             Estado Civil
                         </label>
                         <Select
-                            value={filters.estadoCivil}
-                            onValueChange={(val) => setFilters({ ...filters, estadoCivil: val })}
+                            value={filterInputs.estadoCivil}
+                            onValueChange={(val) => setFilterInputs({ ...filterInputs, estadoCivil: val })}
                         >
                             <SelectTrigger>
                                 <SelectValue placeholder="Seleccionar estado" />
@@ -251,7 +278,6 @@ export function BatchPredictionPage() {
                                 <SelectItem value="Soltero">Soltero</SelectItem>
                                 <SelectItem value="Casado">Casado</SelectItem>
                                 <SelectItem value="Divorciado">Divorciado</SelectItem>
-                                <SelectItem value="Viudo">Viudo</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -264,8 +290,8 @@ export function BatchPredictionPage() {
                         </label>
                         <Input
                             type="date"
-                            value={filters.fechaDesde}
-                            onChange={(e) => setFilters({ ...filters, fechaDesde: e.target.value })}
+                            value={filterInputs.fechaDesde}
+                            onChange={(e) => setFilterInputs({ ...filterInputs, fechaDesde: e.target.value })}
                         />
                     </div>
 
@@ -277,26 +303,59 @@ export function BatchPredictionPage() {
                         </label>
                         <Input
                             type="date"
-                            value={filters.fechaHasta}
-                            onChange={(e) => setFilters({ ...filters, fechaHasta: e.target.value })}
+                            value={filterInputs.fechaHasta}
+                            onChange={(e) => setFilterInputs({ ...filterInputs, fechaHasta: e.target.value })}
                         />
                     </div>
                 </div>
 
                 {/* Botones de acción */}
                 <div className="flex gap-3 mt-6">
-                    <Button onClick={handleApplyFilters} className="gap-2 bg-blue-600 hover:bg-blue-700">
-                        <BarChart3 className="w-4 h-4" />
-                        Aplicar Filtros y Analizar
+                    <Button
+                        onClick={handleApplyFilters}
+                        className="gap-2 bg-blue-600 hover:bg-blue-700"
+                        disabled={isLoading}
+                    >
+                        {isLoading ? (
+                            <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Procesando...
+                            </>
+                        ) : (
+                            <>
+                                <BarChart3 className="w-4 h-4" />
+                                Aplicar Filtros y Analizar
+                            </>
+                        )}
                     </Button>
-                    <Button variant="outline" onClick={handleClearFilters}>
+                    <Button variant="outline" onClick={handleClearFilters} disabled={isLoading}>
                         Limpiar Filtros
                     </Button>
                 </div>
+
+                {/* Error message */}
+                {error && (
+                    <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                        {error}
+                    </div>
+                )}
             </Card>
 
+            {/* Loading indicator */}
+            {isLoading && (
+                <Card className="p-8 bg-white border-0 shadow-sm">
+                    <div className="flex flex-col items-center justify-center gap-4">
+                        <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
+                        <div className="text-center">
+                            <p className="text-lg font-medium text-zinc-900">Procesando predicciones...</p>
+                            <p className="text-sm text-zinc-500">Esto puede tomar unos segundos</p>
+                        </div>
+                    </div>
+                </Card>
+            )}
+
             {/* Resultados */}
-            {showResults && (
+            {showResults && !isLoading && (
                 <>
                     {/* Métricas principales del lote */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -306,7 +365,7 @@ export function BatchPredictionPage() {
                                     <Users className="w-6 h-6 text-blue-600" />
                                 </div>
                                 <div>
-                                    <p className="text-sm text-zinc-600">Total Clientes</p>
+                                    <p className="text-sm text-zinc-600">Total Cuentas</p>
                                     <p className="text-2xl font-bold text-zinc-900">{batchStats.total}</p>
                                 </div>
                             </div>
@@ -347,7 +406,7 @@ export function BatchPredictionPage() {
                                     <TrendingUp className="w-6 h-6 text-green-600" />
                                 </div>
                                 <div>
-                                    <p className="text-sm text-zinc-600">Prob. Promedio de Pago</p>
+                                    <p className="text-sm text-zinc-600">Prob. Promedio Pago</p>
                                     <p className="text-2xl font-bold text-zinc-900">{batchStats.promedioProb.toFixed(1)}%</p>
                                 </div>
                             </div>
@@ -429,7 +488,7 @@ export function BatchPredictionPage() {
                                             <span className="text-sm font-medium text-zinc-700">{nivel}</span>
                                         </div>
                                         <div className="text-right">
-                                            <p className="text-sm font-bold text-zinc-900">{cantidad} clientes</p>
+                                            <p className="text-sm font-bold text-zinc-900">{cantidad} cuentas</p>
                                             <p className="text-xs text-zinc-500">
                                                 {batchStats.total > 0
                                                     ? `${((cantidad / batchStats.total) * 100).toFixed(1)}%`
@@ -448,7 +507,7 @@ export function BatchPredictionPage() {
                             <div>
                                 <h3 className="font-semibold text-zinc-900">Resultados Detallados</h3>
                                 <p className="text-sm text-zinc-500 mt-1">
-                                    {batchStats.total} clientes en el lote filtrado
+                                    {batchStats.total} cuentas en el lote analizado
                                 </p>
                             </div>
                             <Button onClick={exportResults} variant="outline" className="gap-2">
@@ -460,43 +519,41 @@ export function BatchPredictionPage() {
                             <table className="w-full">
                                 <thead className="bg-zinc-50">
                                     <tr>
-                                        <th className="text-left py-3 px-6 text-xs text-zinc-500 font-medium uppercase tracking-wider">ID</th>
+                                        <th className="text-left py-3 px-6 text-xs text-zinc-500 font-medium uppercase tracking-wider">RecordID</th>
                                         <th className="text-left py-3 px-6 text-xs text-zinc-500 font-medium uppercase tracking-wider">Nombre</th>
                                         <th className="text-left py-3 px-6 text-xs text-zinc-500 font-medium uppercase tracking-wider">Edad</th>
                                         <th className="text-left py-3 px-6 text-xs text-zinc-500 font-medium uppercase tracking-wider">Educación</th>
                                         <th className="text-left py-3 px-6 text-xs text-zinc-500 font-medium uppercase tracking-wider">Estado Civil</th>
+                                        <th className="text-right py-3 px-6 text-xs text-zinc-500 font-medium uppercase tracking-wider">Límite</th>
                                         <th className="text-right py-3 px-6 text-xs text-zinc-500 font-medium uppercase tracking-wider">Prob. Pago</th>
                                         <th className="text-left py-3 px-6 text-xs text-zinc-500 font-medium uppercase tracking-wider">Nivel Riesgo</th>
-                                        <th className="text-right py-3 px-6 text-xs text-zinc-500 font-medium uppercase tracking-wider">Monto Cuota</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-zinc-100">
-                                    {filteredClients.slice(0, 50).map((client) => (
-                                        <tr key={client.id} className="hover:bg-zinc-50 transition-colors">
-                                            <td className="py-3 px-6 text-sm text-zinc-900">{client.id}</td>
-                                            <td className="py-3 px-6 text-sm text-zinc-900 font-medium">{client.nombre}</td>
-                                            <td className="py-3 px-6 text-sm text-zinc-600">{client.edad}</td>
-                                            <td className="py-3 px-6 text-sm text-zinc-600">{client.educacion}</td>
-                                            <td className="py-3 px-6 text-sm text-zinc-600">{client.estadoCivil}</td>
-                                            <td className="py-3 px-6 text-sm text-right font-medium">{client.probabilidadPago.toFixed(1)}%</td>
+                                    {predictions.slice(0, 50).map((pred) => (
+                                        <tr key={pred.recordId} className="hover:bg-zinc-50 transition-colors">
+                                            <td className="py-3 px-6 text-sm text-zinc-900">{pred.recordId}</td>
+                                            <td className="py-3 px-6 text-sm text-zinc-900 font-medium">{pred.nombre}</td>
+                                            <td className="py-3 px-6 text-sm text-zinc-600">{pred.edad}</td>
+                                            <td className="py-3 px-6 text-sm text-zinc-600">{pred.educacion}</td>
+                                            <td className="py-3 px-6 text-sm text-zinc-600">{pred.estadoCivil}</td>
+                                            <td className="py-3 px-6 text-sm text-right text-zinc-900">${pred.limitBal?.toLocaleString()}</td>
+                                            <td className="py-3 px-6 text-sm text-right font-medium">{pred.probabilidadPago.toFixed(1)}%</td>
                                             <td className="py-3 px-6 text-sm">
                                                 <span
                                                     className="px-2 py-1 rounded-full text-xs text-white font-medium"
-                                                    style={{ backgroundColor: COLORS[client.nivelRiesgo] }}
+                                                    style={{ backgroundColor: COLORS[pred.nivelRiesgo as keyof typeof COLORS] || '#6b7280' }}
                                                 >
-                                                    {client.nivelRiesgo}
+                                                    {pred.nivelRiesgo}
                                                 </span>
-                                            </td>
-                                            <td className="py-3 px-6 text-sm text-right text-zinc-900">
-                                                ${client.montoCuota.toLocaleString()}
                                             </td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
-                            {filteredClients.length > 50 && (
+                            {predictions.length > 50 && (
                                 <div className="p-4 bg-zinc-50 text-center text-sm text-zinc-500">
-                                    Mostrando 50 de {filteredClients.length} resultados. Exporta el CSV para ver todos.
+                                    Mostrando 50 de {predictions.length} resultados. Exporta el CSV para ver todos.
                                 </div>
                             )}
                         </div>
@@ -520,7 +577,7 @@ export function BatchPredictionPage() {
                                     </p>
                                     {batchStats.porNivel.Crítico > 0 && (
                                         <p className="text-sm text-red-700 font-medium">
-                                            → ⚠️ {batchStats.porNivel.Crítico} clientes requieren atención inmediata (riesgo crítico)
+                                            → ⚠️ {batchStats.porNivel.Crítico} cuentas requieren atención inmediata (riesgo crítico)
                                         </p>
                                     )}
                                 </div>

@@ -5,6 +5,8 @@ import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
 import { Label } from '@shared/components/ui/label';
 import { Checkbox } from '@shared/components/ui/checkbox';
+// 🔧 DEV ONLY - Eliminar en producción
+import { DevCredentials } from '@shared/components/DevCredentials';
 
 interface XRAILoginScreenProps {
   onLogin: (username: string, password: string, rememberPassword: boolean) => void;
@@ -149,6 +151,8 @@ export function LoginScreen({ onLogin, onForgotPassword, loginError, isLoading =
           <span>Protegido por tecnología de seguridad avanzada</span>
         </div>
       </div>
+      {/* 🔧 DEV ONLY - Credenciales de prueba - Eliminar en producción */}
+      <DevCredentials onSelect={(email, pass) => { setUsername(email); setPassword(pass); }} />
     </div>
   );
 }

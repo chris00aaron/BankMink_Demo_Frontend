@@ -23,7 +23,7 @@ export function PasswordRequestsTab() {
 
     const fetchRequests = async () => {
         try {
-            const response = await fetch('http://localhost:8000/api/admin/password-requests', {
+            const response = await fetch('http://localhost:8080/api/admin/password-requests', {
                 credentials: 'include'
             });
             const data = await response.json();
@@ -44,7 +44,7 @@ export function PasswordRequestsTab() {
 
         setProcessingId(id);
         try {
-            const response = await fetch(`http://localhost:8000/api/admin/password-requests/${id}/approve`, {
+            const response = await fetch(`http://localhost:8080/api/admin/password-requests/${id}/approve`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -71,7 +71,7 @@ export function PasswordRequestsTab() {
 
         setProcessingId(id);
         try {
-            const response = await fetch(`http://localhost:8000/api/admin/password-requests/${id}/reject`, {
+            const response = await fetch(`http://localhost:8080/api/admin/password-requests/${id}/reject`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

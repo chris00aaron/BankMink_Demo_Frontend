@@ -36,7 +36,7 @@ export function CreateUserModal({ isOpen, onClose, onSuccess }: CreateUserModalP
 
     const fetchRoles = async () => {
         try {
-            const response = await fetch('http://localhost:8000/api/admin/users/roles', {
+            const response = await fetch('http://localhost:8080/api/admin/users/roles', {
                 credentials: 'include'
             });
             const data = await response.json();
@@ -54,7 +54,7 @@ export function CreateUserModal({ isOpen, onClose, onSuccess }: CreateUserModalP
         setError('');
 
         try {
-            const response = await fetch('http://localhost:8000/api/admin/users', {
+            const response = await fetch('http://localhost:8080/api/admin/users', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
