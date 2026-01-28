@@ -136,7 +136,7 @@ export function HomePage({ onNavigateToService, onLogout }: XRAIHomePageProps) {
             {/* User Section */}
             <div className="flex items-center gap-4">
               <div className="hidden md:block text-right">
-                <p className="text-sm font-medium text-gray-900">{user?.name}</p>
+                <p className="text-sm font-medium text-gray-900">{user?.fullName}</p>
                 <p className="text-xs text-gray-500">
                   {isAdmin() ? 'Administrador' : 'Operario'}
                 </p>
@@ -146,7 +146,7 @@ export function HomePage({ onNavigateToService, onLogout }: XRAIHomePageProps) {
                 className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white text-sm font-semibold hover:shadow-lg transition-shadow"
                 title="Cerrar sesión"
               >
-                {user?.name.charAt(0).toUpperCase()}
+                {user?.fullName?.charAt(0)?.toUpperCase() || '?'}
               </button>
             </div>
           </div>

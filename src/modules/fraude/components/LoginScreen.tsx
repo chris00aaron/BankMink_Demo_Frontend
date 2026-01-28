@@ -5,13 +5,17 @@ import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
 import { Label } from '@shared/components/ui/label';
 import { Checkbox } from '@shared/components/ui/checkbox';
+// 🔧 DEV ONLY - Eliminar en producción
+import { DevCredentials } from '@shared/components/DevCredentials';
 
 interface XRAILoginScreenProps {
   onLogin: (username: string, password: string, rememberPassword: boolean) => void;
+  onForgotPassword?: () => void;
   loginError?: string;
+  isLoading?: boolean;
 }
 
-export function LoginScreen({ onLogin, loginError }: XRAILoginScreenProps) {
+export function LoginScreen({ onLogin, onForgotPassword, loginError, isLoading = false }: XRAILoginScreenProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -113,10 +117,24 @@ export function LoginScreen({ onLogin, loginError }: XRAILoginScreenProps) {
             {/* Login Button */}
             <Button
               type="submit"
-              className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-6 shadow-lg shadow-blue-500/20 transition-all"
+              disabled={isLoading}
+              className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-6 shadow-lg shadow-blue-500/20 transition-all disabled:opacity-50"
             >
-              Ingresar al Sistema
+              {isLoading ? 'Verificando...' : 'Ingresar al Sistema'}
             </Button>
+
+            {/* Forgot Password Link */}
+            {onForgotPassword && (
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={onForgotPassword}
+                  className="text-sm text-blue-600 hover:text-blue-700 transition-colors"
+                >
+                  ¿Olvidaste tu contraseña?
+                </button>
+              </div>
+            )}
           </form>
 
           {/* Footer */}
@@ -133,6 +151,8 @@ export function LoginScreen({ onLogin, loginError }: XRAILoginScreenProps) {
           <span>Protegido por tecnología de seguridad avanzada</span>
         </div>
       </div>
+      {/* 🔧 DEV ONLY - Credenciales de prueba - Eliminar en producción */}
+      <DevCredentials onSelect={(email, pass) => { setUsername(email); setPassword(pass); }} />
     </div>
   );
 }

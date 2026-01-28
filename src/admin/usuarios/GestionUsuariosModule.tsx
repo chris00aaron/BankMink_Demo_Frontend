@@ -1,64 +1,85 @@
-import { useState } from 'react';
-import { Users, Search, Plus, Edit, Trash2, Shield, ArrowLeft } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Users, Search, Plus, Trash2, Shield, ArrowLeft, Key } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
 import { Badge } from '@shared/components/ui/badge';
+import { CreateUserModal } from './components/CreateUserModal';
+import { PasswordRequestsTab } from './components/PasswordRequestsTab';
 
 interface GestionUsuariosModuleProps {
   onBack: () => void;
 }
 
-export function GestionUsuariosModule({ onBack }: GestionUsuariosModuleProps) {
-  const [searchTerm, setSearchTerm] = useState('');
+interface User {
+  id: number;
+  dni: string;
+  fullName: string;
+  email: string;
+  phone?: string;
+  roleCodRole: string;
+  roleName: string;
+  enable: boolean;
+  lastAccess?: string;
+  createdAt: string;
+}
 
-  // Mock users data
-  const users = [
-    {
-      id: 1,
-      username: 'admin',
-      name: 'Administrador',
-      email: 'admin@xrai.com',
-      role: 'Administrador',
-      status: 'active',
-      lastAccess: '2026-01-20 14:35:22'
-    },
-    {
-      id: 2,
-      username: 'op-anomalias',
-      name: 'Operario Anomalías',
-      email: 'anomalias@xrai.com',
-      role: 'Operario - Anomalías Transaccionales',
-      status: 'active',
-      lastAccess: '2026-01-20 14:35:22'
-    },
-    {
-      id: 3,
-      username: 'op-morosidad',
-      name: 'Operario Morosidad',
-      email: 'morosidad@xrai.com',
-      role: 'Operario - Morosidad Detalle',
-      status: 'active',
-      lastAccess: '2026-01-20 12:10:08'
-    },
-    {
-      id: 4,
-      username: 'op-demanda',
-      name: 'Operario Demanda Efectivo',
-      email: 'demanda@xrai.com',
-      role: 'Operario - Demanda Efectivo',
-      status: 'active',
-      lastAccess: '2026-01-20 09:30:12'
-    },
-    {
-      id: 5,
-      username: 'op-fuga',
-      name: 'Operario Fuga Demanda',
-      email: 'fuga@xrai.com',
-      role: 'Operario - Fuga Demanda',
-      status: 'active',
-      lastAccess: '2026-01-20 11:45:33'
-    },
-  ];
+type TabType = 'users' | 'password-requests';
+
+export function GestionUsuariosModule({ onBack }: GestionUsuariosModuleProps) {
+  const [activeTab, setActiveTab] = useState<TabType>('users');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/api/admin/users', {
+        credentials: 'include'
+      });
+      const data = await response.json();
+      if (data.success) {
+        setUsers(data.data);
+      }
+    } catch (err) {
+      console.error('Error fetching users:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId: number) => {
+    if (!confirm('¿Está seguro de eliminar este usuario?')) return;
+
+    try {
+      const response = await fetch(`http://localhost:8080/api/admin/users/${userId}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+      const data = await response.json();
+      if (data.success) {
+        fetchUsers();
+      } else {
+        alert(data.message || 'Error al eliminar usuario');
+      }
+    } catch (err) {
+      alert('Error de conexión');
+    }
+  };
+
+  const filteredUsers = users.filter(user =>
+    user.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user.dni.includes(searchTerm)
+  );
+
+  const adminCount = users.filter(u => u.roleCodRole === 'ADMIN').length;
+  const operatorCount = users.filter(u => u.roleCodRole !== 'ADMIN').length;
+  const activeToday = users.filter(u => u.enable).length;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -85,162 +106,214 @@ export function GestionUsuariosModule({ onBack }: GestionUsuariosModuleProps) {
                 </div>
               </div>
             </div>
-            <Button className="gap-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800">
-              <Plus className="w-4 h-4" />
-              Nuevo Usuario
-            </Button>
+            {activeTab === 'users' && (
+              <Button
+                onClick={() => setIsModalOpen(true)}
+                className="gap-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800"
+              >
+                <Plus className="w-4 h-4" />
+                Nuevo Usuario
+              </Button>
+            )}
           </div>
 
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <Input
-              type="text"
-              placeholder="Buscar usuarios..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-11"
-            />
+          {/* Tabs */}
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => setActiveTab('users')}
+              className={`px-4 py-2 rounded-lg font-medium transition-all ${activeTab === 'users'
+                ? 'bg-indigo-100 text-indigo-700'
+                : 'text-gray-600 hover:bg-gray-100'
+                }`}
+            >
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4" />
+                Usuarios
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('password-requests')}
+              className={`px-4 py-2 rounded-lg font-medium transition-all ${activeTab === 'password-requests'
+                ? 'bg-indigo-100 text-indigo-700'
+                : 'text-gray-600 hover:bg-gray-100'
+                }`}
+            >
+              <div className="flex items-center gap-2">
+                <Key className="w-4 h-4" />
+                Solicitudes de Contraseña
+              </div>
+            </button>
           </div>
+
+          {/* Search - only for users tab */}
+          {activeTab === 'users' && (
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <Input
+                type="text"
+                placeholder="Buscar usuarios..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-11"
+              />
+            </div>
+          )}
         </div>
       </header>
 
       {/* Content */}
       <main className="p-8">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-gray-600">Total Usuarios</p>
-              <Users className="w-5 h-5 text-indigo-600" />
-            </div>
-            <p className="text-3xl font-bold text-gray-900">5</p>
-          </div>
+        {activeTab === 'users' ? (
+          <>
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+              <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm text-gray-600">Total Usuarios</p>
+                  <Users className="w-5 h-5 text-indigo-600" />
+                </div>
+                <p className="text-3xl font-bold text-gray-900">{users.length}</p>
+              </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-gray-600">Administradores</p>
-              <Shield className="w-5 h-5 text-purple-600" />
-            </div>
-            <p className="text-3xl font-bold text-gray-900">1</p>
-          </div>
+              <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm text-gray-600">Administradores</p>
+                  <Shield className="w-5 h-5 text-purple-600" />
+                </div>
+                <p className="text-3xl font-bold text-gray-900">{adminCount}</p>
+              </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-gray-600">Operarios</p>
-              <Users className="w-5 h-5 text-blue-600" />
-            </div>
-            <p className="text-3xl font-bold text-gray-900">4</p>
-          </div>
+              <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm text-gray-600">Operarios</p>
+                  <Users className="w-5 h-5 text-blue-600" />
+                </div>
+                <p className="text-3xl font-bold text-gray-900">{operatorCount}</p>
+              </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-gray-600">Activos Hoy</p>
-              <Users className="w-5 h-5 text-green-600" />
-            </div>
-            <p className="text-3xl font-bold text-gray-900">5</p>
-          </div>
-        </div>
-
-        {/* Users Table */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Usuario
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Email
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Rol
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Estado
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Último Acceso
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {users.map((user) => (
-                  <tr key={user.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold">
-                          {user.name.charAt(0)}
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">{user.name}</div>
-                          <div className="text-xs text-gray-500">@{user.username}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900">{user.email}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <Badge
-                        variant={user.role === 'Administrador' ? 'default' : 'secondary'}
-                        className={
-                          user.role === 'Administrador'
-                            ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
-                            : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                        }
-                      >
-                        {user.role}
-                      </Badge>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                        Activo
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-600">{user.lastAccess}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50">
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          disabled={user.role === 'Administrador'}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Info Box */}
-        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-6">
-          <div className="flex items-start gap-3">
-            <Shield className="w-5 h-5 text-blue-600 mt-0.5" />
-            <div>
-              <h3 className="font-semibold text-blue-900 mb-1">Credenciales de Prueba</h3>
-              <div className="text-sm text-blue-700 space-y-1">
-                <p><strong>Admin:</strong> usuario: admin, contraseña: admin123</p>
-                <p><strong>Operarios:</strong> op-anomalias/anom123, op-morosidad/mora123, op-demanda/dema123, op-fuga/fuga123</p>
+              <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm text-gray-600">Activos</p>
+                  <Users className="w-5 h-5 text-green-600" />
+                </div>
+                <p className="text-3xl font-bold text-gray-900">{activeToday}</p>
               </div>
             </div>
-          </div>
-        </div>
+
+            {/* Users Table */}
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Usuario
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Email
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Rol
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Estado
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Último Acceso
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Acciones
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {loading ? (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                          Cargando usuarios...
+                        </td>
+                      </tr>
+                    ) : filteredUsers.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                          No se encontraron usuarios
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredUsers.map((user) => (
+                        <tr key={user.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold">
+                                {user.fullName.charAt(0)}
+                              </div>
+                              <div>
+                                <div className="text-sm font-medium text-gray-900">{user.fullName}</div>
+                                <div className="text-xs text-gray-500">DNI: {user.dni}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm text-gray-900">{user.email}</div>
+                            {user.phone && <div className="text-xs text-gray-500">{user.phone}</div>}
+                          </td>
+                          <td className="px-6 py-4">
+                            <Badge
+                              variant={user.roleCodRole === 'ADMIN' ? 'default' : 'secondary'}
+                              className={
+                                user.roleCodRole === 'ADMIN'
+                                  ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                                  : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                              }
+                            >
+                              {user.roleName}
+                            </Badge>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${user.enable
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-red-100 text-red-700'
+                              }`}>
+                              {user.enable ? 'Activo' : 'Inactivo'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-600">
+                              {user.lastAccess ? new Date(user.lastAccess).toLocaleString('es-ES') : 'Nunca'}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                disabled={user.roleCodRole === 'ADMIN'}
+                                onClick={() => handleDeleteUser(user.id)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        ) : (
+          <PasswordRequestsTab />
+        )}
       </main>
+
+      {/* Modal */}
+      <CreateUserModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={fetchUsers}
+      />
     </div>
   );
 }

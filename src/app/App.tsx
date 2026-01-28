@@ -1,33 +1,107 @@
-import React, { useState, useEffect } from 'react';
-import { TrendingDown, AlertTriangle, DollarSign } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { AlertTriangle, DollarSign } from 'lucide-react';
 import { AuthProvider, useAuth, ServiceType } from '@shared/contexts/AuthContext';
 import {
   FraudeSidebar,
   FraudeLoginScreen,
-  FraudeHomePage,
-  Dashboard,
+  Dashboard as FraudeDashboard,
   BatchPrediction,
   IndividualPrediction,
   RiskAnalysis
 } from '@modules/fraude';
+import { ClientPrediction, Dashboard as MorosidadDashboard, MorosidadSidebar, BatchPrediction as MorosidadBatchPrediction, EarlyWarnings } from '@modules/morosidad';
+import { HomePage } from './pages/HomePage';
 import { ServicePlaceholder } from '@shared/components/ServicePlaceholder';
 import { AuditoriaModule } from '@admin/auditoria/AuditoriaModule';
 import { GestionUsuariosModule } from '@admin/usuarios/GestionUsuariosModule';
+import { OtpVerificationScreen } from '@shared/components/OtpVerificationScreen';
+import { ForgotPasswordScreen } from '@shared/components/ForgotPasswordScreen';
+
+import { ChangePasswordScreen } from '@shared/components/ChangePasswordScreen';
+
+type AuthScreen = 'login' | 'otp' | 'forgot-password';
 
 function AppContent() {
-  const { user, isAuthenticated, login, logout, hasAccessToService, isAdmin } = useAuth();
+  const {
+    user,
+    isAuthenticated,
+    isLoading,
+    mfaState,
+    passwordChangeRequired,
+    finalizePasswordChange,
+    login,
+    verifyOtp,
+    resendOtp,
+    logout,
+    forgotPassword,
+    hasAccessToService,
+    isAdmin,
+    cancelMfa
+  } = useAuth();
+
   const [currentView, setCurrentView] = useState<'home' | ServiceType>('home');
   const [currentScreen, setCurrentScreen] = useState('dashboard');
+  const [morosidadScreen, setMorosidadScreen] = useState('dashboard');
   const [loginError, setLoginError] = useState('');
+  const [otpError, setOtpError] = useState('');
+  const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
 
-  const handleLogin = (username: string, password: string, rememberPassword: boolean) => {
-    const success = login(username, password, rememberPassword);
-    if (success) {
+  console.log('App Render State:', {
+    isAuthenticated,
+    passwordChangeRequired,
+    authScreen,
+    mfaRequired: mfaState?.required,
+    currentView
+  });
+
+  // Manejar cambio a pantalla OTP cuando se requiere MFA
+  useEffect(() => {
+    if (mfaState?.required) {
+      setAuthScreen('otp');
       setLoginError('');
-      setCurrentView('home'); // Temporarily set to home, will be updated by useEffect
-    } else {
-      setLoginError('Usuario o contraseña incorrectos');
     }
+  }, [mfaState]);
+
+
+
+  const handleLogin = async (username: string, password: string, _rememberPassword: boolean) => {
+    const result = await login(username, password);
+    if (!result.success && result.error) {
+      setLoginError(result.error);
+    } else {
+      setLoginError('');
+    }
+  };
+
+  const handleVerifyOtp = async (code: string) => {
+    const result = await verifyOtp(code);
+    if (!result.success && result.error) {
+      setOtpError(result.error);
+    } else {
+      setOtpError('');
+      setAuthScreen('login');
+    }
+  };
+
+  const handleResendOtp = async () => {
+    const result = await resendOtp();
+    if (!result.success && result.error) {
+      setOtpError(result.error);
+    } else {
+      setOtpError('');
+    }
+  };
+
+  const handleForgotPassword = async (email: string) => {
+    await forgotPassword(email);
+    // El componente ForgotPasswordScreen maneja su propio estado de éxito
+  };
+
+  const handleBackToLogin = () => {
+    setAuthScreen('login');
+    setLoginError('');
+    setOtpError('');
+    cancelMfa();
   };
 
   // Redirect operarios to their service after login
@@ -60,14 +134,29 @@ function AppContent() {
     }
   }, [isAuthenticated, user]);
 
-  const handleLogout = () => {
-    logout();
+  // Si se requiere cambio de contraseña, mostrar pantalla de cambio
+  if (passwordChangeRequired) {
+    return <ChangePasswordScreen onPasswordChanged={() => {
+      finalizePasswordChange();
+      setAuthScreen('login');
+      // Asegurarse de limpiar errores
+      setLoginError('');
+    }} />;
+  }
+
+  const handleLogout = async () => {
+    await logout();
     setCurrentView('home');
     setCurrentScreen('dashboard');
+    setAuthScreen('login');
   };
 
   const handleNavigate = (screen: string) => {
     setCurrentScreen(screen);
+  };
+
+  const handleMorosidadNavigate = (screen: string) => {
+    setMorosidadScreen(screen);
   };
 
   const handleNavigateToService = (service: ServiceType) => {
@@ -76,6 +165,9 @@ function AppContent() {
       setCurrentView(service);
       if (service === 'anomalias-transaccionales') {
         setCurrentScreen('dashboard');
+      }
+      if (service === 'morosidad-detalle') {
+        setMorosidadScreen('dashboard');
       }
     }
   };
@@ -86,12 +178,44 @@ function AppContent() {
 
   // Pantalla de Login
   if (!isAuthenticated) {
-    return <FraudeLoginScreen onLogin={handleLogin} loginError={loginError} />;
+    // Pantalla de verificación OTP
+    if (authScreen === 'otp' && mfaState) {
+      return (
+        <OtpVerificationScreen
+          phoneHint={mfaState.phoneHint}
+          onVerify={handleVerifyOtp}
+          onResendCode={handleResendOtp}
+          onBack={handleBackToLogin}
+          error={otpError}
+          isLoading={isLoading}
+        />
+      );
+    }
+
+    // Pantalla de olvidé mi contraseña
+    if (authScreen === 'forgot-password') {
+      return (
+        <ForgotPasswordScreen
+          onSubmit={handleForgotPassword}
+          onBack={handleBackToLogin}
+        />
+      );
+    }
+
+    // Pantalla de login principal
+    return (
+      <FraudeLoginScreen
+        onLogin={handleLogin}
+        onForgotPassword={() => setAuthScreen('forgot-password')}
+        loginError={loginError}
+        isLoading={isLoading}
+      />
+    );
   }
 
   // Página Principal (HomePage) - Solo para admin
   if (currentView === 'home' && isAdmin()) {
-    return <FraudeHomePage onNavigateToService={handleNavigateToService} onLogout={handleLogout} />;
+    return <HomePage onNavigateToService={handleNavigateToService} onLogout={handleLogout} />;
   }
 
   // Módulo de Auditoría - Solo admin
@@ -107,12 +231,23 @@ function AppContent() {
   // Servicio: Morosidad Detalle
   if (currentView === 'morosidad-detalle') {
     return (
-      <ServicePlaceholder
-        serviceName="Morosidad Detalle"
-        icon={TrendingDown}
-        description="Análisis detallado de patrones de morosidad y predicción de incumplimiento de pagos"
-        onBack={handleBackToHome}
-      />
+      <div className="min-h-screen bg-gray-50 flex">
+        <MorosidadSidebar
+          currentScreen={morosidadScreen}
+          onNavigate={handleMorosidadNavigate}
+          onBackToHome={isAdmin() ? handleBackToHome : undefined}
+          onLogout={handleLogout}
+        />
+        <div className="flex-1 ml-64">
+          {/* Page Content */}
+          <main className="p-8">
+            {morosidadScreen === 'dashboard' && <MorosidadDashboard />}
+            {morosidadScreen === 'individual' && <ClientPrediction />}
+            {morosidadScreen === 'batch' && <MorosidadBatchPrediction />}
+            {morosidadScreen === 'alerts' && <EarlyWarnings />}
+          </main>
+        </div>
+      </div>
     );
   }
 
@@ -149,13 +284,14 @@ function AppContent() {
           currentScreen={currentScreen}
           onNavigate={handleNavigate}
           onBackToHome={isAdmin() ? handleBackToHome : undefined}
+          onLogout={handleLogout}
         />
 
         {/* Main Content Area */}
         <div className="flex-1 ml-64">
           {/* Page Content */}
           <main className="p-8">
-            {currentScreen === 'dashboard' && <Dashboard />}
+            {currentScreen === 'dashboard' && <FraudeDashboard />}
             {currentScreen === 'batch' && <BatchPrediction />}
             {currentScreen === 'individual' && <IndividualPrediction />}
             {currentScreen === 'risk-analysis' && <RiskAnalysis />}
@@ -166,7 +302,7 @@ function AppContent() {
   }
 
   // Fallback a home
-  return <FraudeHomePage onNavigateToService={handleNavigateToService} onLogout={handleLogout} />;
+  return <HomePage onNavigateToService={handleNavigateToService} onLogout={handleLogout} />;
 }
 
 export default function App() {
