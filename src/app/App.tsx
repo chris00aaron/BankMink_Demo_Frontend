@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { TrendingDown, AlertTriangle, DollarSign } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { AlertTriangle, DollarSign, TrendingDown } from 'lucide-react';
 import { AuthProvider, useAuth, ServiceType } from '@shared/contexts/AuthContext';
 import {
   FraudeSidebar,
@@ -13,28 +13,87 @@ import {
 import { ServicePlaceholder } from '@shared/components/ServicePlaceholder';
 import { AuditoriaModule } from '@admin/auditoria/AuditoriaModule';
 import { GestionUsuariosModule } from '@admin/usuarios/GestionUsuariosModule';
+import { OtpVerificationScreen } from '@shared/components/OtpVerificationScreen';
+import { ForgotPasswordScreen } from '@shared/components/ForgotPasswordScreen';
+import { ChangePasswordScreen } from '@shared/components/ChangePasswordScreen';
+
+type AuthScreen = 'login' | 'otp' | 'forgot-password';
 
 function AppContent() {
-  const { user, isAuthenticated, login, logout, hasAccessToService, isAdmin } = useAuth();
+  const {
+    user,
+    isAuthenticated,
+    isLoading,
+    mfaState,
+    passwordChangeRequired,
+    finalizePasswordChange,
+    login,
+    verifyOtp,
+    resendOtp,
+    logout,
+    forgotPassword,
+    hasAccessToService,
+    isAdmin,
+    cancelMfa
+  } = useAuth();
+
   const [currentView, setCurrentView] = useState<'home' | ServiceType>('home');
   const [currentScreen, setCurrentScreen] = useState('dashboard');
   const [loginError, setLoginError] = useState('');
+  const [otpError, setOtpError] = useState('');
+  const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
 
-  const handleLogin = (username: string, password: string, rememberPassword: boolean) => {
-    const success = login(username, password, rememberPassword);
-    if (success) {
+  // Manejar cambio a pantalla OTP cuando se requiere MFA
+  useEffect(() => {
+    if (mfaState?.required) {
+      setAuthScreen('otp');
       setLoginError('');
-      setCurrentView('home'); // Temporarily set to home, will be updated by useEffect
-    } else {
-      setLoginError('Usuario o contraseña incorrectos');
     }
+  }, [mfaState]);
+
+  const handleLogin = async (username: string, password: string, _rememberPassword: boolean) => {
+    const result = await login(username, password);
+    if (!result.success && result.error) {
+      setLoginError(result.error);
+    } else {
+      setLoginError('');
+    }
+  };
+
+  const handleVerifyOtp = async (code: string) => {
+    const result = await verifyOtp(code);
+    if (!result.success && result.error) {
+      setOtpError(result.error);
+    } else {
+      setOtpError('');
+      setAuthScreen('login');
+    }
+  };
+
+  const handleResendOtp = async () => {
+    const result = await resendOtp();
+    if (!result.success && result.error) {
+      setOtpError(result.error);
+    } else {
+      setOtpError('');
+    }
+  };
+
+  const handleForgotPassword = async (email: string) => {
+    await forgotPassword(email);
+  };
+
+  const handleBackToLogin = () => {
+    setAuthScreen('login');
+    setLoginError('');
+    setOtpError('');
+    cancelMfa();
   };
 
   // Redirect operarios to their service after login
   useEffect(() => {
     if (isAuthenticated && user) {
       if (!isAdmin()) {
-        // Map user role to service
         const serviceMap: Record<string, ServiceType> = {
           'operario-morosidad': 'morosidad-detalle',
           'operario-anomalias': 'anomalias-transaccionales',
@@ -46,7 +105,6 @@ function AppContent() {
           setCurrentView(targetService);
         }
       } else {
-        // Admin goes to home
         if (currentView !== 'home' &&
           currentView !== 'auditoria' &&
           currentView !== 'gestion-usuarios' &&
@@ -60,10 +118,24 @@ function AppContent() {
     }
   }, [isAuthenticated, user]);
 
-  const handleLogout = () => {
-    logout();
+  // Si se requiere cambio de contraseña
+  if (passwordChangeRequired) {
+    return (
+      <ChangePasswordScreen
+        onPasswordChanged={() => {
+          finalizePasswordChange();
+          setAuthScreen('login');
+          setLoginError('');
+        }}
+      />
+    );
+  }
+
+  const handleLogout = async () => {
+    await logout();
     setCurrentView('home');
     setCurrentScreen('dashboard');
+    setAuthScreen('login');
   };
 
   const handleNavigate = (screen: string) => {
@@ -71,7 +143,6 @@ function AppContent() {
   };
 
   const handleNavigateToService = (service: ServiceType) => {
-    // Verificar si el usuario tiene acceso al servicio
     if (hasAccessToService(service)) {
       setCurrentView(service);
       if (service === 'anomalias-transaccionales') {
@@ -84,10 +155,44 @@ function AppContent() {
     setCurrentView('home');
   };
 
-  // Pantalla de Login
+  // PANTALLAS DE AUTENTICACIÓN
   if (!isAuthenticated) {
-    return <FraudeLoginScreen onLogin={handleLogin} loginError={loginError} />;
+    // Pantalla de verificación OTP
+    if (authScreen === 'otp' && mfaState) {
+      return (
+        <OtpVerificationScreen
+          phoneHint={mfaState.phoneHint}
+          onVerify={handleVerifyOtp}
+          onResendCode={handleResendOtp}
+          onBack={handleBackToLogin}
+          error={otpError}
+          isLoading={isLoading}
+        />
+      );
+    }
+
+    // Pantalla de olvidé mi contraseña
+    if (authScreen === 'forgot-password') {
+      return (
+        <ForgotPasswordScreen
+          onSubmit={handleForgotPassword}
+          onBack={handleBackToLogin}
+        />
+      );
+    }
+
+    // Pantalla de login principal
+    return (
+      <FraudeLoginScreen
+        onLogin={handleLogin}
+        onForgotPassword={() => setAuthScreen('forgot-password')}
+        loginError={loginError}
+        isLoading={isLoading}
+      />
+    );
   }
+
+  // PANTALLAS DE APLICACIÓN (Usuario autenticado)
 
   // Página Principal (HomePage) - Solo para admin
   if (currentView === 'home' && isAdmin()) {
@@ -144,16 +249,12 @@ function AppContent() {
   if (currentView === 'anomalias-transaccionales') {
     return (
       <div className="min-h-screen bg-gray-50 flex">
-        {/* Sidebar */}
         <FraudeSidebar
           currentScreen={currentScreen}
           onNavigate={handleNavigate}
           onBackToHome={isAdmin() ? handleBackToHome : undefined}
         />
-
-        {/* Main Content Area */}
         <div className="flex-1 ml-64">
-          {/* Page Content */}
           <main className="p-8">
             {currentScreen === 'dashboard' && <Dashboard />}
             {currentScreen === 'batch' && <BatchPrediction />}
