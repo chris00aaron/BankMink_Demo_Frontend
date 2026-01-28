@@ -1,132 +1,136 @@
-import { useState, useCallback } from 'react';
-import { Upload, FileText, CheckCircle, AlertTriangle, Loader2, Database } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import {
+  CheckCircle, AlertTriangle, Loader2, Database, RefreshCw,
+  Play, Clock, TrendingUp, AlertCircle, ChevronDown, ChevronUp
+} from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
-
-interface BatchTransaction {
-  id: string;
-  clientId: string;
-  amount: number;
-  category: string;
-  status: 'pending' | 'processing' | 'completed';
-  confidence: number;
-  prediction: 'legitimate' | 'fraud' | 'review';
-}
+import { batchService, PendingTransaction, BatchItemResult } from '../services/batchService';
 
 export function BatchPrediction() {
-  const [isDragging, setIsDragging] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
+  // Estado
+  const [pendingCount, setPendingCount] = useState<number>(0);
+  const [pendingList, setPendingList] = useState<PendingTransaction[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [isLoadingPending, setIsLoadingPending] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [transactions, setTransactions] = useState<BatchTransaction[]>([]);
-  const [progress, setProgress] = useState(0);
+  const [results, setResults] = useState<BatchItemResult[]>([]);
+  const [summary, setSummary] = useState<{
+    totalProcessed: number;
+    totalFrauds: number;
+    totalLegitimate: number;
+    totalErrors: number;
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [showPendingTable, setShowPendingTable] = useState(true);
+  const [batchSize, setBatchSize] = useState(100);
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
+  // Cargar conteo al montar
+  useEffect(() => {
+    loadPendingData();
   }, []);
 
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-
-    const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile && droppedFile.name.endsWith('.csv')) {
-      setFile(droppedFile);
-    }
-  }, []);
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      setFile(selectedFile);
+  const loadPendingData = async () => {
+    setIsLoadingPending(true);
+    setError(null);
+    try {
+      const [countRes, listRes] = await Promise.all([
+        batchService.getPendingCount(),
+        batchService.getPendingTransactions(batchSize)
+      ]);
+      setPendingCount(countRes.pending_count);
+      setPendingList(listRes);
+      setSelectedIds(new Set(listRes.map(t => t.id_transaction)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al cargar datos');
+    } finally {
+      setIsLoadingPending(false);
     }
   };
 
-  const processFile = () => {
-    if (!file) return;
+  const handleSelectAll = () => {
+    if (selectedIds.size === pendingList.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(pendingList.map(t => t.id_transaction)));
+    }
+  };
+
+  const handleSelectOne = (id: number) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const handleProcess = async () => {
+    if (selectedIds.size === 0) return;
 
     setIsProcessing(true);
-    setProgress(0);
+    setResults([]);
+    setSummary(null);
+    setError(null);
 
-    // Generar datos mock
-    const mockData: BatchTransaction[] = Array.from({ length: 20 }, (_, i) => ({
-      id: `TXN-${1000 + i}`,
-      clientId: `CLI-${2000 + i}`,
-      amount: Math.floor(Math.random() * 10000) + 100,
-      category: ['Retail', 'Online', 'Transfer', 'ATM', 'Restaurant'][Math.floor(Math.random() * 5)],
-      status: 'pending' as const,
-      confidence: 0,
-      prediction: 'legitimate' as const,
-    }));
-
-    setTransactions(mockData);
-
-    // Simular procesamiento progresivo
-    let currentIndex = 0;
-    const interval = setInterval(() => {
-      if (currentIndex < mockData.length) {
-        setTransactions((prev) =>
-          prev.map((t, idx) => {
-            if (idx === currentIndex) {
-              const confidence = Math.random() * 100;
-              let prediction: 'legitimate' | 'fraud' | 'review';
-
-              if (confidence > 85) {
-                prediction = 'legitimate';
-              } else if (confidence < 50) {
-                prediction = 'fraud';
-              } else {
-                prediction = 'review';
-              }
-
-              return {
-                ...t,
-                status: 'completed',
-                confidence: +confidence.toFixed(1),
-                prediction,
-              };
-            } else if (idx === currentIndex + 1) {
-              return { ...t, status: 'processing' };
-            }
-            return t;
-          })
-        );
-
-        currentIndex++;
-        setProgress(Math.round((currentIndex / mockData.length) * 100));
-      } else {
-        setIsProcessing(false);
-        clearInterval(interval);
-      }
-    }, 300);
-  };
-
-  const getPredictionColor = (prediction: string) => {
-    switch (prediction) {
-      case 'legitimate':
-        return 'text-emerald-600 bg-emerald-50 border-emerald-200';
-      case 'fraud':
-        return 'text-red-600 bg-red-50 border-red-200';
-      case 'review':
-        return 'text-orange-600 bg-orange-50 border-orange-200';
-      default:
-        return 'text-gray-600 bg-gray-50 border-gray-200';
+    try {
+      const result = await batchService.processBatch(Array.from(selectedIds));
+      setResults(result.results);
+      setSummary({
+        totalProcessed: result.total_processed,
+        totalFrauds: result.total_frauds,
+        totalLegitimate: result.total_legitimate,
+        totalErrors: result.total_errors,
+      });
+      // Recargar pendientes
+      await loadPendingData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al procesar lote');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
-  const getPredictionIcon = (prediction: string) => {
-    switch (prediction) {
-      case 'legitimate':
-        return <CheckCircle className="w-4 h-4" />;
-      case 'fraud':
-        return <AlertTriangle className="w-4 h-4" />;
-      default:
-        return <AlertTriangle className="w-4 h-4" />;
+  const handleProcessAll = async () => {
+    setIsProcessing(true);
+    setResults([]);
+    setSummary(null);
+    setError(null);
+
+    try {
+      const result = await batchService.processNextBatch(batchSize);
+      setResults(result.results);
+      setSummary({
+        totalProcessed: result.total_processed,
+        totalFrauds: result.total_frauds,
+        totalLegitimate: result.total_legitimate,
+        totalErrors: result.total_errors,
+      });
+      // Recargar pendientes
+      await loadPendingData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al procesar lote');
+    } finally {
+      setIsProcessing(false);
     }
+  };
+
+  const getVeredictoColor = (veredicto: string) => {
+    if (veredicto === 'ALTO RIESGO') return 'text-red-600 bg-red-50 border-red-200';
+    if (veredicto === 'LEGÍTIMO') return 'text-emerald-600 bg-emerald-50 border-emerald-200';
+    return 'text-gray-600 bg-gray-50 border-gray-200';
+  };
+
+  const formatDateTime = (dateStr: string) => {
+    if (!dateStr) return '-';
+    const date = new Date(dateStr);
+    return date.toLocaleString('es-PE', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   return (
@@ -134,93 +138,208 @@ export function BatchPrediction() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Predicción por Lotes</h1>
-        <p className="text-gray-600 mt-1">Procesamiento masivo de transacciones mediante IA</p>
+        <p className="text-gray-600 mt-1">
+          Procesa múltiples transacciones pendientes de análisis
+        </p>
       </div>
 
-      {/* Upload Area */}
-      <div className="backdrop-blur-xl bg-white/90 rounded-xl border border-gray-200 p-8 shadow-lg">
-        <div
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          className={`
-            relative border-2 border-dashed rounded-xl p-12 text-center transition-all
-            ${isDragging
-              ? 'border-blue-500 bg-blue-50'
-              : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'
-            }
-          `}
-        >
-          <input
-            type="file"
-            accept=".csv"
-            onChange={handleFileSelect}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            disabled={isProcessing}
-          />
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-2">
+          <AlertCircle className="w-5 h-5" />
+          {error}
+        </div>
+      )}
 
-          <div className="space-y-4">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-50">
-              <Upload className="w-8 h-8 text-blue-600" />
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="backdrop-blur-xl bg-white/90 rounded-xl border border-gray-200 p-5 shadow-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500">Pendientes</p>
+              <p className="text-3xl font-bold text-blue-600">
+                {isLoadingPending ? '...' : pendingCount.toLocaleString()}
+              </p>
             </div>
-
-            {file ? (
-              <div className="space-y-2">
-                <div className="flex items-center justify-center gap-2 text-gray-900">
-                  <FileText className="w-5 h-5 text-blue-600" />
-                  <span className="font-medium">{file.name}</span>
-                </div>
-                <p className="text-sm text-gray-600">
-                  {(file.size / 1024).toFixed(2)} KB
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-lg font-medium text-gray-900">
-                  Arrastre su archivo CSV aquí
-                </p>
-                <p className="text-sm text-gray-600">
-                  o haga clic para seleccionar desde su ordenador
-                </p>
-              </div>
-            )}
-
-            {file && !isProcessing && (
-              <Button
-                onClick={processFile}
-                className="mt-4 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold"
-              >
-                <Database className="w-4 h-4 mr-2" />
-                Procesar Archivo
-              </Button>
-            )}
+            <div className="p-3 bg-blue-50 rounded-full">
+              <Clock className="w-6 h-6 text-blue-600" />
+            </div>
           </div>
         </div>
 
-        {/* Progress Bar */}
-        {isProcessing && (
-          <div className="mt-6 space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-600">Procesando transacciones...</span>
-              <span className="text-blue-600 font-medium">{progress}%</span>
+        <div className="backdrop-blur-xl bg-white/90 rounded-xl border border-gray-200 p-5 shadow-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500">Seleccionadas</p>
+              <p className="text-3xl font-bold text-purple-600">{selectedIds.size}</p>
             </div>
-            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300"
-                style={{ width: `${progress}%` }}
-              ></div>
+            <div className="p-3 bg-purple-50 rounded-full">
+              <Database className="w-6 h-6 text-purple-600" />
             </div>
           </div>
+        </div>
+
+        {summary && (
+          <>
+            <div className="backdrop-blur-xl bg-white/90 rounded-xl border border-emerald-200 p-5 shadow-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500">Legítimas</p>
+                  <p className="text-3xl font-bold text-emerald-600">{summary.totalLegitimate}</p>
+                </div>
+                <div className="p-3 bg-emerald-50 rounded-full">
+                  <CheckCircle className="w-6 h-6 text-emerald-600" />
+                </div>
+              </div>
+            </div>
+
+            <div className="backdrop-blur-xl bg-white/90 rounded-xl border border-red-200 p-5 shadow-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500">Alto Riesgo</p>
+                  <p className="text-3xl font-bold text-red-600">{summary.totalFrauds}</p>
+                </div>
+                <div className="p-3 bg-red-50 rounded-full">
+                  <AlertTriangle className="w-6 h-6 text-red-600" />
+                </div>
+              </div>
+            </div>
+          </>
         )}
       </div>
 
-      {/* Results Table */}
-      {transactions.length > 0 && (
+      {/* Controls */}
+      <div className="backdrop-blur-xl bg-white/90 rounded-xl border border-gray-200 p-6 shadow-lg">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700">Cantidad:</label>
+              <select
+                value={batchSize}
+                onChange={(e) => setBatchSize(Number(e.target.value))}
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+            <Button
+              variant="outline"
+              onClick={loadPendingData}
+              disabled={isLoadingPending}
+              className="gap-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${isLoadingPending ? 'animate-spin' : ''}`} />
+              Actualizar
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={handleProcess}
+              disabled={isProcessing || selectedIds.size === 0}
+              className="bg-purple-600 hover:bg-purple-700 text-white gap-2"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Procesando...
+                </>
+              ) : (
+                <>
+                  <Play className="w-4 h-4" />
+                  Procesar Seleccionadas ({selectedIds.size})
+                </>
+              )}
+            </Button>
+            <Button
+              onClick={handleProcessAll}
+              disabled={isProcessing || pendingCount === 0}
+              variant="outline"
+              className="gap-2"
+            >
+              <TrendingUp className="w-4 h-4" />
+              Procesar Todo ({Math.min(batchSize, pendingCount)})
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Pending Transactions Table */}
+      {pendingList.length > 0 && (
         <div className="backdrop-blur-xl bg-white/90 rounded-xl border border-gray-200 overflow-hidden shadow-lg">
-          <div className="p-6 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">Resultados del Análisis</h2>
+          <div
+            className="p-4 border-b border-gray-200 flex items-center justify-between cursor-pointer hover:bg-gray-50"
+            onClick={() => setShowPendingTable(!showPendingTable)}
+          >
+            <h2 className="text-lg font-semibold text-gray-900">
+              Transacciones Pendientes ({pendingList.length})
+            </h2>
+            {showPendingTable ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+          </div>
+
+          {showPendingTable && (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.size === pendingList.length && pendingList.length > 0}
+                        onChange={handleSelectAll}
+                        className="w-4 h-4 text-purple-600 rounded border-gray-300"
+                      />
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">ID</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Fecha</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Cliente</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Tarjeta</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Monto</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Categoría</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {pendingList.map((t) => (
+                    <tr key={t.id_transaction} className="hover:bg-gray-50">
+                      <td className="px-4 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(t.id_transaction)}
+                          onChange={() => handleSelectOne(t.id_transaction)}
+                          className="w-4 h-4 text-purple-600 rounded border-gray-300"
+                        />
+                      </td>
+                      <td className="px-4 py-3 text-sm font-mono text-gray-900">{t.trans_num}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{formatDateTime(t.trans_date_time)}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900">{t.customer_name || '-'}</td>
+                      <td className="px-4 py-3 text-sm font-mono text-gray-600">{t.cc_num_masked}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                        ${t.amt?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{t.category?.replace(/_/g, ' ') || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Results Table */}
+      {results.length > 0 && (
+        <div className="backdrop-blur-xl bg-white/90 rounded-xl border border-gray-200 overflow-hidden shadow-lg">
+          <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-emerald-50 to-blue-50">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Resultados del Procesamiento
+            </h2>
             <p className="text-sm text-gray-600 mt-1">
-              {transactions.filter(t => t.status === 'completed').length} de {transactions.length} transacciones procesadas
+              {summary?.totalProcessed} transacciones procesadas •
+              {' '}<span className="text-emerald-600 font-medium">{summary?.totalLegitimate} legítimas</span> •
+              {' '}<span className="text-red-600 font-medium">{summary?.totalFrauds} fraudes</span>
+              {summary?.totalErrors ? <span className="text-amber-600"> • {summary.totalErrors} errores</span> : ''}
             </p>
           </div>
 
@@ -228,80 +347,51 @@ export function BatchPrediction() {
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    ID Transacción
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    ID Cliente
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Monto
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Categoría
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Confianza IA
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Estado
-                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Transacción</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Monto</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Score</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Veredicto</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Estado</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {transactions.map((transaction) => (
-                  <tr
-                    key={transaction.id}
-                    className="hover:bg-gray-50 transition-colors"
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {transaction.id}
+                {results.map((r, idx) => (
+                  <tr key={idx} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm font-mono text-gray-900">{r.trans_num || `ID: ${r.id_transaction}`}</td>
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                      {r.amt ? `$${r.amt.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '-'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                      {transaction.clientId}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                      ${transaction.amount.toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                      {transaction.category}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {transaction.status === 'completed' ? (
+                    <td className="px-4 py-3">
+                      {r.score !== null && r.score !== undefined ? (
                         <div className="flex items-center gap-2">
-                          <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden max-w-[100px]">
+                          <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
                             <div
-                              className={`h-full ${transaction.confidence > 85 ? 'bg-emerald-500' :
-                                transaction.confidence < 50 ? 'bg-red-500' : 'bg-orange-500'
-                                }`}
-                              style={{ width: `${transaction.confidence}%` }}
-                            ></div>
+                              className={`h-full ${r.score > 0.5 ? 'bg-red-500' : 'bg-emerald-500'}`}
+                              style={{ width: `${r.score * 100}%` }}
+                            />
                           </div>
-                          <span className="text-sm text-gray-700 font-medium">
-                            {transaction.confidence}%
+                          <span className="text-xs font-medium text-gray-700">
+                            {(r.score * 100).toFixed(1)}%
                           </span>
                         </div>
-                      ) : transaction.status === 'processing' ? (
-                        <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
-                      ) : (
-                        <span className="text-sm text-gray-500">Pendiente</span>
-                      )}
+                      ) : '-'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {transaction.status === 'completed' ? (
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${getPredictionColor(transaction.prediction)}`}>
-                          {getPredictionIcon(transaction.prediction)}
-                          {transaction.prediction === 'legitimate' ? 'Legítima' :
-                            transaction.prediction === 'fraud' ? 'Fraude' : 'Revisar'}
+                    <td className="px-4 py-3">
+                      {r.veredicto ? (
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getVeredictoColor(r.veredicto)}`}>
+                          {r.veredicto === 'ALTO RIESGO' ? <AlertTriangle className="w-3 h-3" /> : <CheckCircle className="w-3 h-3" />}
+                          {r.veredicto}
                         </span>
-                      ) : transaction.status === 'processing' ? (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border text-blue-600 bg-blue-50 border-blue-200">
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                          Procesando
+                      ) : '-'}
+                    </td>
+                    <td className="px-4 py-3">
+                      {r.status === 'success' ? (
+                        <span className="inline-flex items-center gap-1 text-emerald-600 text-sm">
+                          <CheckCircle className="w-4 h-4" /> OK
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border text-gray-600 bg-gray-50 border-gray-200">
-                          Pendiente
+                        <span className="text-red-600 text-sm" title={r.error_message}>
+                          Error: {r.error_message?.substring(0, 30)}...
                         </span>
                       )}
                     </td>
@@ -310,6 +400,17 @@ export function BatchPrediction() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {pendingList.length === 0 && !isLoadingPending && (
+        <div className="backdrop-blur-xl bg-white/90 rounded-xl border border-gray-200 p-12 text-center shadow-lg">
+          <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <CheckCircle className="w-8 h-8 text-emerald-500" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900">¡Todo al día!</h3>
+          <p className="text-gray-500 mt-1">No hay transacciones pendientes de análisis</p>
         </div>
       )}
     </div>
