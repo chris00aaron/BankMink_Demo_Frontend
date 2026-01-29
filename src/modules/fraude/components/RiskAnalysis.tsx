@@ -201,15 +201,22 @@ export function RiskAnalysis() {
                       }`}
                   >
                     <div className="flex items-start justify-between mb-2">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
                         {alert.veredicto === 'LEGÍTIMO' ? (
-                          <CheckCircle className="w-4 h-4 text-emerald-600" />
+                          <CheckCircle className="w-4 h-4 flex-shrink-0 text-emerald-600" />
                         ) : (
-                          <AlertTriangle className="w-4 h-4 text-red-600" />
+                          <AlertTriangle className="w-4 h-4 flex-shrink-0 text-red-600" />
                         )}
-                        <span className="text-sm font-medium text-gray-900">{alert.transaction_id}</span>
+                        <span
+                          className="text-sm font-medium text-gray-900 truncate"
+                          title={alert.transaction_id}
+                        >
+                          {alert.transaction_id.length > 12
+                            ? alert.transaction_id.substring(0, 12) + '...'
+                            : alert.transaction_id}
+                        </span>
                       </div>
-                      <span className={`text-xs font-bold ${alert.veredicto === 'LEGÍTIMO' ? 'text-emerald-600' : 'text-red-600'
+                      <span className={`text-xs font-bold flex-shrink-0 ml-2 ${alert.veredicto === 'LEGÍTIMO' ? 'text-emerald-600' : 'text-red-600'
                         }`}>
                         {((alert.score_final || 0) * 100).toFixed(1)}%
                       </span>
