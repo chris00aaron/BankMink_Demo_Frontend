@@ -8,7 +8,8 @@ import {
   Dashboard,
   BatchPrediction,
   IndividualPrediction,
-  RiskAnalysis
+  RiskAnalysis,
+  ModelMonitoring
 } from '@modules/fraude';
 import { ServicePlaceholder } from '@shared/components/ServicePlaceholder';
 import { AuditoriaModule } from '@admin/auditoria/AuditoriaModule';
@@ -260,6 +261,7 @@ function AppContent() {
             {currentScreen === 'batch' && <BatchPrediction />}
             {currentScreen === 'individual' && <IndividualPrediction />}
             {currentScreen === 'risk-analysis' && <RiskAnalysis />}
+            {currentScreen === 'model-monitoring' && <ModelMonitoring />}
           </main>
         </div>
       </div>
