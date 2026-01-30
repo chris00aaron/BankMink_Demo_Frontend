@@ -12,7 +12,7 @@ export interface RiskFactor {
 }
 
 export interface WhatIfRequest {
-    cc_num: number;
+    cc_num: string;  // String to avoid precision loss with large numbers
     amt: number;
     category: string;
     hour: number;
@@ -92,7 +92,7 @@ export const whatIfService = {
     /**
      * Busca información del cliente por número de tarjeta
      */
-    lookupCustomer: async (ccNum: number): Promise<CustomerLookup> => {
+    lookupCustomer: async (ccNum: string): Promise<CustomerLookup> => {
         return apiRequest<CustomerLookup>(`/fraud/what-if/customer/${ccNum}`);
     },
 

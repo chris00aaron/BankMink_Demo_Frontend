@@ -62,7 +62,7 @@ export function IndividualPrediction() {
     setResult(null);
 
     try {
-      const response = await whatIfService.lookupCustomer(Number(ccNum));
+      const response = await whatIfService.lookupCustomer(ccNum.trim());
 
       if (response.customer_found) {
         setCustomerInfo({
@@ -99,7 +99,7 @@ export function IndividualPrediction() {
 
     try {
       const response = await whatIfService.simulate({
-        cc_num: Number(ccNum),
+        cc_num: ccNum.trim(),
         amt: Number(formData.amount),
         category: formData.category,
         hour: Number(formData.hour),
