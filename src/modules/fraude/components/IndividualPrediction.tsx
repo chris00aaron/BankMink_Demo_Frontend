@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   DollarSign, Tag, Brain, Activity, Search, AlertTriangle, CheckCircle,
-  Clock, MapPin, User, Shield, Loader2, CreditCard, RefreshCw
+  Clock, MapPin, User, Shield, Loader2, CreditCard, RefreshCw, Store, Database
 } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
@@ -15,10 +15,12 @@ export function IndividualPrediction() {
   const [ccNum, setCcNum] = useState('');
   const [formData, setFormData] = useState({
     amount: '',
+    merchant: '',
     category: '',
     hour: new Date().getHours().toString(),
     merchLat: '',
     merchLong: '',
+    saveToDB: false,
   });
 
   // Estado del cliente
@@ -101,10 +103,12 @@ export function IndividualPrediction() {
       const response = await whatIfService.simulate({
         cc_num: ccNum.trim(),
         amt: Number(formData.amount),
+        merchant: formData.saveToDB ? formData.merchant : undefined,
         category: formData.category,
         hour: Number(formData.hour),
         merch_lat: formData.merchLat ? Number(formData.merchLat) : undefined,
         merch_long: formData.merchLong ? Number(formData.merchLong) : undefined,
+        save_to_db: formData.saveToDB,
       });
 
       setResult(response);
@@ -120,10 +124,12 @@ export function IndividualPrediction() {
     setCcNum('');
     setFormData({
       amount: '',
+      merchant: '',
       category: '',
       hour: new Date().getHours().toString(),
       merchLat: '',
       merchLong: '',
+      saveToDB: false,
     });
     setCustomerInfo(null);
     setResult(null);
@@ -141,7 +147,11 @@ export function IndividualPrediction() {
         <h1 className="text-3xl font-bold text-gray-900">Predicción Individual</h1>
         <p className="text-gray-600 mt-1">
           Simulador "What-If" - Evalúe escenarios hipotéticos{' '}
-          <span className="text-amber-600 font-medium">(No se guarda en BD)</span>
+          {formData.saveToDB ? (
+            <span className="text-emerald-600 font-medium">(Se guardará en BD)</span>
+          ) : (
+            <span className="text-amber-600 font-medium">(No se guarda en BD)</span>
+          )}
         </p>
       </div>
 
@@ -318,11 +328,49 @@ export function IndividualPrediction() {
                 </div>
               </div>
 
+              {/* Comercio (requerido si se guarda en BD) */}
+              {formData.saveToDB && (
+                <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                  <Label className="flex items-center gap-2 text-sm font-medium">
+                    <Store className="w-4 h-4 text-gray-500" /> Nombre del Comercio
+                  </Label>
+                  <Input
+                    type="text"
+                    placeholder="Ej: Amazon Store, Walmart, etc."
+                    value={formData.merchant}
+                    onChange={(e) => setFormData({ ...formData, merchant: e.target.value })}
+                    required={formData.saveToDB}
+                  />
+                </div>
+              )}
+
+              {/* Toggle Guardar en BD */}
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="flex items-center gap-2">
+                  <Database className="w-4 h-4 text-gray-500" />
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Guardar en BD</span>
+                    <p className="text-xs text-gray-500">Persiste la transacción y predicción</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, saveToDB: !formData.saveToDB })}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${formData.saveToDB ? 'bg-emerald-500' : 'bg-gray-300'
+                    }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.saveToDB ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                  />
+                </button>
+              </div>
+
               {/* Botones */}
               <div className="flex gap-2 pt-4">
                 <Button
                   type="submit"
-                  disabled={isAnalyzing || !formData.amount || !formData.category}
+                  disabled={isAnalyzing || !formData.amount || !formData.category || (formData.saveToDB && !formData.merchant.trim())}
                   className="flex-1 bg-purple-600 hover:bg-purple-700 text-white shadow-md"
                 >
                   {isAnalyzing ? (
@@ -331,7 +379,7 @@ export function IndividualPrediction() {
                     </span>
                   ) : (
                     <span className="flex items-center gap-2">
-                      <Brain className="w-4 h-4" /> Simular Predicción
+                      <Brain className="w-4 h-4" /> {formData.saveToDB ? 'Simular y Guardar' : 'Simular Predicción'}
                     </span>
                   )}
                 </Button>
@@ -372,9 +420,15 @@ export function IndividualPrediction() {
                       <Shield className="w-4 h-4 text-gray-400" />
                       <span className="text-sm font-medium text-gray-600">{result.recomendacion}</span>
                     </div>
-                    <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
-                      ⚠️ Simulación - No guardada en BD
-                    </p>
+                    {result.saved_to_db ? (
+                      <p className="text-xs text-emerald-600 mt-2 flex items-center gap-1">
+                        ✅ Guardado en BD - ID: {result.transaction_id}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
+                        ⚠️ Simulación - No guardada en BD
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="text-right">

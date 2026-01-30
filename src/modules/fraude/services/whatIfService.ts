@@ -14,10 +14,12 @@ export interface RiskFactor {
 export interface WhatIfRequest {
     cc_num: string;  // String to avoid precision loss with large numbers
     amt: number;
+    merchant?: string;  // Merchant name (required if saving to DB)
     category: string;
     hour: number;
     merch_lat?: number;
     merch_long?: number;
+    save_to_db?: boolean;  // If true, save the transaction and prediction to DB
 }
 
 export interface WhatIfResponse {
@@ -38,6 +40,7 @@ export interface WhatIfResponse {
         iforest_score: number;
     };
     recomendacion?: string;
+    saved_to_db?: boolean;  // Indicates if the transaction was saved to DB
     error?: string;
 }
 
