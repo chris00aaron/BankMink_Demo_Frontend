@@ -1,20 +1,20 @@
-import { useAuth } from '@/shared/hook/useAuth';
-import { AuditoriaModule } from '@admin/auditoria/AuditoriaModule';
-import { AtmModule } from '@modules/atm/page/AtmModule';
-import { LoginScreen } from '@modules/auth/pages/LoginScreen';
-import { ProtectedRoute } from '@shared/components/ProtectedRoute';
-import { AuthProvider } from '@shared/contexts/AuthContext';
-import { HomePage } from '@shared/pages/HomePage';
-import { ServiceType } from '@shared/types/index';
-import { useState } from 'react';
+import { useAuth } from "@/shared/hook/useAuth";
+import { AuditoriaModule } from "@admin/auditoria/AuditoriaModule";
+import { AtmModule } from "@/modules/atm/AtmModule";
+import { LoginScreen } from "@modules/auth/pages/LoginScreen";
+import { ProtectedRoute } from "@shared/components/ProtectedRoute";
+import { AuthProvider } from "@shared/contexts/AuthContext";
+import { HomePage } from "@shared/pages/HomePage";
+import { ServiceType } from "@shared/types/index";
+import { useState } from "react";
 
 function AppContent() {
   const { user, isAuthenticated, isAdmin, login, logout } = useAuth();
-  
+
   // Estados básicos
-  const [currentView, setCurrentView] = useState<'home' | ServiceType>('home');
-  const [currentScreen, setCurrentScreen] = useState('dashboard');
-  const [loginError, setLoginError] = useState('');
+  const [currentView, setCurrentView] = useState<"home" | ServiceType>("home");
+  const [currentScreen, setCurrentScreen] = useState("dashboard");
+  const [loginError, setLoginError] = useState("");
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -22,44 +22,53 @@ function AppContent() {
    * LÓGICA DE ENRUTAMIENTO (Estado Derivado)
    * Determinamos qué mostrar sin usar useEffect
    */
-  let activeView: 'home' | ServiceType = currentView;
+  let activeView: "home" | ServiceType = currentView;
 
   if (isAuthenticated && user) {
-      if (!isAdmin) {
-        // --- Lógica para Operarios ---
-        const serviceMap: Record<string, ServiceType> = {
-          'operario-morosidad': 'morosidad-detalle',
-          'operario-anomalias': 'anomalias-transaccionales',
-          'operario-demanda-efectivo': 'demanda-efectivo',
-          'operario-fuga-demanda': 'fuga-demanda',
-        };
+    if (!isAdmin) {
+      // --- Lógica para Operarios ---
+      const serviceMap: Record<string, ServiceType> = {
+        "operario-morosidad": "morosidad-detalle",
+        "operario-anomalias": "anomalias-transaccionales",
+        "operario-demanda-efectivo": "demanda-efectivo",
+        "operario-fuga-demanda": "fuga-demanda",
+      };
 
-        // Si el operario intenta estar en 'home', lo derivamos a su servicio
-        if (currentView === 'home') {
-          activeView = serviceMap[user.role] || 'home';
-        }
-      } else {
-        // --- Lógica para Admins ---
-        // Lista de vistas a las que un Admin tiene permitido entrar
-        const adminViews: string[] = [
-          'home', 'auditoria', 'gestion-usuarios', 'morosidad-detalle', 
-          'anomalias-transaccionales', 'demanda-efectivo', 'fuga-demanda'
-        ];
+      // Si el operario intenta estar en 'home', lo derivamos a su servicio
+      if (currentView === "home") {
+        activeView = serviceMap[user.role] || "home";
+      }
+    } else {
+      // --- Lógica para Admins ---
+      // Lista de vistas a las que un Admin tiene permitido entrar
+      const adminViews: string[] = [
+        "home",
+        "auditoria",
+        "gestion-usuarios",
+        "morosidad-detalle",
+        "anomalias-transaccionales",
+        "demanda-efectivo",
+        "fuga-demanda",
+      ];
 
-        // Si la vista actual no está en la lista permitida, lo mandamos a home
-        if (!adminViews.includes(currentView)) {
-          activeView = 'home';
-        }
+      // Si la vista actual no está en la lista permitida, lo mandamos a home
+      if (!adminViews.includes(currentView)) {
+        activeView = "home";
       }
     }
+  }
 
   // Manejador de Login
-  const handleLogin = (username: string, password: string, remember: boolean) => {
+  const handleLogin = (
+    username: string,
+    password: string,
+    remember: boolean,
+  ) => {
     const success = login(username, password, remember);
     if (!success) {
-      setLoginError('Usuario o contraseña incorrectos');
+      setLoginError("Usuario o contraseña incorrectos");
     } else {
-      setLoginError('');
+      setLoginError("");
       // Al tener éxito, el componente se re-renderiza, isAuthenticated cambia y activeView se calcula solo.
     }
   };
@@ -74,10 +83,12 @@ function AppContent() {
 
   const handleNavigateToService = (service: ServiceType) => {
     setCurrentView(service);
-    setCurrentScreen('dashboard'); // Resetear pantalla interna
+    setCurrentScreen("dashboard"); // Resetear pantalla interna
   };
 
-  {/* Renderizado */}
+  {
+    /* Renderizado */
+  }
   // 1. Capa de Seguridad: Si no hay sesión, fuera.
   if (!isAuthenticated) {
     return <LoginScreen onLogin={handleLogin} loginError={loginError} />;
@@ -95,7 +106,7 @@ function AppContent() {
           />
         </ProtectedRoute>
       )}
-      
+
       {/* MÓDULO AUDITORÍA */}
       {activeView === "auditoria" && (
         <ProtectedRoute requiredService="auditoria">
@@ -110,7 +121,7 @@ function AppContent() {
             title="Gestión de Demanda de Efectivo de ATM"
             currentScreen={currentScreen}
             onNavigate={handleNavigate}
-            onBack={ isAdmin? handleBackToHome : undefined}
+            onBack={isAdmin ? handleBackToHome : undefined}
             isMobileMenuOpen={isMobileMenuOpen}
             setIsMobileMenuOpen={setIsMobileMenuOpen}
           />
@@ -119,7 +130,6 @@ function AppContent() {
     </div>
   );
 }
-
 
 export default function App() {
   return (
