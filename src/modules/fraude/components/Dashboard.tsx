@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   AlertTriangle, CheckCircle, TrendingUp, Activity,
-  BarChart3, Shield, Loader2, RefreshCw, DollarSign
+  BarChart3, Shield, Loader2, RefreshCw, DollarSign, CreditCard
 } from 'lucide-react';
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip,
@@ -98,10 +98,11 @@ export function Dashboard() {
     loadData();
   }, []);
 
-  // Datos para Pie Chart (distribución de alertas)
+  // Datos para Pie Chart (MODIFICADO: mostrar estados de transacciones)
   const pieData = stats ? [
-    { name: 'Legítimas', value: stats.legitimate, color: COLORS.emerald },
-    { name: 'Fraudes Detectados', value: stats.frauds_detected, color: COLORS.red },
+    { name: 'Aprobadas', value: stats.approved_count || 0, color: COLORS.emerald },
+    { name: 'Pendientes', value: stats.pending_count || 0, color: COLORS.yellow },
+    { name: 'Rechazadas', value: stats.rejected_count || 0, color: COLORS.red },
   ] : [];
 
   // Formatear hora para gráfica
@@ -246,10 +247,10 @@ export function Dashboard() {
           </div>
         </div>
 
-        {/* Distribución de Alertas (Pie Chart) - 1 columna */}
+        {/* Estados de Transacciones (Pie Chart MODIFICADO) - 1 columna */}
         <div className="backdrop-blur-xl bg-white/90 rounded-xl border border-gray-200 p-6 shadow-sm">
-          <h2 className="text-lg font-bold text-gray-900 mb-2">Estado de Alertas</h2>
-          <p className="text-sm text-gray-500 mb-6">Distribución actual del sistema</p>
+          <h2 className="text-lg font-bold text-gray-900 mb-2">Estados de Transacciones</h2>
+          <p className="text-sm text-gray-500 mb-6">Flujo PENDING → APPROVED/REJECTED</p>
 
           <div className="h-64">
             {pieData.length > 0 && pieData.some(d => d.value > 0) ? (
@@ -279,16 +280,16 @@ export function Dashboard() {
             )}
           </div>
 
-          {/* Mini Stats */}
-          <div className="grid grid-cols-2 gap-4 mt-2 pt-4 border-t border-gray-100">
-            <div className="text-center">
-              <p className="text-xs text-gray-500">Tasa de Fraude</p>
-              <p className="text-lg font-bold text-gray-900">{stats?.fraud_rate?.toFixed(1) || 0}%</p>
+          {/* Tarjetas Bloqueadas (DATO REAL) */}
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CreditCard className="w-4 h-4 text-red-600" />
+                <span className="text-sm font-medium text-gray-700">Tarjetas Bloqueadas</span>
+              </div>
+              <span className="text-2xl font-bold text-red-600">{stats?.cards_blocked_today || 0}</span>
             </div>
-            <div className="text-center">
-              <p className="text-xs text-gray-500">Precisión Modelo</p>
-              <p className="text-lg font-bold text-gray-900">99.8%</p>
-            </div>
+            <p className="text-xs text-gray-500 mt-1">Por fraude confirmado</p>
           </div>
         </div>
       </div>

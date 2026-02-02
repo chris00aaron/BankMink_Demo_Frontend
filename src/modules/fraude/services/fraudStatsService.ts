@@ -14,6 +14,11 @@ export interface DashboardStats {
     fraud_rate: number;
     total_amount_at_risk: number;
     avg_fraud_score: number;
+    // Nuevos campos: Sistema de Notificaciones
+    pending_count?: number;
+    approved_count?: number;
+    rejected_count?: number;
+    cards_blocked_today?: number;
 }
 
 export interface HourlyTrend {
