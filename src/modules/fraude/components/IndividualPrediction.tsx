@@ -111,6 +111,13 @@ export function IndividualPrediction() {
         save_to_db: formData.saveToDB,
       });
 
+      // VERIFICAR SI HAY ERROR EN EL RESPONSE (ej: tarjeta bloqueada)
+      if (response.error) {
+        setError(response.error);
+        setResult(null);
+        return;
+      }
+
       setResult(response);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error en la simulación');
