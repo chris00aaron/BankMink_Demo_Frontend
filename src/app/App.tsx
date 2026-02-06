@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AlertTriangle, DollarSign } from 'lucide-react';
+import { AlertTriangle, DollarSign, TrendingDown } from 'lucide-react';
 import { AuthProvider, useAuth, ServiceType } from '@shared/contexts/AuthContext';
 import {
   FraudeSidebar,
@@ -7,7 +7,8 @@ import {
   Dashboard as FraudeDashboard,
   BatchPrediction,
   IndividualPrediction,
-  RiskAnalysis
+  RiskAnalysis,
+  ModelMonitoring
 } from '@modules/fraude';
 import { ClientPrediction, Dashboard as MorosidadDashboard, MorosidadSidebar, BatchPrediction as MorosidadBatchPrediction, EarlyWarnings } from '@modules/morosidad';
 import {
@@ -26,7 +27,6 @@ import { AuditoriaModule } from '@admin/auditoria/AuditoriaModule';
 import { GestionUsuariosModule } from '@admin/usuarios/GestionUsuariosModule';
 import { OtpVerificationScreen } from '@shared/components/OtpVerificationScreen';
 import { ForgotPasswordScreen } from '@shared/components/ForgotPasswordScreen';
-
 import { ChangePasswordScreen } from '@shared/components/ChangePasswordScreen';
 
 type AuthScreen = 'login' | 'otp' | 'forgot-password';
@@ -58,14 +58,6 @@ function AppContent() {
   const [otpError, setOtpError] = useState('');
   const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
 
-  console.log('App Render State:', {
-    isAuthenticated,
-    passwordChangeRequired,
-    authScreen,
-    mfaRequired: mfaState?.required,
-    currentView
-  });
-
   // Manejar cambio a pantalla OTP cuando se requiere MFA
   useEffect(() => {
     if (mfaState?.required) {
@@ -73,8 +65,6 @@ function AppContent() {
       setLoginError('');
     }
   }, [mfaState]);
-
-
 
   const handleLogin = async (username: string, password: string, _rememberPassword: boolean) => {
     const result = await login(username, password);
@@ -106,7 +96,6 @@ function AppContent() {
 
   const handleForgotPassword = async (email: string) => {
     await forgotPassword(email);
-    // El componente ForgotPasswordScreen maneja su propio estado de éxito
   };
 
   const handleBackToLogin = () => {
@@ -120,7 +109,6 @@ function AppContent() {
   useEffect(() => {
     if (isAuthenticated && user) {
       if (!isAdmin()) {
-        // Map user role to service
         const serviceMap: Record<string, ServiceType> = {
           'operario-morosidad': 'morosidad-detalle',
           'operario-anomalias': 'anomalias-transaccionales',
@@ -132,7 +120,6 @@ function AppContent() {
           setCurrentView(targetService);
         }
       } else {
-        // Admin goes to home
         if (currentView !== 'home' &&
           currentView !== 'auditoria' &&
           currentView !== 'gestion-usuarios' &&
@@ -146,14 +133,17 @@ function AppContent() {
     }
   }, [isAuthenticated, user]);
 
-  // Si se requiere cambio de contraseña, mostrar pantalla de cambio
+  // Si se requiere cambio de contraseña
   if (passwordChangeRequired) {
-    return <ChangePasswordScreen onPasswordChanged={() => {
-      finalizePasswordChange();
-      setAuthScreen('login');
-      // Asegurarse de limpiar errores
-      setLoginError('');
-    }} />;
+    return (
+      <ChangePasswordScreen
+        onPasswordChanged={() => {
+          finalizePasswordChange();
+          setAuthScreen('login');
+          setLoginError('');
+        }}
+      />
+    );
   }
 
   const handleLogout = async () => {
@@ -177,7 +167,6 @@ function AppContent() {
   };
 
   const handleNavigateToService = (service: ServiceType) => {
-    // Verificar si el usuario tiene acceso al servicio
     if (hasAccessToService(service)) {
       setCurrentView(service);
       if (service === 'anomalias-transaccionales') {
@@ -193,7 +182,7 @@ function AppContent() {
     setCurrentView('home');
   };
 
-  // Pantalla de Login
+  // PANTALLAS DE AUTENTICACIÓN
   if (!isAuthenticated) {
     // Pantalla de verificación OTP
     if (authScreen === 'otp' && mfaState) {
@@ -229,6 +218,8 @@ function AppContent() {
       />
     );
   }
+
+  // PANTALLAS DE APLICACIÓN (Usuario autenticado)
 
   // Página Principal (HomePage) - Solo para admin
   if (currentView === 'home' && isAdmin()) {
@@ -315,22 +306,19 @@ function AppContent() {
   if (currentView === 'anomalias-transaccionales') {
     return (
       <div className="min-h-screen bg-gray-50 flex">
-        {/* Sidebar */}
         <FraudeSidebar
           currentScreen={currentScreen}
           onNavigate={handleNavigate}
           onBackToHome={isAdmin() ? handleBackToHome : undefined}
           onLogout={handleLogout}
         />
-
-        {/* Main Content Area */}
         <div className="flex-1 ml-64">
-          {/* Page Content */}
           <main className="p-8">
             {currentScreen === 'dashboard' && <FraudeDashboard />}
             {currentScreen === 'batch' && <BatchPrediction />}
             {currentScreen === 'individual' && <IndividualPrediction />}
             {currentScreen === 'risk-analysis' && <RiskAnalysis />}
+            {currentScreen === 'model-monitoring' && <ModelMonitoring />}
           </main>
         </div>
       </div>

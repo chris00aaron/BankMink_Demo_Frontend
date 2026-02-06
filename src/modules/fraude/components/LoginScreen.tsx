@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Shield, Lock, User, Eye, EyeOff } from 'lucide-react';
+import { Shield, Lock, User, Eye, EyeOff, Loader2 } from 'lucide-react';
 import bankMindLogo from '@shared/assets/logo_BankMind.png';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
@@ -120,7 +120,14 @@ export function LoginScreen({ onLogin, onForgotPassword, loginError, isLoading =
               disabled={isLoading}
               className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-6 shadow-lg shadow-blue-500/20 transition-all disabled:opacity-50"
             >
-              {isLoading ? 'Verificando...' : 'Ingresar al Sistema'}
+              {isLoading ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Ingresando...
+                </span>
+              ) : (
+                'Ingresar al Sistema'
+              )}
             </Button>
 
             {/* Forgot Password Link */}
@@ -136,6 +143,19 @@ export function LoginScreen({ onLogin, onForgotPassword, loginError, isLoading =
               </div>
             )}
           </form>
+
+          {/* Forgot Password Link */}
+          {onForgotPassword && (
+            <div className="mt-4 text-center">
+              <button
+                type="button"
+                onClick={onForgotPassword}
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors"
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+            </div>
+          )}
 
           {/* Footer */}
           <div className="mt-6 text-center">

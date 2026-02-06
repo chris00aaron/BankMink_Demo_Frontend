@@ -1,4 +1,4 @@
-import { LayoutDashboard, FileUp, FileSearch, Activity, Home, LogOut } from 'lucide-react';
+import { LayoutDashboard, FileUp, FileSearch, Activity, Home, Brain, LogOut } from 'lucide-react';
 import bankMindLogo from '@shared/assets/logo_BankMind.png';
 
 interface XRAISidebarProps {
@@ -14,6 +14,7 @@ export function Sidebar({ currentScreen, onNavigate, onBackToHome, onLogout }: X
     { id: 'batch', label: 'Predicción por Lotes', icon: FileUp },
     { id: 'individual', label: 'Predicción Individual', icon: FileSearch },
     { id: 'risk-analysis', label: 'Análisis de Riesgo', icon: Activity },
+    { id: 'model-monitoring', label: 'Monitoreo del Modelo', icon: Brain },
   ];
 
   return (

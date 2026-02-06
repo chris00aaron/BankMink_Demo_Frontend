@@ -146,7 +146,7 @@ export function HomePage({ onNavigateToService, onLogout }: XRAIHomePageProps) {
                 className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white text-sm font-semibold hover:shadow-lg transition-shadow"
                 title="Cerrar sesión"
               >
-                {user?.fullName?.charAt(0)?.toUpperCase() || '?'}
+                {user?.name?.charAt(0)?.toUpperCase() || 'U'}
               </button>
             </div>
           </div>
