@@ -32,6 +32,7 @@ export type {
   FilterParams,
   QueryParams,
   MutationState,
+  SpringPage,
 } from "./types";
 
 // Query Client

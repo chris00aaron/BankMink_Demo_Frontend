@@ -1,8 +1,8 @@
 import { ModuleLayout } from "@shared/Layout/ModuleLayout";
 import { SidebarAtm } from "./components/SidebarAtm";
-import { WithdrawalDashboard } from "./page/WithdrawalDashboard";
+import Dashboard from "./page/Dashboard";
 import { Simulator } from "./page/Simulator";
-import { PredictionDashboard } from "./page/PredictionDashboard";
+import ModelAudit from "./page/ModelAudit";
 
 interface IAtmModule {
   title: string;
@@ -36,9 +36,9 @@ export function AtmModule({
       chanceStateMenuOpen={setIsMobileMenuOpen}
     >
       {/* El Layout inyectará esto en {children} */}
-      {currentScreen === "dashboard" && <PredictionDashboard />}
+      {currentScreen === "dashboard" && <Dashboard />}
       {currentScreen === "simulator" && <Simulator />}
-      {currentScreen === "prediction-withdrawal" && <WithdrawalDashboard />}
+      {currentScreen === "model-audit" && <ModelAudit />}
     </ModuleLayout>
   );
 }

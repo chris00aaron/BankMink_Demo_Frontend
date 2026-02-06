@@ -78,3 +78,16 @@ export interface MutationState<T> {
   data?: T;
   error?: Error;
 }
+
+/**
+ * Estructura de respuesta de Paginación de Spring Boot
+ */
+export interface SpringPage<T> {
+  content: T[];
+  page: {
+    totalPages: number;
+    totalElements: number;
+    size: number;
+    number: number;
+  };
+}

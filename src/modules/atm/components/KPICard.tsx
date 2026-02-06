@@ -1,70 +1,56 @@
-import clsx from "clsx";
 import { LucideIcon } from "lucide-react";
+import styles from "../styles/Simulator.module.css";
+
+type ColorKPI = "blue" | "green" | "orange";
 
 interface KPICardProps {
   title: string;
   value: string | number;
-  icon?: LucideIcon;
-  trend?: string;
-  trendUp?: boolean;
-  color?: "blue" | "green" | "red" | "slate" | "orange";
+  icon: LucideIcon;
+  color?: ColorKPI;
   className?: string;
 }
 
-export default function KPICard({
-  title,
-  value,
-  icon: Icon,
-  trend,
-  trendUp,
-  color = "slate",
-  className,
-}: KPICardProps) {
-  const colorStyles = {
-    blue: { text: "text-blue-600", bg: "bg-blue-50 border-blue-100" },
-    green: { text: "text-green-600", bg: "bg-green-50 border-green-100" },
-    red: { text: "text-red-600", bg: "bg-red-50 border-red-100" },
-    orange: { text: "text-orange-600", bg: "bg-orange-50 border-orange-100" },
-    slate: { text: "text-slate-600", bg: "bg-slate-50 border-slate-100" },
+export const KPICard = ({ 
+  title, 
+  value, 
+  icon: Icon, 
+  color = "blue",
+  className = "" 
+}: KPICardProps) => {
+
+  const colorClasses = {
+    orange: {
+      bg: 'bg-gradient-to-br from-orange-50 to-amber-50',
+      icon: 'bg-orange-100 text-orange-600',
+      border: 'border-orange-100',
+    },
+    blue: {
+      bg: 'bg-gradient-to-br from-blue-50 to-indigo-50',
+      icon: 'bg-blue-100 text-blue-600',
+      border: 'border-blue-100',
+    },
+    green: {
+      bg: 'bg-gradient-to-br from-emerald-50 to-green-50',
+      icon: 'bg-emerald-100 text-emerald-600',
+      border: 'border-emerald-100',
+    },
   };
 
+  const classes = colorClasses[color];
+
   return (
-    <div
-      className={clsx(
-        "bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between",
-        className,
-      )}
-    >
-      <div className="flex justify-between items-start">
+    <div className={`group ${classes.bg} p-5 rounded-xl border ${classes.border} shadow-sm ${styles.hoverLift || ''} ${className}`}>
+      <div className="flex items-center gap-4">
+        {/* El Icon ahora se renderiza de forma segura */}
+        <div className={`p-3 ${classes.icon} rounded-xl transition-transform duration-300 ${styles.hoverScale || ''}`}>
+          <Icon size={22} />
+        </div>
         <div>
           <p className="text-sm font-medium text-slate-500">{title}</p>
-          <h3
-            className={clsx(
-              "text-2xl font-bold mt-1",
-              colorStyles[color].text,
-            )}
-          >
-            {value}</h3>
+          <p className="text-2xl font-bold text-slate-900 tracking-tight mt-0.5">{value}</p>
         </div>
-        {Icon && (
-          <div className={clsx("p-2 rounded-lg", colorStyles[color].bg, colorStyles[color].text)}>
-            <Icon size={25} />
-          </div>
-        )}
       </div>
-      {trend && (
-        <div className="mt-4 flex items-center text-xs font-medium">
-          <span
-            className={clsx(
-              trendUp ? "text-green-600" : "text-red-600",
-              "mr-1",
-            )}
-          >
-            {trend}
-          </span>
-          <span className="text-slate-400">vs ayer</span>
-        </div>
-      )}
     </div>
   );
-}
+};

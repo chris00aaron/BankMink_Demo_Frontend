@@ -13,7 +13,7 @@ export function WeeklyDemandChart({ data }: WeeklyDemandChartProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Demanda por Día de la Semana</CardTitle>
+        <CardTitle></CardTitle>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>
@@ -38,7 +38,7 @@ export function WeeklyDemandChart({ data }: WeeklyDemandChartProps) {
               }}
             />
             <Legend />
-            <Bar dataKey="demanda" fill="#3b82f6" name="Demanda Actual" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="demanda" fill="#3b82f6" name="Retiro predicho" radius={[4, 4, 0, 0]} />
             <Bar dataKey="promedio" fill="#94a3b8" name="Promedio Histórico" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>

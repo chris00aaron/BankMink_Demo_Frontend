@@ -12,6 +12,46 @@ import type {
 
 // ===== TIPOS =====
 
+// Interfaces para el Dashboard (matching DashboardController.java DTOs)
+export interface RetiroEfectivoAtmPrediccionDTO {
+  idAtm: number;
+  retiroPrevisto: number;
+  lowerBound: number;
+  upperBound: number;
+  confidenceLevel: number;
+}
+
+export interface RetiroEfectivoAtmPrediccionResumenDTO {
+  totalRetirosPrevisto: number;
+  totalRetirosPrevistoOptimista: number;
+  totalRetirosPrevistoPesimista: number;
+}
+
+export interface ResumeOperativoDTO {
+  activos: number;
+  inactivos: number;
+}
+
+export interface RetiroHistoricoDTO {
+  atm: number;
+  retiroHistorico: number;
+  retiroPrevisto: number;
+}
+
+export interface SegmentacionRetiroDTO {
+  ubicaciones: Record<string, number>;
+}
+
+export interface DashboardDTO {
+  resumenRetiroEfectivoAtm: RetiroEfectivoAtmPrediccionResumenDTO;
+  resumenOperativoAtms: ResumeOperativoDTO;
+  atmsConPotencialDeFaltaStock: number;
+  retirosPredichos: RetiroEfectivoAtmPrediccionDTO[];
+  retirosHistoricos: RetiroHistoricoDTO[];
+  featuresImportancia: Record<string, unknown>;
+  segmentacionRetiro: SegmentacionRetiroDTO;
+}
+
 export interface Transaccion {
   id: string;
   clienteId: string;
@@ -169,6 +209,16 @@ export const fraudeService = {
       `/fraude/transacciones/${transaccionId}/reportar`,
       data,
     );
+    return response.data;
+  },
+
+  /**
+   * Obtener datos del dashboard de predicciones ATM
+   * Endpoint: GET /dashboard (DashboardController.java)
+   */
+  async getDashboard(): Promise<DashboardDTO> {
+    const response = await apiClient.get<DashboardDTO>("/dashboard");
+    console.log("Dashboard data:", response.data);
     return response.data;
   },
 };

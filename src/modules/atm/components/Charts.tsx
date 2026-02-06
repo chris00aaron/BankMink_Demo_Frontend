@@ -92,8 +92,8 @@ export const ConfidenceIntervalChart = ({ data }: ChartsProps) => {
             <ErrorBar dataKey="error" width={4} strokeWidth={2} stroke="#2563eb" direction="y" />
         </Bar>
         
-        <Line type="monotone" dataKey="predicted" name="Predicción Central" stroke="#2563eb" strokeWidth={3} dot={{ r: 4, fill: '#2563eb', strokeWidth: 2, stroke: '#fff' }} />
         <Line type="monotone" dataKey="upperBound" name="Límite Superior" stroke="#10b981" strokeDasharray="5 5" strokeWidth={2} dot={false} />
+        <Line type="monotone" dataKey="predicted" name="Predicción Central" stroke="#2563eb" strokeWidth={3} dot={{ r: 4, fill: '#2563eb', strokeWidth: 2, stroke: '#fff' }} />
         <Line type="monotone" dataKey="lowerBound" name="Límite Inferior" stroke="#f59e0b" strokeDasharray="5 5" strokeWidth={2} dot={false} />
 
       </ComposedChart>

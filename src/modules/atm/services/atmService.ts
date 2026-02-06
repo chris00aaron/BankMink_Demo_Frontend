@@ -12,6 +12,47 @@ import type {
 
 // ===== TIPOS =====
 
+export interface RetiroEfectivoAtmPrediccionDTO {
+  idAtm: number;
+  retiroPrevisto: number;
+  lowerBound: number;
+  upperBound: number;
+  confidenceLevel: number;
+}
+
+export interface RetiroHistoricoDTO {
+  atm: number;
+  retiroHistorico: number;
+  retiroPrevisto: number;
+}
+
+export interface RetiroEfectivoAtmPrediccionResumenDTO {
+  totalRetirosPrevisto: number;
+  totalRetirosPrevistoOptimista: number;
+  totalRetirosPrevistoPesimista: number;
+}
+
+export interface PrediccionDeRetirosDTO {
+  predicciones: RetiroEfectivoAtmPrediccionDTO[];
+  retirosHistoricos: RetiroHistoricoDTO[];
+  resumen: RetiroEfectivoAtmPrediccionResumenDTO;
+}
+
+export interface SimulationParams {
+  fechaObjetivo: string;
+  idWeather: number; // El id del clima
+  nivelCarga: number;
+}
+
+export interface SimulationResult {
+  atmId: string;
+  demandaPredicha: number;
+  limiteInferior: number;
+  limiteSuperior: number;
+  riesgo: "bajo" | "medio" | "alto";
+  recomendacion: string;
+}
+
 export interface ATM {
   id: string;
   atmId: string;
@@ -24,54 +65,10 @@ export interface ATM {
   longitud?: number;
 }
 
-export interface ATMPrediction {
-  atmId: string;
-  fecha: string;
-  demandaPredicha: number;
-  limiteInferior: number;
-  limiteSuperior: number;
-  confianza: number;
-  factoresInfluencia?: {
-    factor: string;
-    impacto: number;
-  }[];
-}
-
-export interface HistoricoRetiro {
-  id: string;
-  atmId: string;
-  fecha: string;
-  monto: number;
-  tipoTransaccion: string;
-  timestamp: string;
-}
-
-export interface SimulationParams {
-  fecha: string;
-  clima: number; // 1: Soleado, 2: Lluvia, 3: Evento
-  nivelCarga: number;
-  atmIds?: string[];
-}
-
-export interface SimulationResult {
-  atmId: string;
-  demandaPredicha: number;
-  limiteInferior: number;
-  limiteSuperior: number;
-  riesgo: "bajo" | "medio" | "alto";
-  recomendacion: string;
-}
-
 export interface ATMFilters extends PaginationParams {
   estado?: "normal" | "alerta" | "critico";
   tipo?: string;
   ubicacion?: string;
-}
-
-export interface HistoricoFilters extends PaginationParams {
-  atmId?: string;
-  startDate?: string;
-  endDate?: string;
 }
 
 // ===== SERVICIO =====
@@ -96,51 +93,13 @@ export const atmService = {
   },
 
   /**
-   * Obtener predicción de un ATM
-   */
-  async getPrediction(
-    atmId: string,
-    fecha?: string,
-  ): Promise<ApiResponse<ATMPrediction>> {
-    const response = await apiClient.get<ApiResponse<ATMPrediction>>(
-      `/atm/${atmId}/prediction`,
-      { params: { fecha } },
-    );
-    return response.data;
-  },
-
-  /**
-   * Obtener predicciones de múltiples ATMs
-   */
-  async getPredictions(fecha?: string): Promise<ApiResponse<ATMPrediction[]>> {
-    const response = await apiClient.get<ApiResponse<ATMPrediction[]>>(
-      "/atm/predictions",
-      { params: { fecha } },
-    );
-    return response.data;
-  },
-
-  /**
-   * Obtener histórico de retiros
-   */
-  async getHistorico(
-    filters?: HistoricoFilters,
-  ): Promise<PaginatedResponse<HistoricoRetiro>> {
-    const response = await apiClient.get<PaginatedResponse<HistoricoRetiro>>(
-      "/simulador/retiro-efectivo-atm/historico",
-      { params: filters },
-    );
-    return response.data;
-  },
-
-  /**
    * Ejecutar simulación
    */
   async runSimulation(
     params: SimulationParams,
-  ): Promise<ApiResponse<SimulationResult[]>> {
-    const response = await apiClient.post<ApiResponse<SimulationResult[]>>(
-      "/atm/simulation",
+  ): Promise<PrediccionDeRetirosDTO> {
+    const response = await apiClient.post<PrediccionDeRetirosDTO>(
+      "/simulador/retiro-efectivo-atm/historico",
       params,
     );
     return response.data;
@@ -160,37 +119,6 @@ export const atmService = {
     }>
   > {
     const response = await apiClient.get("/atm/stats");
-    return response.data;
-  },
-
-  /**
-   * Obtener métricas del modelo predictivo
-   */
-  async getModelMetrics(): Promise<
-    ApiResponse<{
-      accuracy: number;
-      precision: number;
-      recall: number;
-      f1Score: number;
-      lastUpdated: string;
-    }>
-  > {
-    const response = await apiClient.get("/atm/model-metrics");
-    return response.data;
-  },
-
-  /**
-   * Programar recarga de ATM
-   */
-  async scheduleRefill(
-    atmId: string,
-    data: {
-      fecha: string;
-      monto: number;
-      prioridad: "alta" | "media" | "baja";
-    },
-  ): Promise<ApiResponse<{ success: boolean; ticketId: string }>> {
-    const response = await apiClient.post(`/atm/${atmId}/refill`, data);
     return response.data;
   },
 };

@@ -7,7 +7,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { atmService } from "../services/atmService";
 import type {
   ATMFilters,
-  HistoricoFilters,
   SimulationParams,
 } from "../services/atmService";
 
@@ -23,8 +22,6 @@ export const atmKeys = {
   predictions: () => [...atmKeys.all, "predictions"] as const,
   prediction: (atmId: string, fecha?: string) =>
     [...atmKeys.predictions(), atmId, fecha] as const,
-  historico: (filters?: HistoricoFilters) =>
-    [...atmKeys.all, "historico", filters] as const,
   stats: () => [...atmKeys.all, "stats"] as const,
   modelMetrics: () => [...atmKeys.all, "model-metrics"] as const,
 };
@@ -53,37 +50,6 @@ export function useATM(atmId: string) {
 }
 
 /**
- * Hook para obtener predicción de un ATM
- */
-export function useATMPrediction(atmId: string, fecha?: string) {
-  return useQuery({
-    queryKey: atmKeys.prediction(atmId, fecha),
-    queryFn: () => atmService.getPrediction(atmId, fecha),
-    enabled: !!atmId,
-  });
-}
-
-/**
- * Hook para obtener predicciones de todos los ATMs
- */
-export function useATMPredictions(fecha?: string) {
-  return useQuery({
-    queryKey: atmKeys.predictions(),
-    queryFn: () => atmService.getPredictions(fecha),
-  });
-}
-
-/**
- * Hook para obtener histórico de retiros
- */
-export function useHistoricoRetiros(filters?: HistoricoFilters) {
-  return useQuery({
-    queryKey: atmKeys.historico(filters),
-    queryFn: () => atmService.getHistorico(filters),
-  });
-}
-
-/**
  * Hook para obtener estadísticas
  */
 export function useATMStats() {
@@ -97,7 +63,7 @@ export function useATMStats() {
 
 /**
  * Hook para obtener métricas del modelo
- */
+
 export function useModelMetrics() {
   return useQuery({
     queryKey: atmKeys.modelMetrics(),
@@ -106,6 +72,7 @@ export function useModelMetrics() {
     staleTime: 15 * 60 * 1000, // 15 minutos
   });
 }
+*/
 
 // ===== MUTATIONS =====
 
@@ -126,7 +93,7 @@ export function useSimulation() {
 
 /**
  * Hook para programar recarga de ATM
- */
+
 export function useScheduleRefill() {
   const queryClient = useQueryClient();
 
@@ -148,6 +115,7 @@ export function useScheduleRefill() {
     },
   });
 }
+*/
 
 // ===== PREFETCHING =====
 

@@ -8,62 +8,53 @@ import {
   AlertTriangle,
   CheckCircle,
   Search,
+  Activity,
 } from "lucide-react";
 import { useWeather } from "../hooks/useWeatherQueries";
-import KPICard from "../components/KPICard";
+import { useSimulation } from "../hooks/useAtmQueries";
+import { KPICard } from "../components/KPICard";
 import { ComparisonChart, ConfidenceIntervalChart } from "../components/Charts";
 import { toast } from "sonner";
-
-// Mock Data Generators
-const generateMockPredictions = (weatherId: number, cashMultiplier: number) => {
-  const atms = [
-    "ATM-001",
-    "ATM-002",
-    "ATM-003",
-    "ATM-004",
-    "ATM-005",
-    "ATM-006",
-  ];
-  return atms.map((atm) => {
-    const baseDemand = Math.floor(Math.random() * 50000) + 20000;
-    // Weather impact: 1=Sunny (normal), 2=Rain (lower demand), 3=Event (high demand)
-    let weatherFactor = 1.0;
-    if (weatherId === 2) weatherFactor = 0.8;
-    if (weatherId === 3) weatherFactor = 1.4;
-
-    const predicted = Math.floor(baseDemand * weatherFactor * cashMultiplier);
-    const volatility = Math.floor(predicted * 0.15); // 15% volatility
-
-    return {
-      atmId: atm,
-      historical: Math.floor(baseDemand * (0.9 + Math.random() * 0.2)), // +/- 10%
-      predicted: predicted,
-      lowerBound: predicted - volatility,
-      upperBound: predicted + volatility,
-    };
-  });
-};
+import styles from "../styles/Simulator.module.css";
+import { EmptyStateSimulator } from "../components/EmptyStateSimulator";
+import { ChartContainer } from "../components/ChartContainer";
+import { LoadingState } from "../components/LoadingState";
 
 export function Simulator() {
-  // State de Dia para que sea por defecto el dia de hoy
-  const [targetDate, setTargetDate] = useState(
-    format(new Date(), "yyyy-MM-dd"),
-  );
-  const [weather, setWeather] = useState(0); // 0: No seleccionado, number: ID del clima
-  const [cashLevel, setCashLevel] = useState(80); // Porcentaje de efectivo
-  const [isSimulating, setIsSimulating] = useState(false); // Estado de simulación (si está cargando)
-  const { data: weatherList, isLoading: isLoadingWeather } = useWeather(); // Hook para obtener el clima
+  const [targetDate, setTargetDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [weather, setWeather] = useState(0);
+  const [cashLevel, setCashLevel] = useState(80);
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [hasSimulated, setHasSimulated] = useState(false);
+  
+  const { data: weatherList, isLoading: isLoadingWeather } = useWeather();
+  const simulationMutation = useSimulation();
+  const simulationResult = simulationMutation.data;
 
-  // Derived Data
-  const data = useMemo(
-    () => generateMockPredictions(weather, 1 + (100 - cashLevel) / 200),
-    [targetDate, weather, cashLevel],
-  );
+  // Transform API data for charts
+  const chartData = useMemo(() => {
+    if (!simulationResult) return [];
+    
+    const predictionsMap = new Map(
+      simulationResult.predicciones?.map((p) => [p.idAtm, p]) || []
+    );
 
-  // KPIs
-  const totalPredicted = data.reduce((acc, curr) => acc + curr.predicted, 0);
-  const totalOptimistic = data.reduce((acc, curr) => acc + curr.upperBound, 0);
-  const totalPessimistic = data.reduce((acc, curr) => acc + curr.lowerBound, 0);
+    return (simulationResult.retirosHistoricos || []).map((h) => {
+      const prediction = predictionsMap.get(h.atm);
+      return {
+        atmId: `ATM-${h.atm}`,
+        historical: h.retiroHistorico,
+        predicted: prediction?.retiroPrevisto || 0,
+        lowerBound: prediction?.lowerBound || 0,
+        upperBound: prediction?.upperBound || 0,
+      };
+    });
+  }, [simulationResult]);
+
+  // KPIs from API summary
+  const totalPredicted = simulationResult?.resumen.totalRetirosPrevisto || 0;
+  const totalOptimistic = simulationResult?.resumen.totalRetirosPrevistoOptimista || 0;
+  const totalPessimistic = simulationResult?.resumen.totalRetirosPrevistoPesimista || 0;
 
   // Risk Logic
   const riskLevel = useMemo(() => {
@@ -72,16 +63,31 @@ export function Simulator() {
     return "low";
   }, [cashLevel]);
 
-  const riskBadgeColor = {
-    high: "bg-red-100 text-red-700 border-red-200",
-    medium: "bg-orange-100 text-orange-700 border-orange-200",
-    low: "bg-green-100 text-green-700 border-green-200",
-  };
-
-  const riskLabel = {
-    high: "ALTO RIESGO",
-    medium: "RIESGO MODERADO",
-    low: "BAJO RIESGO",
+  const riskConfig = {
+    high: {
+      badge: "bg-red-100 text-red-700 border-red-200",
+      label: "ALTO RIESGO",
+      container: "bg-gradient-to-r from-red-50 to-rose-50 border-red-200",
+      accent: "border-l-red-500",
+      title: "text-red-800",
+      text: "text-red-700",
+    },
+    medium: {
+      badge: "bg-amber-100 text-amber-700 border-amber-200",
+      label: "RIESGO MODERADO",
+      container: "bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200",
+      accent: "border-l-amber-500",
+      title: "text-amber-800",
+      text: "text-amber-700",
+    },
+    low: {
+      badge: "bg-emerald-100 text-emerald-700 border-emerald-200",
+      label: "BAJO RIESGO",
+      container: "bg-gradient-to-r from-emerald-50 to-green-50 border-emerald-200",
+      accent: "border-l-emerald-500",
+      title: "text-emerald-800",
+      text: "text-emerald-700",
+    },
   };
 
   const recommendation = useMemo(() => {
@@ -93,201 +99,242 @@ export function Simulator() {
   }, [riskLevel]);
 
   const handleSimulate = () => {
+    if (weather === 0) {
+      toast.error("Por favor selecciona un clima.");
+      return;
+    }
+
     setIsSimulating(true);
-    // Fake delay
-    setTimeout(() => {
-      setIsSimulating(false);
-      toast.success("Simulación actualizada con los nuevos parámetros.");
-    }, 600);
+    simulationMutation.mutate(
+      {
+        fechaObjetivo: targetDate,
+        idWeather: weather,
+        nivelCarga: cashLevel,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Simulación completada correctamente.");
+          setIsSimulating(false);
+          setHasSimulated(true);
+        },
+        onError: (error) => {
+          toast.error(`Error en la simulación: ${error.message}`);
+          setIsSimulating(false);
+        },
+      }
+    );
   };
 
+  const risk = riskConfig[riskLevel];
+
   return (
-    <div className="space-y-6 pb-12 animate-in fade-in duration-500">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900">
-            Simulador de Demanda
-          </h2>
-          <p className="text-slate-500 text-sm">
-            Ajusta los parámetros para predecir el comportamiento de retiro.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleSimulate}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors shadow-sm shadow-blue-600/20"
-          >
-            {isSimulating ? (
-              "Calculando..."
-            ) : (
-              <>
-                <Search size={18} /> Ejecutar Simulación
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Filters / Parameters */}
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Date Input */}
-        <div className="space-y-2">
-          <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-            <Calendar size={16} /> Fecha Objetivo
-          </label>
-          <input
-            type="date"
-            min={format(new Date(), "yyyy-MM-dd")}
-            value={targetDate}
-            onChange={(e) => setTargetDate(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
-          />
-        </div>
-
-        {/* Weather Select */}
-        <div className="space-y-2">
-          <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-            <CloudSun size={16} /> Pronóstico del Clima
-          </label>
-          <select
-            value={weather}
-            onChange={(e) => setWeather(Number(e.target.value))}
-            disabled={isLoadingWeather}
-            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 appearance-none disabled:opacity-50"
-          >
-            {isLoadingWeather ? (
-              <option>Cargando clima...</option>
-            ) : (
-              weatherList?.data?.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))
-            )}
-            {!isLoadingWeather && !weatherList?.data?.length && (
-              <>
-                <option value={0}> Error al cargar clima</option>
-              </>
-            )}
-          </select>
-        </div>
-
-        {/* Cash Slider */}
-        <div className="space-y-2">
-          <div className="flex justify-between">
-            <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-              <DollarSign size={16} /> Nivel de Carga Actual
-            </label>
-            <span className="text-sm font-bold text-blue-600">
-              {cashLevel}%
-            </span>
-          </div>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={cashLevel}
-            onChange={(e) => setCashLevel(Number(e.target.value))}
-            className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-          />
-          <div className="flex justify-between text-xs text-slate-400">
-            <span>Vacío</span>
-            <span>Lleno</span>
-          </div>
-        </div>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard
-          title="Escenario Pesimista"
-          value={`$${totalPessimistic.toLocaleString()}`}
-          icon={AlertTriangle}
-          color="orange"
-        />
-        
-        <KPICard
-          title="Demanda Predicha Total"
-          value={`$${totalPredicted.toLocaleString()}`}
-          icon={TrendingUp}
-          color="blue"
-        />
-
-        <KPICard
-          title="Escenario Optimista"
-          value={`$${totalOptimistic.toLocaleString()}`}
-          icon={CheckCircle}
-          color="green"
-        />
-
-        {/* Risk Badge Card */}
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30">
+      <div className={`space-y-6 p-6 lg:p-8 max-w-7xl mx-auto pb-16 ${styles.fadeIn}`}>
+        {/* Header */}
+        <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
           <div>
-            <p className="text-sm font-medium text-slate-500">
-              Riesgo de Desabastecimiento
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-1 h-8 bg-gradient-to-b from-blue-600 to-violet-500 rounded-full" />
+              <h2 className="text-2xl lg:text-3xl font-bold text-slate-900 tracking-tight">
+                Simulador de Demanda
+              </h2>
+            </div>
+            <p className="text-slate-500 ml-4">
+              Ajusta los parámetros para predecir el comportamiento de retiro.
             </p>
-            <div
-              className={`mt-2 inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ${riskBadgeColor[riskLevel]}`}
+          </div>
+          
+          {hasSimulated && !isSimulating && (
+            <button
+              onClick={handleSimulate}
+              disabled={weather === 0}
+              className="group inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-slate-400 disabled:to-slate-500 text-white px-5 py-2.5 rounded-xl font-semibold transition-all duration-300 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 disabled:shadow-none"
             >
-              {riskLabel[riskLevel]}
+              <Search size={18} />
+              Ejecutar Simulación
+            </button>
+          )}
+        </header>
+
+        {/* Parameters Panel */}
+        <section className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-sm">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Date Input */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                <div className="p-1.5 bg-blue-50 rounded-lg">
+                  <Calendar size={14} className="text-blue-600" />
+                </div>
+                Fecha Objetivo
+              </label>
+              <input
+                type="date"
+                min={format(new Date(), "yyyy-MM-dd")}
+                value={targetDate}
+                onChange={(e) => setTargetDate(e.target.value)}
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-900 transition-all duration-200 hover:border-slate-300"
+              />
+            </div>
+
+            {/* Weather Select */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                <div className="p-1.5 bg-amber-50 rounded-lg">
+                  <CloudSun size={14} className="text-amber-600" />
+                </div>
+                Pronóstico del Clima
+              </label>
+              <div className="relative">
+                <select
+                  value={weather}
+                  onChange={(e) => setWeather(Number(e.target.value))}
+                  disabled={isLoadingWeather}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-900 appearance-none disabled:opacity-50 transition-all duration-200 hover:border-slate-300 pr-10"
+                >
+                  {isLoadingWeather ? (
+                    <option>Cargando clima...</option>
+                  ) : (
+                    <>
+                      <option value={0}>Seleccionar clima...</option>
+                      {weatherList?.data?.map((w) => (
+                        <option key={w.id} value={w.id}>
+                          {w.name}
+                        </option>
+                      ))}
+                    </>
+                  )}
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                  <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            {/* Cash Slider */}
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                  <div className="p-1.5 bg-emerald-50 rounded-lg">
+                    <DollarSign size={14} className="text-emerald-600" />
+                  </div>
+                  Nivel de Carga Actual
+                </label>
+                <span className="text-sm font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg">
+                  {cashLevel}%
+                </span>
+              </div>
+              <div className="pt-1">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={cashLevel}
+                  onChange={(e) => setCashLevel(Number(e.target.value))}
+                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                  style={{
+                    background: `linear-gradient(to right, #2563eb ${cashLevel}%, #e2e8f0 ${cashLevel}%)`
+                  }}
+                />
+                <div className="flex justify-between text-xs text-slate-400 mt-2">
+                  <span>Vacío</span>
+                  <span>Lleno</span>
+                </div>
+              </div>
             </div>
           </div>
-          <p className="text-xs text-slate-400 mt-4">
-            Basado en la carga actual y demanda proyectada.
-          </p>
-        </div>
-      </div>
+        </section>
 
-      {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <h3 className="text-lg font-bold text-slate-900 mb-4">
-            Predicción vs Histórico por ATM
-          </h3>
-          <ComparisonChart data={data} />
-        </div>
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <h3 className="text-lg font-bold text-slate-900 mb-4">
-            Intervalos de Confianza (95%)
-          </h3>
-          <ConfidenceIntervalChart data={data} />
-        </div>
-      </div>
+        {/* Conditional Content */}
+        {isSimulating ? (
+          <LoadingState />
+        ) : !hasSimulated ? (
+          <EmptyStateSimulator onSimulate={handleSimulate} isDisabled={weather === 0} />
+        ) : (
+          <div className={`space-y-6 ${styles.resultsSection}`}>
+            {/* KPI Cards */}
+            <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <KPICard
+                title="Escenario Pesimista"
+                value={`$${totalPessimistic.toLocaleString()}`}
+                icon={AlertTriangle}
+                color="orange"
+                className={styles.kpiCard}
+              />
+              <KPICard
+                title="Demanda Predicha Total"
+                value={`$${totalPredicted.toLocaleString()}`}
+                icon={TrendingUp}
+                color="blue"
+                className={styles.kpiCard}
+              />
+              <KPICard
+                title="Escenario Optimista"
+                value={`$${totalOptimistic.toLocaleString()}`}
+                icon={CheckCircle}
+                color="green"
+                className={styles.kpiCard}
+              />
+              
+              {/* Risk Badge Card */}
+              <div className={`group bg-white p-5 rounded-xl border border-slate-200 shadow-sm ${styles.hoverLift} ${styles.kpiCard}`}>
+                <div className="flex flex-col h-full justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-slate-500">
+                      Riesgo de Desabastecimiento
+                    </p>
+                    <div className={`mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border ${risk.badge}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full bg-current ${styles.pulseEffect}`} />
+                      {risk.label}
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-4">
+                    Basado en la carga actual y demanda proyectada.
+                  </p>
+                </div>
+              </div>
+            </section>
 
-      {/* Recommendation Section */}
-      <div
-        className={`p-6 rounded-xl border border-l-4 shadow-sm ${
-          riskLevel === "high"
-            ? "bg-red-50 border-red-500 border-l-red-500"
-            : riskLevel === "medium"
-              ? "bg-orange-50 border-orange-500 border-l-orange-500"
-              : "bg-blue-50 border-blue-500 border-l-blue-500"
-        }`}
-      >
-        <h4
-          className={`text-lg font-bold mb-2 ${
-            riskLevel === "high"
-              ? "text-red-800"
-              : riskLevel === "medium"
-                ? "text-orange-800"
-                : "text-blue-800"
-          }`}
-        >
-          Recomendación de Operaciones
-        </h4>
-        <p
-          className={`text-sm ${
-            riskLevel === "high"
-              ? "text-red-700"
-              : riskLevel === "medium"
-                ? "text-orange-700"
-                : "text-blue-700"
-          }`}
-        >
-          {recommendation}
-        </p>
+            {/* Charts Section - Improved spacing with xl breakpoint */}
+            <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <ChartContainer 
+                title="Predicción vs Histórico por ATM"
+                subtitle="Comparativa de retiros reales vs proyectados"
+                className={styles.chartContainer}
+              >
+                <ComparisonChart data={chartData} />
+              </ChartContainer>
+              
+              <ChartContainer 
+                title="Intervalos de Confianza (95%)"
+                subtitle="Rango de variación esperado por ATM"
+                className={styles.chartContainerAlt}
+              >
+                <ConfidenceIntervalChart data={chartData} />
+              </ChartContainer>
+            </section>
+
+            {/* Recommendation Section */}
+            <section className={`p-6 rounded-2xl border border-l-4 ${risk.container} ${risk.accent} shadow-sm ${styles.hoverLift} ${styles.recommendationCard}`}>
+              <div className="flex items-start gap-4">
+                <div className={`p-2.5 rounded-xl ${risk.badge} border-0 flex-shrink-0`}>
+                  {riskLevel === 'high' ? <AlertTriangle size={20} /> : 
+                   riskLevel === 'medium' ? <Activity size={20} /> : 
+                   <CheckCircle size={20} />}
+                </div>
+                <div className="min-w-0">
+                  <h4 className={`text-lg font-bold mb-2 ${risk.title}`}>
+                    Recomendación de Operaciones
+                  </h4>
+                  <p className={`text-sm leading-relaxed ${risk.text}`}>
+                    {recommendation}
+                  </p>
+                </div>
+              </div>
+            </section>
+          </div>
+        )}
       </div>
     </div>
-  );
-}
+  );}

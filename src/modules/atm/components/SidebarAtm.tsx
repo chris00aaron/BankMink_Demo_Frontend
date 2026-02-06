@@ -1,4 +1,4 @@
-import { LayoutDashboard, Brain, Calculator } from 'lucide-react';
+import { LayoutDashboard, Brain, Calculator, Scale } from 'lucide-react';
 import { SidebarMenu } from '@shared/components/SidebarMenu';
 
 interface ISidebarAtmProps {
@@ -11,9 +11,9 @@ interface ISidebarAtmProps {
 
 export function SidebarAtm({ currentScreen, onNavigate, onBackToHome, isOpen, setIsOpen }: ISidebarAtmProps) {
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard General', icon: LayoutDashboard },
-    { id: 'prediction-withdrawal', label: 'Predicción de Retiros', icon: Brain },
+    { id: 'dashboard', label: 'Dashboard Retiros', icon: LayoutDashboard },
     { id: 'simulator', label: 'Simulador', icon: Calculator },
+    { id: 'model-audit', label: 'Auditoría de Modelos', icon: Scale },
   ];
 
   return (
