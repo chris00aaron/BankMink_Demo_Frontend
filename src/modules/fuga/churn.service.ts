@@ -193,8 +193,8 @@ export const ChurnService = {
             const response = await axios.get<ScenarioIntervention[]>(`${API_URL}/config/strategies`);
             return response.data;
         } catch (error) {
-             // Fallback: Datos que coinciden con los INSERTs del SQL
-             return [
+            // Fallback: Datos que coinciden con los INSERTs del SQL
+            return [
                 {
                     id: 1,
                     name: 'Descuento Tasa Interés',
@@ -223,14 +223,14 @@ export const ChurnService = {
     // 8. Ejecutar Escenario Estratégico (Usando Rule Engine)
     runScenario: async (segment: ScenarioSegment, intervention: ScenarioIntervention): Promise<ScenarioResult> => {
         await delay(1000); // Simular proceso
-        
+
         // 1. Filtrar población usando el Motor de Reglas
         // Nota: Mapeamos nombres de campos de BD a propiedades del objeto JS si difieren
         const targetClients = MOCK_CUSTOMERS_EXTENDED.filter(c => evaluateRules(c, segment.rules));
         const totalClients = targetClients.length;
 
         if (totalClients === 0) {
-             throw new Error("No se encontraron clientes que cumplan las reglas del segmento.");
+            throw new Error("No se encontraron clientes que cumplan las reglas del segmento.");
         }
 
         // 2. Calcular estado BASE (Before)
@@ -243,7 +243,7 @@ export const ChurnService = {
             let improvement = intervention.impactFactor * 100;
             improvement = improvement * (0.9 + Math.random() * 0.2); // +/- 10% variabilidad
             const newRisk = Math.max(0, c.risk - improvement);
-            return newRisk > 50; 
+            return newRisk > 50;
         });
 
         const clientsAtRiskAfter = riskyClientsAfter.length;
@@ -278,7 +278,7 @@ export const ChurnService = {
 
     createCampaign: async (req: CreateCampaignRequest): Promise<CampaignLog> => {
         await delay(1200);
-        
+
         // Encontrar nombres para desnormalizar (simulación de JOIN)
         const segments = await ChurnService.getSegments();
         const strategies = await ChurnService.getStrategies();
@@ -300,7 +300,7 @@ export const ChurnService = {
 
         // Guardar en memoria (PERSISTENCIA SIMULADA)
         IN_MEMORY_CAMPAIGNS.push(newCampaign);
-        
+
         return newCampaign;
     }
 };

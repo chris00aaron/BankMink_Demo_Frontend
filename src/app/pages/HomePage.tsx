@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Shield, Activity, Brain, ArrowRight, Sparkles, ChevronDown, TrendingDown, AlertTriangle, DollarSign } from 'lucide-react';
-import { useAuth } from '@shared/hook/useAuth';
+import { useAuth } from '@shared/contexts/AuthContext';
 import { ServiceType } from '@shared/types/index';
 import bankMindLogo from '@shared/assets/logo_BankMind.png';
 
@@ -112,7 +112,7 @@ export function HomePage({ onNavigateToService, onLogout }: HomePageProps) {
               </div>
 
               {/* Admin-only menu items */}
-              {isAdmin && (
+              {isAdmin() && (
                 <>
                   <button
                     onClick={() => onNavigateToService('auditoria')}
@@ -137,9 +137,9 @@ export function HomePage({ onNavigateToService, onLogout }: HomePageProps) {
             {/* User Section */}
             <div className="flex items-center gap-4">
               <div className="hidden md:block text-right">
-                <p className="text-sm font-medium text-gray-900">{user?.fullName}</p>
+                <p className="text-sm font-medium text-gray-900">{user?.name}</p>
                 <p className="text-xs text-gray-500">
-                  {isAdmin ? 'Administrador' : 'Operario'}
+                  {isAdmin() ? 'Administrador' : 'Operario'}
                 </p>
               </div>
               <button

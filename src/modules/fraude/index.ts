@@ -5,6 +5,6 @@ export { IndividualPrediction } from './components/IndividualPrediction';
 export { RiskAnalysis } from './components/RiskAnalysis';
 export { ModelMonitoring } from './components/ModelMonitoring';
 export { Sidebar as FraudeSidebar } from './components/Sidebar';
-export { LoginScreen as FraudeLoginScreen } from './components/LoginScreen';
-export { HomePage as FraudeHomePage } from './pages/HomePage';
+export { LoginScreen as FraudeLoginScreen } from '../auth/pages/LoginScreen';
+export { HomePage as FraudeHomePage } from '../../app/pages/HomePage';
 
