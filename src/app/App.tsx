@@ -10,6 +10,16 @@ import {
   RiskAnalysis
 } from '@modules/fraude';
 import { ClientPrediction, Dashboard as MorosidadDashboard, MorosidadSidebar, BatchPrediction as MorosidadBatchPrediction, EarlyWarnings } from '@modules/morosidad';
+import {
+  FugaSidebar,
+  DashboardPage as FugaDashboard,
+  SimulatorPage as FugaSimulator,
+  MLOpsPage as FugaMLOps,
+  GeographyPage as FugaGeography,
+  CustomerDetailPage as FugaCustomerDetail,
+  CampaignsPage as FugaCampaigns
+} from '@modules/fuga';
+import type { FugaScreen } from '@modules/fuga';
 import { HomePage } from './pages/HomePage';
 import { ServicePlaceholder } from '@shared/components/ServicePlaceholder';
 import { AuditoriaModule } from '@admin/auditoria/AuditoriaModule';
@@ -42,6 +52,8 @@ function AppContent() {
   const [currentView, setCurrentView] = useState<'home' | ServiceType>('home');
   const [currentScreen, setCurrentScreen] = useState('dashboard');
   const [morosidadScreen, setMorosidadScreen] = useState('dashboard');
+  const [fugaScreen, setFugaScreen] = useState<FugaScreen>('dashboard');
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
   const [loginError, setLoginError] = useState('');
   const [otpError, setOtpError] = useState('');
   const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
@@ -159,6 +171,11 @@ function AppContent() {
     setMorosidadScreen(screen);
   };
 
+  const handleNavigateToCustomer = (id: number) => {
+    setSelectedCustomerId(id);
+    setFugaScreen('cliente');
+  };
+
   const handleNavigateToService = (service: ServiceType) => {
     // Verificar si el usuario tiene acceso al servicio
     if (hasAccessToService(service)) {
@@ -266,12 +283,31 @@ function AppContent() {
   // Servicio: Fuga Demanda
   if (currentView === 'fuga-demanda') {
     return (
-      <ServicePlaceholder
-        serviceName="Fuga Demanda"
-        icon={AlertTriangle}
-        description="Detección temprana de clientes con riesgo de abandonar productos o servicios bancarios"
-        onBack={handleBackToHome}
-      />
+      <div className="min-h-screen bg-gray-50 flex">
+        <FugaSidebar
+          currentScreen={fugaScreen}
+          onNavigate={(screen) => setFugaScreen(screen)}
+          onBackToHome={isAdmin() ? handleBackToHome : undefined}
+          onLogout={handleLogout}
+        />
+        <div className="flex-1 ml-64">
+          <main className="p-8">
+            {fugaScreen === 'dashboard' && (
+              <FugaDashboard onNavigateToCustomer={handleNavigateToCustomer} />
+            )}
+            {fugaScreen === 'simulador' && <FugaSimulator />}
+            {fugaScreen === 'mlops' && <FugaMLOps />}
+            {fugaScreen === 'geografia' && <FugaGeography />}
+            {fugaScreen === 'campañas' && <FugaCampaigns />}
+            {fugaScreen === 'cliente' && selectedCustomerId && (
+              <FugaCustomerDetail
+                customerId={selectedCustomerId}
+                onBack={() => setFugaScreen('dashboard')}
+              />
+            )}
+          </main>
+        </div>
+      </div>
     );
   }
 
