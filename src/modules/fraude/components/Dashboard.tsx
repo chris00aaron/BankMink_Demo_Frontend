@@ -1,137 +1,129 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import {
-  AlertTriangle, CheckCircle, TrendingUp, Activity,
-  BarChart3, Shield, Loader2, RefreshCw, DollarSign, CreditCard
-} from 'lucide-react';
+  AlertTriangle,
+  CheckCircle,
+  TrendingUp,
+  Activity,
+  MapPin,
+  Loader2,
+} from "lucide-react";
 import {
-  PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, AreaChart, Area
-} from 'recharts';
-import {
-  fraudStatsService,
-  DashboardStats,
-  HourlyTrend,
-  ShapGlobal,
-  CategoryStats
-} from '../services/fraudStatsService';
-
-// Colores para gráficas
-const COLORS = {
-  emerald: '#10b981',
-  red: '#ef4444',
-  blue: '#3b82f6',
-  orange: '#f97316',
-  yellow: '#eab308',
-  slate: '#94a3b8',
-};
-
-// Componente auxiliar para KPI Cards
-function KpiCard({ title, value, trend, trendUp, icon: Icon, color }: {
-  title: string;
-  value: string;
-  trend: string;
-  trendUp: boolean;
-  icon: React.ComponentType<{ className?: string }>;
-  color: 'blue' | 'red' | 'amber' | 'emerald';
-}) {
-  const colors = {
-    blue: "text-blue-600 bg-blue-50",
-    red: "text-red-600 bg-red-50",
-    amber: "text-amber-600 bg-amber-50",
-    emerald: "text-emerald-600 bg-emerald-50",
-  };
-
-  return (
-    <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-      <div className="flex justify-between items-start mb-4">
-        <div className={`p-3 rounded-lg ${colors[color]}`}>
-          <Icon className="w-6 h-6" />
-        </div>
-        <span className={`text-xs font-medium px-2 py-1 rounded-full ${trendUp ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
-          {trend}
-        </span>
-      </div>
-      <div>
-        <p className="text-sm font-medium text-gray-500 mb-1">{title}</p>
-        <h3 className="text-2xl font-bold text-gray-900">{value}</h3>
-      </div>
-    </div>
-  );
-}
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  Legend,
+  Tooltip,
+} from "recharts";
+import { fraudeService, type DashboardDTO } from "../services/fraudeService";
 
 export function Dashboard() {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [hourlyData, setHourlyData] = useState<HourlyTrend[]>([]);
-  const [shapData, setShapData] = useState<ShapGlobal[]>([]);
-  const [categoryData, setCategoryData] = useState<CategoryStats[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [dashboardData, setDashboardData] = useState<DashboardDTO | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [fraudPoints, setFraudPoints] = useState<
+    Array<{
+      id: number;
+      lat: number;
+      lng: number;
+      severity: "high" | "medium" | "low";
+    }>
+  >([]);
 
-  // Cargar datos
-  const loadData = async (showRefreshing = false) => {
-    if (showRefreshing) setIsRefreshing(true);
-    else setIsLoading(true);
-
-    try {
-      const [summaryRes, hourlyRes, shapRes, categoryRes] = await Promise.all([
-        fraudStatsService.getSummary(),
-        fraudStatsService.getHourlyTrend(),
-        fraudStatsService.getShapGlobal(),
-        fraudStatsService.getCategoryStats(),
-      ]);
-
-      setStats(summaryRes);
-      setHourlyData(hourlyRes);
-      setShapData(shapRes);
-      setCategoryData(categoryRes);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al cargar estadísticas');
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  };
-
+  // Cargar datos del dashboard desde la API
   useEffect(() => {
-    loadData();
+    const fetchDashboard = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await fraudeService.getDashboard();
+        setDashboardData(data);
+      } catch (err) {
+        console.error("Error fetching dashboard:", err);
+        setError("Error al cargar los datos del dashboard");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboard();
   }, []);
 
-  // Datos para Pie Chart (MODIFICADO: mostrar estados de transacciones)
-  const pieData = stats ? [
-    { name: 'Aprobadas', value: stats.approved_count || 0, color: COLORS.emerald },
-    { name: 'Pendientes', value: stats.pending_count || 0, color: COLORS.yellow },
-    { name: 'Rechazadas', value: stats.rejected_count || 0, color: COLORS.red },
-  ] : [];
+  // Generar puntos de fraude aleatorios para el mapa (simulación visual)
+  useEffect(() => {
+    const generateFraudPoints = () => {
+      const points = Array.from({ length: 15 }, (_, i) => ({
+        id: i,
+        lat: Math.random() * 60 + 10,
+        lng: Math.random() * 80 + 10,
+        severity: ["high", "medium", "low"][Math.floor(Math.random() * 3)] as
+          | "high"
+          | "medium"
+          | "low",
+      }));
+      setFraudPoints(points);
+    };
 
-  // Formatear hora para gráfica
-  const formatHour = (hour: number) => `${hour.toString().padStart(2, '0')}:00`;
+    generateFraudPoints();
+    const interval = setInterval(generateFraudPoints, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
-  // Datos para tendencia horaria
-  const trendData = hourlyData.map(h => ({
-    time: formatHour(h.hour),
-    total: h.total_transactions,
-    fraude: h.fraud_count,
-  }));
+  // Preparar datos del gráfico de pie basado en segmentación del backend
+  const transactionData = dashboardData?.segmentacionRetiro?.ubicaciones
+    ? Object.entries(dashboardData.segmentacionRetiro.ubicaciones).map(
+        ([name, value], index) => {
+          const colors = [
+            "#10b981",
+            "#3b82f6",
+            "#f59e0b",
+            "#ef4444",
+            "#8b5cf6",
+            "#ec4899",
+          ];
+          return {
+            name,
+            value: Number(value),
+            color: colors[index % colors.length],
+          };
+        },
+      )
+    : [];
 
-  // Datos para SHAP global
-  const shapChartData = shapData.map((s, idx) => ({
-    factor: s.display_name,
-    impacto: s.avg_impact * 100,
-    color: [COLORS.red, COLORS.orange, COLORS.yellow, COLORS.blue, COLORS.slate][idx] || COLORS.slate,
-  }));
+  const totalRetiros = dashboardData?.resumenRetiroEfectivoAtm?.totalRetirosPrevisto || 0;
+  const atmsActivos = dashboardData?.resumenOperativoAtms?.activos || 0;
+  const atmsInactivos = dashboardData?.resumenOperativoAtms?.inactivos || 0;
+  const atmsConRiesgo = dashboardData?.atmsConPotencialDeFaltaStock || 0;
 
-  // Datos para categorías (top 5)
-  const categoryChartData = categoryData.slice(0, 5).map(c => ({
-    category: c.category.length > 15 ? c.category.slice(0, 15) + '...' : c.category,
-    fraudes: c.fraud_count,
-  }));
+  // Calcular tasa de riesgo basada en ATMs con potencial falta de stock
+  const totalAtms = atmsActivos + atmsInactivos;
+  const riskRate =
+    totalAtms > 0 ? ((atmsConRiesgo / totalAtms) * 100).toFixed(1) : "0.0";
 
-  if (isLoading) {
+  if (loading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
+          <p className="text-gray-600">Cargando dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-4 text-red-600">
+          <AlertTriangle className="w-12 h-12" />
+          <p>{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-red-100 rounded-lg hover:bg-red-200 transition-colors"
+          >
+            Reintentar
+          </button>
+        </div>
       </div>
     );
   }
@@ -141,78 +133,28 @@ export function Dashboard() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Panel de Control de Fraude</h1>
-          <p className="text-gray-600 mt-1">Monitoreo de IA y métricas de negocio en tiempo real</p>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Dashboard Principal
+          </h1>
+          <p className="text-gray-600 mt-1">
+            Monitoreo en tiempo real del sistema de predicción
+          </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => loadData(true)}
-            disabled={isRefreshing}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Actualizar
-          </button>
-          <span className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-full text-sm font-medium border border-blue-100">
-            <Shield className="w-4 h-4" /> Modelo XAI Activo
+        <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-50 border border-emerald-200">
+          <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+          <span className="text-sm font-medium text-emerald-600">
+            Sistema Activo
           </span>
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium">
-            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-            Sistema Online
-          </div>
         </div>
       </div>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-          {error}
-        </div>
-      )}
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <KpiCard
-          title="Total Predicciones"
-          value={stats?.transactions_today?.toLocaleString() || '0'}
-          trend={`${stats?.fraud_rate?.toFixed(1) || 0}% tasa fraude`}
-          trendUp={false}
-          icon={Activity}
-          color="blue"
-        />
-        <KpiCard
-          title="Fraudes Detectados"
-          value={stats?.frauds_detected?.toLocaleString() || '0'}
-          trend={`Score prom: ${((stats?.avg_fraud_score || 0) * 100).toFixed(1)}%`}
-          trendUp={false}
-          icon={AlertTriangle}
-          color="red"
-        />
-        <KpiCard
-          title="Transacciones Legítimas"
-          value={stats?.legitimate?.toLocaleString() || '0'}
-          trend="Verificadas por IA"
-          trendUp={true}
-          icon={CheckCircle}
-          color="emerald"
-        />
-        <KpiCard
-          title="Monto en Riesgo"
-          value={`$${((stats?.total_amount_at_risk || 0) / 1000).toFixed(1)}K`}
-          trend="Transacciones bloqueadas"
-          trendUp={false}
-          icon={DollarSign}
-          color="amber"
-        />
-      </div>
-
-      {/* Sección Principal de Gráficos */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Tendencia Horaria (Area Chart) - 2 columnas */}
-        <div className="lg:col-span-2 backdrop-blur-xl bg-white/90 rounded-xl border border-gray-200 p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-lg font-bold text-gray-900">Volumen Transaccional vs Fraude</h2>
-              <p className="text-sm text-gray-500">Detección de anomalías por franja horaria</p>
+      {/* Metrics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        {/* Total Retiros Previstos */}
+        <div className="backdrop-blur-xl bg-white/90 rounded-xl border border-gray-200 p-6 shadow-lg">
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-3 rounded-lg bg-blue-50">
+              <Activity className="w-6 h-6 text-blue-600" />
             </div>
             <TrendingUp className="text-gray-400 w-5 h-5" />
           </div>
@@ -245,65 +187,120 @@ export function Dashboard() {
               </div>
             )}
           </div>
+          <p className="text-sm text-gray-600 mb-1">Retiros Previstos</p>
+          <p className="text-2xl font-bold text-gray-900">
+            S/{" "}
+            {Number(totalRetiros).toLocaleString("es-PE", {
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 0,
+            })}
+          </p>
+          <p className="text-xs text-gray-500 mt-2">Predicción del modelo</p>
         </div>
 
-        {/* Estados de Transacciones (Pie Chart MODIFICADO) - 1 columna */}
-        <div className="backdrop-blur-xl bg-white/90 rounded-xl border border-gray-200 p-6 shadow-sm">
-          <h2 className="text-lg font-bold text-gray-900 mb-2">Estados de Transacciones</h2>
-          <p className="text-sm text-gray-500 mb-6">Flujo PENDING → APPROVED/REJECTED</p>
-
-          <div className="h-64">
-            {pieData.length > 0 && pieData.some(d => d.value > 0) ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend verticalAlign="bottom" height={36} />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-full text-gray-400">
-                No hay datos de distribución
-              </div>
-            )}
-          </div>
-
-          {/* Tarjetas Bloqueadas (DATO REAL) */}
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CreditCard className="w-4 h-4 text-red-600" />
-                <span className="text-sm font-medium text-gray-700">Tarjetas Bloqueadas</span>
-              </div>
-              <span className="text-2xl font-bold text-red-600">{stats?.cards_blocked_today || 0}</span>
+        {/* ATMs Activos */}
+        <div className="backdrop-blur-xl bg-white/90 rounded-xl border border-gray-200 p-6 shadow-lg">
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-3 rounded-lg bg-emerald-50">
+              <CheckCircle className="w-6 h-6 text-emerald-600" />
             </div>
-            <p className="text-xs text-gray-500 mt-1">Por fraude confirmado</p>
+            <span className="text-xs px-2 py-1 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200">
+              Operativos
+            </span>
           </div>
+          <p className="text-sm text-gray-600 mb-1">ATMs Activos</p>
+          <p className="text-3xl font-bold text-gray-900">{atmsActivos}</p>
+          <p className="text-xs text-gray-500 mt-2">
+            {atmsInactivos} inactivos
+          </p>
+        </div>
+
+        {/* ATMs con Riesgo */}
+        <div className="backdrop-blur-xl bg-white/90 rounded-xl border border-gray-200 p-6 shadow-lg">
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-3 rounded-lg bg-red-50">
+              <AlertTriangle className="w-6 h-6 text-red-600" />
+            </div>
+            <span className="text-xs px-2 py-1 rounded-full bg-red-50 text-red-600 border border-red-200">
+              Alerta
+            </span>
+          </div>
+          <p className="text-sm text-gray-600 mb-1">ATMs en Riesgo</p>
+          <p className="text-3xl font-bold text-gray-900">{atmsConRiesgo}</p>
+          <p className="text-xs text-red-600 mt-2">Potencial falta de stock</p>
+        </div>
+
+        {/* Predicciones Realizadas */}
+        <div className="backdrop-blur-xl bg-white/90 rounded-xl border border-gray-200 p-6 shadow-lg">
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-3 rounded-lg bg-purple-50">
+              <TrendingUp className="w-6 h-6 text-purple-600" />
+            </div>
+          </div>
+          <p className="text-sm text-gray-600 mb-1">Predicciones</p>
+          <p className="text-3xl font-bold text-gray-900">
+            {dashboardData?.retirosPredichos?.length || 0}
+          </p>
+          <p className="text-xs text-gray-500 mt-2">ATMs analizados</p>
         </div>
       </div>
 
       {/* Sección Secundaria */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* SHAP Global (Barras Horizontales) */}
-        <div className="backdrop-blur-xl bg-white/90 rounded-xl border border-gray-200 p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-lg font-bold text-gray-900">Factores de Riesgo Dominantes</h2>
-              <p className="text-sm text-gray-500">¿Qué está disparando las alertas? (SHAP Global)</p>
+        {/* Fraud Heatmap */}
+        <div className="backdrop-blur-xl bg-white/90 rounded-xl border border-gray-200 p-6 shadow-lg">
+          <div className="flex items-center gap-3 mb-6">
+            <MapPin className="w-5 h-5 text-blue-600" />
+            <h2 className="text-xl font-semibold text-gray-900">
+              Mapa de Riesgo en Tiempo Real
+            </h2>
+          </div>
+
+          <div className="relative w-full h-80 bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+            {/* World Map Overlay (simplified) */}
+            <div className="absolute inset-0 opacity-10">
+              <svg viewBox="0 0 100 100" className="w-full h-full">
+                <path
+                  d="M10,50 Q30,30 50,50 T90,50"
+                  stroke="currentColor"
+                  fill="none"
+                  strokeWidth="0.5"
+                  className="text-gray-400"
+                />
+                <path
+                  d="M20,30 L80,30 L80,70 L20,70 Z"
+                  stroke="currentColor"
+                  fill="none"
+                  strokeWidth="0.5"
+                  className="text-gray-400"
+                />
+              </svg>
             </div>
-            <BarChart3 className="text-gray-400 w-5 h-5" />
+
+            {/* Fraud Points */}
+            {fraudPoints.map((point) => {
+              const colors = {
+                high: { bg: "bg-red-500", glow: "shadow-red-500/50" },
+                medium: { bg: "bg-orange-500", glow: "shadow-orange-500/50" },
+                low: { bg: "bg-yellow-500", glow: "shadow-yellow-500/50" },
+              };
+
+              return (
+                <div
+                  key={point.id}
+                  className={`absolute w-3 h-3 rounded-full ${colors[point.severity].bg} ${colors[point.severity].glow} shadow-lg animate-pulse`}
+                  style={{
+                    left: `${point.lng}%`,
+                    top: `${point.lat}%`,
+                    animationDelay: `${point.id * 0.1}s`,
+                  }}
+                >
+                  <div
+                    className={`absolute inset-0 rounded-full ${colors[point.severity].bg} opacity-50 animate-ping`}
+                  ></div>
+                </div>
+              );
+            })}
           </div>
 
           <div className="h-64">
@@ -328,44 +325,129 @@ export function Dashboard() {
           </div>
         </div>
 
-        {/* Fraude por Categoría */}
-        <div className="backdrop-blur-xl bg-white/90 rounded-xl border border-gray-200 p-6 shadow-sm flex flex-col">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-lg font-bold text-gray-900">Fraude por Categoría</h2>
-              <p className="text-sm text-gray-500">Categorías de comercio con más alertas</p>
-            </div>
-            <BarChart3 className="text-blue-500 w-5 h-5" />
-          </div>
+        {/* Transaction Distribution Chart - Segmentación por Ubicación */}
+        <div className="backdrop-blur-xl bg-white/90 rounded-xl border border-gray-200 p-6 shadow-lg">
+          <h2 className="text-xl font-semibold text-gray-900 mb-6">
+            Retiros por Tipo de Ubicación
+          </h2>
 
-          <div className="flex-1 h-64">
-            {categoryChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={categoryChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                  <XAxis
-                    dataKey="category"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 11, fill: '#6b7280' }}
-                    interval={0}
-                    angle={-15}
-                    textAnchor="end"
-                    height={50}
-                  />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} />
-                  <Tooltip cursor={{ fill: '#f9fafb' }} contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }} />
-                  <Bar dataKey="fraudes" radius={[4, 4, 0, 0]} barSize={35} fill={COLORS.red} name="Fraudes" />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-full text-gray-400">
-                No hay datos de categorías
-              </div>
-            )}
-          </div>
+          {transactionData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={transactionData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) =>
+                    `${name}: ${(percent * 100).toFixed(1)}%`
+                  }
+                  outerRadius={100}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {transactionData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "#ffffff",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "8px",
+                    color: "#1f2937",
+                  }}
+                  formatter={(value: number) => [
+                    `S/ ${value.toLocaleString("es-PE")}`,
+                    "Monto",
+                  ]}
+                />
+                <Legend
+                  verticalAlign="bottom"
+                  height={36}
+                  wrapperStyle={{ color: "#6b7280" }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-[300px] text-gray-500">
+              No hay datos de segmentación disponibles
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Risk Rate Indicator */}
+      <div className="backdrop-blur-xl bg-white/90 rounded-xl border border-gray-200 p-6 shadow-lg">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">
+              Tasa de Riesgo de Stock
+            </h2>
+            <p className="text-sm text-gray-600">
+              Porcentaje de ATMs con potencial falta de efectivo
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-5xl font-bold text-gray-900">{riskRate}%</p>
+            <p
+              className={`text-sm mt-1 ${Number(riskRate) > 20 ? "text-red-600" : "text-emerald-600"}`}
+            >
+              {Number(riskRate) > 20 ? "Requiere Atención" : "Normal"}
+            </p>
+          </div>
+        </div>
+
+        {/* Progress Bar */}
+        <div className="mt-6 h-3 bg-gray-100 rounded-full overflow-hidden">
+          <div
+            className={`h-full transition-all duration-500 ${Number(riskRate) > 20 ? "bg-red-500" : "bg-emerald-500"}`}
+            style={{ width: `${Math.min(Number(riskRate), 100)}%` }}
+          ></div>
+        </div>
+      </div>
+
+      {/* Rango de Predicción */}
+      {dashboardData?.resumenRetiroEfectivoAtm && (
+        <div className="backdrop-blur-xl bg-white/90 rounded-xl border border-gray-200 p-6 shadow-lg">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">
+            Rango de Predicción de Retiros
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="text-center p-4 bg-yellow-50 rounded-lg">
+              <p className="text-sm text-yellow-700 mb-1">
+                Escenario Pesimista
+              </p>
+              <p className="text-2xl font-bold text-yellow-800">
+                S/{" "}
+                {Number(
+                  dashboardData.resumenRetiroEfectivoAtm
+                    .totalRetirosPrevistoPesimista,
+                ).toLocaleString("es-PE", { maximumFractionDigits: 0 })}
+              </p>
+            </div>
+            <div className="text-center p-4 bg-blue-50 rounded-lg">
+              <p className="text-sm text-blue-700 mb-1">Predicción Base</p>
+              <p className="text-2xl font-bold text-blue-800">
+                S/{" "}
+                {Number(
+                  dashboardData.resumenRetiroEfectivoAtm.totalRetirosPrevisto,
+                ).toLocaleString("es-PE", { maximumFractionDigits: 0 })}
+              </p>
+            </div>
+            <div className="text-center p-4 bg-green-50 rounded-lg">
+              <p className="text-sm text-green-700 mb-1">Escenario Optimista</p>
+              <p className="text-2xl font-bold text-green-800">
+                S/{" "}
+                {Number(
+                  dashboardData.resumenRetiroEfectivoAtm
+                    .totalRetirosPrevistoOptimista,
+                ).toLocaleString("es-PE", { maximumFractionDigits: 0 })}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

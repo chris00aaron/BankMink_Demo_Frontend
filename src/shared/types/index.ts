@@ -1,2 +1,10 @@
 // Re-exportar tipos compartidos
-export type { UserRole, ServiceType, User } from '../contexts/AuthContext';
+/**
+ * Punto de entrada único para todos los tipos de la aplicación.
+ * El uso de 'export type' asegura que no haya código de ejecución aquí.
+ */
+export type { 
+    User,
+    UserRole, 
+    ServiceType
+} from './auth.types';

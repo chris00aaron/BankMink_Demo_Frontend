@@ -4,7 +4,7 @@ import { MetricsCard } from './MetricsCard';
 import { TransactionsChart } from './TransactionsChart';
 import { TransactionsTable, Transaction } from './TransactionsTable';
 import { TransactionDetail } from './TransactionDetail';
-import { NotificationAlert } from './NotificationAlert';
+import { NotificationAlert } from '../NotificationAlert';
 
 // Mock data para el gráfico
 const chartData = [
