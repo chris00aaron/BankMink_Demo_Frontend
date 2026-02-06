@@ -10,7 +10,7 @@ import {
   RiskAnalysis,
   ModelMonitoring
 } from '@modules/fraude';
-import { ClientPrediction, Dashboard as MorosidadDashboard, MorosidadSidebar, BatchPrediction as MorosidadBatchPrediction, EarlyWarnings } from '@modules/morosidad';
+import { ClientPrediction, Dashboard as MorosidadDashboard, MorosidadSidebar, BatchPrediction as MorosidadBatchPrediction, EarlyWarnings, Simulation, ModelHealth } from '@modules/morosidad';
 import {
   FugaSidebar,
   DashboardPage as FugaDashboard,
@@ -253,6 +253,8 @@ function AppContent() {
             {morosidadScreen === 'individual' && <ClientPrediction />}
             {morosidadScreen === 'batch' && <MorosidadBatchPrediction />}
             {morosidadScreen === 'alerts' && <EarlyWarnings />}
+            {morosidadScreen === 'simulation' && <Simulation />}
+            {morosidadScreen === 'model-health' && <ModelHealth />}
           </main>
         </div>
       </div>

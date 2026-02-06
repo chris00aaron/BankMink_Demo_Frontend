@@ -9,6 +9,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@shared/components/ui/select';
+import { Switch } from '@shared/components/ui/switch';
+import { Label } from '@shared/components/ui/label';
 import {
     Filter,
     Download,
@@ -38,7 +40,7 @@ import {
     ResponsiveContainer
 } from 'recharts';
 import { filterCustomers, predictBatch } from '../services/morosidadService';
-import type { BatchFilters, BatchAccountPrediction } from '../types/morosidad.types';
+import type { BatchFilters, BatchAccountPrediction, RiskFactor } from '../types/morosidad.types';
 
 const COLORS = {
     Crítico: '#dc2626',
@@ -67,6 +69,9 @@ export function BatchPredictionPage() {
     });
 
     const [predictions, setPredictions] = useState<BatchAccountPrediction[]>([]);
+    const [currentThreshold, setCurrentThreshold] = useState<number>(50); // Default 50%
+    const [includeShap, setIncludeShap] = useState(false);
+    const [shapSummary, setShapSummary] = useState<RiskFactor[] | undefined>(undefined);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [showResults, setShowResults] = useState(false);
@@ -74,10 +79,10 @@ export function BatchPredictionPage() {
     // Calcular estadísticas del lote
     const batchStats = useMemo(() => {
         const total = predictions.length;
-        const enRiesgo = predictions.filter(c => c.probabilidadPago < 50).length;
+        const enRiesgo = predictions.filter(c => c.probabilidadPago < currentThreshold).length;
         const dineroEnRiesgo = predictions
-            .filter(c => c.probabilidadPago < 50)
-            .reduce((sum, c) => sum + (c.ultimaCuota || 0), 0);
+            .filter(c => c.probabilidadPago < currentThreshold)
+            .reduce((sum, c) => sum + (c.estimatedLoss || 0), 0);
         const promedioProb = predictions.reduce((sum, c) => sum + c.probabilidadPago, 0) / (total || 1);
 
         return {
@@ -92,7 +97,7 @@ export function BatchPredictionPage() {
                 Bajo: predictions.filter(c => c.nivelRiesgo === 'Bajo').length
             }
         };
-    }, [predictions]);
+    }, [predictions, currentThreshold]);
 
     const handleApplyFilters = async () => {
         setIsLoading(true);
@@ -119,8 +124,10 @@ export function BatchPredictionPage() {
             }
 
             // 2. Realizar predicción batch
-            const results = await predictBatch(recordIds);
+            const { predictions: results, umbralPolitica, shapSummary: shapData } = await predictBatch(recordIds, includeShap);
             setPredictions(results);
+            setCurrentThreshold(umbralPolitica || 50);
+            setShapSummary(shapData);
             setShowResults(true);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error al procesar la solicitud');
@@ -139,6 +146,8 @@ export function BatchPredictionPage() {
             fechaHasta: ''
         });
         setPredictions([]);
+        setCurrentThreshold(50);
+        setShapSummary(undefined);
         setShowResults(false);
         setError(null);
     };
@@ -157,7 +166,7 @@ export function BatchPredictionPage() {
                 c.balance,
                 c.probabilidadPago.toFixed(2),
                 c.nivelRiesgo,
-                c.ultimaCuota
+                c.estimatedLoss?.toFixed(2) || '0.00'
             ].join(','))
         ].join('\n');
 
@@ -182,18 +191,18 @@ export function BatchPredictionPage() {
         return groups.map(edu => ({
             educacion: edu,
             cantidad: predictions.filter(c => c.educacion === edu).length,
-            enRiesgo: predictions.filter(c => c.educacion === edu && c.probabilidadPago < 50).length
+            enRiesgo: predictions.filter(c => c.educacion === edu && c.probabilidadPago < currentThreshold).length
         }));
-    }, [predictions]);
+    }, [predictions, currentThreshold]);
 
     const maritalStatusDistribution = useMemo(() => {
         const groups = ['Soltero', 'Casado', 'Divorciado'];
         return groups.map(status => ({
             estado: status,
             cantidad: predictions.filter(c => c.estadoCivil === status).length,
-            enRiesgo: predictions.filter(c => c.estadoCivil === status && c.probabilidadPago < 50).length
+            enRiesgo: predictions.filter(c => c.estadoCivil === status && c.probabilidadPago < currentThreshold).length
         }));
-    }, [predictions]);
+    }, [predictions, currentThreshold]);
 
     return (
         <div className="space-y-6">
@@ -306,7 +315,24 @@ export function BatchPredictionPage() {
                             value={filterInputs.fechaHasta}
                             onChange={(e) => setFilterInputs({ ...filterInputs, fechaHasta: e.target.value })}
                         />
+                        <Input
+                            type="date"
+                            value={filterInputs.fechaHasta}
+                            onChange={(e) => setFilterInputs({ ...filterInputs, fechaHasta: e.target.value })}
+                        />
                     </div>
+                </div>
+
+                <div className="mt-6 flex items-center space-x-2">
+                    <Switch
+                        id="shap-mode"
+                        checked={includeShap}
+                        onCheckedChange={setIncludeShap}
+                        className="data-[state=checked]:bg-blue-600"
+                    />
+                    <Label htmlFor="shap-mode" className="text-zinc-700 font-medium cursor-pointer">
+                        Predecir con Interpretador (Análisis SHAP de impacto por variable)
+                    </Label>
                 </div>
 
                 {/* Botones de acción */}
@@ -558,6 +584,82 @@ export function BatchPredictionPage() {
                             )}
                         </div>
                     </Card>
+
+                    {/* Sección de Interpretación SHAP (si existe) */}
+                    {shapSummary && shapSummary.length > 0 && (
+                        <Card className="p-6 bg-white border-0 shadow-sm mb-6">
+                            <div className="flex items-center gap-2 mb-4">
+                                <BarChart3 className="w-5 h-5 text-indigo-600" />
+                                <h3 className="font-semibold text-zinc-900">Variables más Influyentes (SHAP)</h3>
+                            </div>
+                            <p className="text-sm text-zinc-500 mb-2">
+                                Muestra qué variables tuvieron más peso en la decisión del modelo para este grupo.
+                            </p>
+                            <div className="flex gap-4 mb-6 text-xs text-zinc-500">
+                                <div className="flex items-center gap-1">
+                                    <div className="w-3 h-3 bg-red-500 rounded-sm"></div>
+                                    <span>Aumenta el Riesgo (Juega en contra)</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <div className="w-3 h-3 bg-green-500 rounded-sm"></div>
+                                    <span>Disminuye el Riesgo (Juega a favor)</span>
+                                </div>
+                            </div>
+                            <ResponsiveContainer width="100%" height={350}>
+                                <BarChart
+                                    data={shapSummary}
+                                    layout="vertical"
+                                    margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
+                                >
+                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                    <XAxis type="number" hide />
+                                    <YAxis
+                                        dataKey="name"
+                                        type="category"
+                                        width={120}
+                                        tick={{ fontSize: 11 }}
+                                    />
+                                    <Tooltip
+                                        cursor={{ fill: '#f4f4f5' }}
+                                        content={({ active, payload }) => {
+                                            if (active && payload && payload.length) {
+                                                const data = payload[0].payload;
+                                                return (
+                                                    <div className="bg-white p-3 border shadow-md rounded-md text-sm max-w-xs">
+                                                        <p className="font-bold mb-1 border-b pb-1">{data.name}</p>
+                                                        <div className="flex justify-between gap-4 mb-1 mt-1">
+                                                            <span className="text-zinc-600">Influencia Relativa:</span>
+                                                            <span className="font-mono font-medium">{data.impact}%</span>
+                                                        </div>
+                                                        <p className="text-xs text-zinc-500 mb-2">
+                                                            (Escala relativa a la variable más importante)
+                                                        </p>
+                                                        <div className="flex items-center gap-2">
+                                                            <div className={`w-2 h-2 rounded-full ${data.direction === 'positive' ? 'bg-red-500' : 'bg-green-500'}`}></div>
+                                                            <span className="font-medium">
+                                                                {data.direction === 'positive'
+                                                                    ? 'Aumenta la probabilidad de morosidad'
+                                                                    : 'Reduce la probabilidad de morosidad'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        }}
+                                    />
+                                    <Bar dataKey="impact" name="Impacto" radius={[0, 4, 4, 0]}>
+                                        {shapSummary.map((entry, index) => (
+                                            <Cell
+                                                key={`cell-${index}`}
+                                                fill={entry.direction === 'positive' ? '#ef4444' : '#22c55e'}
+                                            />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </Card>
+                    )}
 
                     {/* Insights */}
                     <Card className="p-6 bg-blue-50 border-blue-100 border shadow-none">
