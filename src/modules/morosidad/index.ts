@@ -3,3 +3,6 @@ export { ClientPredictionPage as ClientPrediction } from './pages/ClientPredicti
 export { BatchPredictionPage as BatchPrediction } from './pages/BatchPredictionPage';
 export { EarlyWarningsPage as EarlyWarnings } from './pages/EarlywarningsPage';
 export { Sidebar as MorosidadSidebar } from './components/Sidebar';
+export { SimulationPage as Simulation } from './pages/SimulationPage';
+export { default as ModelHealth } from './pages/ModelHealthPage';
+

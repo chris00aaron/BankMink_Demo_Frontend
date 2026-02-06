@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@shared/components/ui/card';
 import { Button } from '@shared/components/ui/button';
 import { Slider } from '@shared/components/ui/slider';
@@ -17,139 +17,104 @@ import {
     Phone,
     CheckCircle,
     ArrowRight,
-    Calendar
+    Calendar,
+    Loader2,
+    ChevronDown,
+    Plus,
+    Shield
 } from 'lucide-react';
-import { mockClients } from '../utils/mockData';
-
-interface Alert {
-    id: string;
-    tipo: 'critico' | 'alto' | 'tendencia' | 'vencimiento';
-    titulo: string;
-    descripcion: string;
-    clientesAfectados: number;
-    dineroEnRiesgo: number;
-    prioridad: 'urgente' | 'alta' | 'media';
-    fecha: string;
-    accionRecomendada: string;
-}
+import type { DefaultPolicy, Alerta, EarlyWarningsPreview } from '../types/morosidad.types';
+import {
+    getAllPolicies,
+    getActivePolicy,
+    activatePolicy,
+    getWarningsPreview
+} from '../services/morosidadService';
 
 export function EarlyWarningsPage() {
+    // Estados de configuración temporal (no persiste)
     const [umbralRiesgo, setUmbralRiesgo] = useState([30]);
     const [diasAnticipacion, setDiasAnticipacion] = useState([7]);
     const [alertasActivas, setAlertasActivas] = useState(true);
 
-    // Generar alertas basadas en los datos
-    const generarAlertas = (): Alert[] => {
-        if (!alertasActivas) return [];
+    // Estados de datos
+    const [policies, setPolicies] = useState<DefaultPolicy[]>([]);
+    const [activePolicy, setActivePolicy] = useState<DefaultPolicy | null>(null);
+    const [warningsData, setWarningsData] = useState<EarlyWarningsPreview | null>(null);
 
-        const alertas: Alert[] = [];
+    // Estados de UI
+    const [isLoading, setIsLoading] = useState(true);
+    const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+    const [showPolicySelector, setShowPolicySelector] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-        // Alerta 1: Clientes con riesgo crítico
-        const clientesCriticos = mockClients.filter(c => c.probabilidadPago < 15);
-        if (clientesCriticos.length > 0) {
-            alertas.push({
-                id: 'alert-1',
-                tipo: 'critico',
-                titulo: 'Clientes en Riesgo Crítico',
-                descripcion: `${clientesCriticos.length} clientes tienen menos de 15% de probabilidad de pago`,
-                clientesAfectados: clientesCriticos.length,
-                dineroEnRiesgo: clientesCriticos.reduce((sum, c) => sum + c.montoCuota, 0),
-                prioridad: 'urgente',
-                fecha: new Date().toISOString(),
-                accionRecomendada: 'Contacto inmediato y evaluación de reestructuración'
-            });
+    // Cargar datos iniciales
+    useEffect(() => {
+        const loadData = async () => {
+            try {
+                setIsLoading(true);
+                const [policiesData, activePolicyData] = await Promise.all([
+                    getAllPolicies(),
+                    getActivePolicy()
+                ]);
+                setPolicies(policiesData);
+                setActivePolicy(activePolicyData);
+
+                // Inicializar sliders con valores de política activa
+                if (activePolicyData) {
+                    setUmbralRiesgo([Math.round((1 - activePolicyData.thresholdApproval) * 100)]);
+                    setDiasAnticipacion([activePolicyData.daysGraceDefault || 7]);
+                }
+            } catch (err) {
+                setError(err instanceof Error ? err.message : 'Error al cargar datos');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        loadData();
+    }, []);
+
+    // Cargar preview de alertas cuando cambian los parámetros
+    const loadWarningsPreview = useCallback(async () => {
+        if (!alertasActivas) {
+            setWarningsData(null);
+            return;
         }
-
-        // Alerta 2: Aumento de morosidad en segmento joven
-        const clientesJovenes = mockClients.filter(c => c.edad < 30);
-        const jovenesMorosos = clientesJovenes.filter(c => c.probabilidadPago < 50);
-        if (jovenesMorosos.length > clientesJovenes.length * 0.3) {
-            alertas.push({
-                id: 'alert-2',
-                tipo: 'tendencia',
-                titulo: 'Tendencia de Riesgo en Clientes Jóvenes',
-                descripcion: `${((jovenesMorosos.length / (clientesJovenes.length || 1)) * 100).toFixed(1)}% de clientes menores de 30 años están en riesgo`,
-                clientesAfectados: jovenesMorosos.length,
-                dineroEnRiesgo: jovenesMorosos.reduce((sum, c) => sum + c.montoCuota, 0),
-                prioridad: 'alta',
-                fecha: new Date().toISOString(),
-                accionRecomendada: 'Revisar políticas de crédito para este segmento'
-            });
+        try {
+            setIsLoadingPreview(true);
+            const data = await getWarningsPreview(umbralRiesgo[0], diasAnticipacion[0]);
+            setWarningsData(data);
+        } catch (err) {
+            console.error('Error loading warnings preview:', err);
+        } finally {
+            setIsLoadingPreview(false);
         }
+    }, [umbralRiesgo, diasAnticipacion, alertasActivas]);
 
-        // Alerta 3: Clientes con múltiples cuotas atrasadas
-        const multipleAtrasos = mockClients.filter(c => c.cuotasAtrasadas >= 3);
-        if (multipleAtrasos.length > 0) {
-            alertas.push({
-                id: 'alert-3',
-                tipo: 'alto',
-                titulo: 'Clientes con Múltiples Cuotas Atrasadas',
-                descripcion: `${multipleAtrasos.length} clientes tienen 3 o más cuotas atrasadas`,
-                clientesAfectados: multipleAtrasos.length,
-                dineroEnRiesgo: multipleAtrasos.reduce((sum, c) => sum + c.montoCuota * c.cuotasAtrasadas, 0),
-                prioridad: 'urgente',
-                fecha: new Date().toISOString(),
-                accionRecomendada: 'Activar protocolo de cobranza avanzada'
-            });
+    // Debounce para evitar muchas llamadas
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            loadWarningsPreview();
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [loadWarningsPreview]);
+
+    // Activar política
+    const handleActivatePolicy = async (policyId: number) => {
+        try {
+            const activated = await activatePolicy(policyId);
+            setActivePolicy(activated);
+            setShowPolicySelector(false);
+            // Actualizar sliders
+            setUmbralRiesgo([Math.round((1 - activated.thresholdApproval) * 100)]);
+            setDiasAnticipacion([activated.daysGraceDefault || 7]);
+            // Recargar lista de políticas
+            const updatedPolicies = await getAllPolicies();
+            setPolicies(updatedPolicies);
+        } catch (err) {
+            console.error('Error activating policy:', err);
         }
-
-        // Alerta 4: Deterioro en clientes con educación primaria
-        const clientesPrimaria = mockClients.filter(c => c.educacion === 'Primaria');
-        const primariaMorosos = clientesPrimaria.filter(c => c.probabilidadPago < 50);
-        if (clientesPrimaria.length > 0 && primariaMorosos.length > clientesPrimaria.length * 0.4) {
-            alertas.push({
-                id: 'alert-4',
-                tipo: 'tendencia',
-                titulo: 'Alto Riesgo en Clientes con Educación Primaria',
-                descripcion: `${((primariaMorosos.length / clientesPrimaria.length) * 100).toFixed(1)}% de este segmento presenta riesgo`,
-                clientesAfectados: primariaMorosos.length,
-                dineroEnRiesgo: primariaMorosos.reduce((sum, c) => sum + c.montoCuota, 0),
-                prioridad: 'media',
-                fecha: new Date().toISOString(),
-                accionRecomendada: 'Programa de educación financiera y acompañamiento'
-            });
-        }
-
-        // Alerta 5: Clientes divorciados con alto riesgo
-        const clientesDivorciados = mockClients.filter(c => c.estadoCivil === 'Divorciado');
-        const divorciadosMorosos = clientesDivorciados.filter(c => c.probabilidadPago < umbralRiesgo[0]);
-        if (divorciadosMorosos.length > 0) {
-            alertas.push({
-                id: 'alert-5',
-                tipo: 'alto',
-                titulo: 'Clientes Divorciados en Riesgo',
-                descripcion: `${divorciadosMorosos.length} clientes divorciados bajo el umbral de ${umbralRiesgo[0]}%`,
-                clientesAfectados: divorciadosMorosos.length,
-                dineroEnRiesgo: divorciadosMorosos.reduce((sum, c) => sum + c.montoCuota, 0),
-                prioridad: 'alta',
-                fecha: new Date().toISOString(),
-                accionRecomendada: 'Evaluación de situación personal y opciones de pago'
-            });
-        }
-
-        // Alerta 6: Nuevos clientes con indicadores de riesgo
-        const fechaLimite = new Date();
-        fechaLimite.setMonth(fechaLimite.getMonth() - 6);
-        const clientesNuevos = mockClients.filter(c => new Date(c.fechaRegistro) > fechaLimite);
-        const nuevosRiesgo = clientesNuevos.filter(c => c.probabilidadPago < 50);
-        if (nuevosRiesgo.length > 0) {
-            alertas.push({
-                id: 'alert-6',
-                tipo: 'tendencia',
-                titulo: 'Clientes Nuevos con Señales de Riesgo',
-                descripcion: `${nuevosRiesgo.length} clientes con menos de 6 meses presentan riesgo temprano`,
-                clientesAfectados: nuevosRiesgo.length,
-                dineroEnRiesgo: nuevosRiesgo.reduce((sum, c) => sum + c.montoCuota, 0),
-                prioridad: 'media',
-                fecha: new Date().toISOString(),
-                accionRecomendada: 'Revisión de proceso de originación de créditos'
-            });
-        }
-
-        return alertas;
     };
-
-    const alertas = generarAlertas();
 
     const getPriorityColor = (prioridad: string) => {
         switch (prioridad) {
@@ -163,7 +128,7 @@ export function EarlyWarningsPage() {
     const getPriorityBadgeVariant = (prioridad: string) => {
         switch (prioridad) {
             case 'urgente': return 'destructive';
-            case 'alta': return 'default'; // Using default for high
+            case 'alta': return 'default';
             case 'media': return 'secondary';
             default: return 'outline';
         }
@@ -179,8 +144,31 @@ export function EarlyWarningsPage() {
         }
     };
 
-    const totalClientesEnAlerta = alertas.reduce((sum, a) => sum + a.clientesAfectados, 0);
-    const totalDineroEnRiesgo = alertas.reduce((sum, a) => sum + a.dineroEnRiesgo, 0);
+    const alertas: Alerta[] = warningsData?.alertas || [];
+    const totalCuentasEnAlerta = warningsData?.totalCuentasEnAlerta || 0;
+    const totalDineroEnRiesgo = warningsData?.totalDineroEnRiesgo || 0;
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <div className="flex flex-col items-center gap-4">
+                    <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                    <p className="text-zinc-500">Cargando alertas...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <div className="text-center">
+                    <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                    <p className="text-red-600 font-medium">{error}</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -192,12 +180,85 @@ export function EarlyWarningsPage() {
                 </p>
             </div>
 
-            {/* Panel de configuración */}
+            {/* Política Activa */}
+            <Card className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="p-3 bg-blue-100 rounded-lg">
+                            <Shield className="w-6 h-6 text-blue-600" />
+                        </div>
+                        <div>
+                            <p className="text-sm text-blue-600 font-medium">Política Activa</p>
+                            <p className="text-lg font-semibold text-zinc-900">
+                                {activePolicy?.policyName || 'Sin política activa'}
+                            </p>
+                            {activePolicy && (
+                                <p className="text-xs text-zinc-500">
+                                    Umbral: {Math.round((1 - activePolicy.thresholdApproval) * 100)}% |
+                                    Días gracia: {activePolicy.daysGraceDefault} |
+                                    LGD: {(activePolicy.factorLgd * 100).toFixed(1)}%
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                    <div className="relative">
+                        <Button
+                            variant="outline"
+                            className="gap-2 bg-white"
+                            onClick={() => setShowPolicySelector(!showPolicySelector)}
+                        >
+                            Cambiar Política
+                            <ChevronDown className="w-4 h-4" />
+                        </Button>
+                        {showPolicySelector && (
+                            <div className="absolute right-0 top-12 w-72 bg-white rounded-lg shadow-lg border z-50">
+                                <div className="p-2">
+                                    {policies.map((policy) => (
+                                        <button
+                                            key={policy.idPolicy}
+                                            onClick={() => handleActivatePolicy(policy.idPolicy)}
+                                            className={`w-full text-left p-3 rounded-lg hover:bg-zinc-50 ${policy.isActive ? 'bg-blue-50' : ''
+                                                }`}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <span className="font-medium">{policy.policyName}</span>
+                                                {policy.isActive && (
+                                                    <Badge variant="default" className="text-xs">Activa</Badge>
+                                                )}
+                                            </div>
+                                            <p className="text-xs text-zinc-500 mt-1">
+                                                Umbral: {Math.round((1 - policy.thresholdApproval) * 100)}% |
+                                                Aprobada por: {policy.approvedBy}
+                                            </p>
+                                        </button>
+                                    ))}
+                                    {policies.length === 0 && (
+                                        <p className="text-sm text-zinc-500 text-center py-4">
+                                            No hay políticas registradas
+                                        </p>
+                                    )}
+                                </div>
+                                <div className="border-t p-2">
+                                    <Button variant="ghost" className="w-full gap-2 text-blue-600">
+                                        <Plus className="w-4 h-4" />
+                                        Crear Nueva Política
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </Card>
+
+            {/* Panel de configuración temporal */}
             <Card className="p-6 bg-white border-0 shadow-sm">
                 <div className="flex items-center justify-between mb-6">
                     <div className="flex items-center gap-2">
                         <Settings className="w-5 h-5 text-blue-600" />
-                        <h2 className="font-semibold text-zinc-900">Configuración de Alertas</h2>
+                        <div>
+                            <h2 className="font-semibold text-zinc-900">Vista Previa de Alertas</h2>
+                            <p className="text-xs text-zinc-500">Modifica temporalmente los umbrales para simular efectos</p>
+                        </div>
                     </div>
                     <div className="flex items-center gap-3">
                         <span className="text-sm font-medium text-zinc-700">Alertas Activas</span>
@@ -233,7 +294,7 @@ export function EarlyWarningsPage() {
                     <div>
                         <div className="flex items-center justify-between mb-2">
                             <label className="text-sm font-medium text-zinc-700">
-                                Días de Anticipación
+                                Días de Gracia (post-vencimiento)
                             </label>
                             <span className="text-sm font-bold text-blue-600">{diasAnticipacion[0]} días</span>
                         </div>
@@ -247,7 +308,7 @@ export function EarlyWarningsPage() {
                             className="py-4"
                         />
                         <p className="text-xs text-zinc-500 mt-1">
-                            Días antes del vencimiento para generar alertas preventivas
+                            Días después del vencimiento antes de considerar una cuenta como morosa
                         </p>
                     </div>
                 </div>
@@ -262,7 +323,9 @@ export function EarlyWarningsPage() {
                         </div>
                         <div>
                             <p className="text-sm text-zinc-600">Alertas Activas</p>
-                            <p className="text-2xl font-bold text-zinc-900">{alertas.length}</p>
+                            <p className="text-2xl font-bold text-zinc-900">
+                                {isLoadingPreview ? '...' : alertas.length}
+                            </p>
                         </div>
                     </div>
                 </Card>
@@ -273,8 +336,10 @@ export function EarlyWarningsPage() {
                             <Users className="w-6 h-6 text-orange-600" />
                         </div>
                         <div>
-                            <p className="text-sm text-zinc-600">Clientes en Alerta</p>
-                            <p className="text-2xl font-bold text-zinc-900">{totalClientesEnAlerta}</p>
+                            <p className="text-sm text-zinc-600">Cuentas en Alerta</p>
+                            <p className="text-2xl font-bold text-zinc-900">
+                                {isLoadingPreview ? '...' : totalCuentasEnAlerta}
+                            </p>
                         </div>
                     </div>
                 </Card>
@@ -286,7 +351,9 @@ export function EarlyWarningsPage() {
                         </div>
                         <div>
                             <p className="text-sm text-zinc-600">Exposición Total</p>
-                            <p className="text-2xl font-bold text-zinc-900">${Math.round(totalDineroEnRiesgo / 1000)}K</p>
+                            <p className="text-2xl font-bold text-zinc-900">
+                                {isLoadingPreview ? '...' : `$${Math.round(totalDineroEnRiesgo / 1000)}K`}
+                            </p>
                         </div>
                     </div>
                 </Card>
@@ -304,12 +371,19 @@ export function EarlyWarningsPage() {
                     </div>
                 </div>
 
-                {alertas.length === 0 ? (
+                {isLoadingPreview ? (
+                    <Card className="p-12 text-center bg-white border-0 shadow-sm">
+                        <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
+                        <p className="text-zinc-500">Calculando alertas...</p>
+                    </Card>
+                ) : alertas.length === 0 ? (
                     <Card className="p-12 text-center bg-white border-0 shadow-sm">
                         <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-4" />
                         <h3 className="text-lg font-medium text-zinc-900 mb-2">No hay alertas activas</h3>
                         <p className="text-zinc-600">
-                            Todos los indicadores están dentro de los parámetros normales
+                            {alertasActivas
+                                ? 'Todos los indicadores están dentro de los parámetros normales'
+                                : 'Las alertas están desactivadas'}
                         </p>
                     </Card>
                 ) : (
@@ -335,8 +409,8 @@ export function EarlyWarningsPage() {
                                         <div className="flex items-center gap-2">
                                             <Users className="w-4 h-4 text-zinc-500" />
                                             <span className="text-sm">
-                                                <span className="text-zinc-600">Clientes: </span>
-                                                <span className="font-medium">{alerta.clientesAfectados}</span>
+                                                <span className="text-zinc-600">Cuentas: </span>
+                                                <span className="font-medium">{alerta.cuentasAfectadas}</span>
                                             </span>
                                         </div>
                                         <div className="flex items-center gap-2">

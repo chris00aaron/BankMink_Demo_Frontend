@@ -57,6 +57,14 @@ const RISK_COLORS = {
   }
 };
 
+const SBS_COLORS = {
+  'Normal': 'bg-green-100 text-green-800',
+  'CPP': 'bg-yellow-100 text-yellow-800',
+  'Deficiente': 'bg-orange-100 text-orange-800',
+  'Dudoso': 'bg-red-100 text-red-800',
+  'Pérdida': 'bg-red-200 text-red-900'
+};
+
 export function ClientPredictionPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredClients, setFilteredClients] = useState<CustomerSearchResult[]>([]);
@@ -112,92 +120,60 @@ export function ClientPredictionPage() {
     }
   };
 
+  // Mapa de etiquetas amigables para las variables del modelo
+  const FACTOR_LABELS: { [key: string]: string } = {
+    'LIMIT_BAL': 'Límite de Crédito',
+    'SEX': 'Género',
+    'EDUCATION': 'Nivel Educativo',
+    'MARRIAGE': 'Estado Civil',
+    'AGE': 'Edad',
+    'PAY_0': 'Estado Pago Septiembre',
+    'PAY_2': 'Estado Pago Agosto',
+    'PAY_3': 'Estado Pago Julio',
+    'PAY_4': 'Estado Pago Junio',
+    'PAY_5': 'Estado Pago Mayo',
+    'PAY_6': 'Estado Pago Abril',
+    'BILL_AMT1': 'Factura Septiembre',
+    'BILL_AMT2': 'Factura Agosto',
+    'BILL_AMT3': 'Factura Julio',
+    'BILL_AMT4': 'Factura Junio',
+    'BILL_AMT5': 'Factura Mayo',
+    'BILL_AMT6': 'Factura Abril',
+    'PAY_AMT1': 'Pago Septiembre',
+    'PAY_AMT2': 'Pago Agosto',
+    'PAY_AMT3': 'Pago Julio',
+    'PAY_AMT4': 'Pago Junio',
+    'PAY_AMT5': 'Pago Mayo',
+    'PAY_AMT6': 'Pago Abril',
+    'UTILIZATION_RATE': 'Tasa de Utilización'
+  };
+
   const getFactoresInfluencia = (result: ClientePredictionDetail) => {
-    const factores = [];
-
-    if (result.cuotasAtrasadas > 0) {
-      factores.push({
-        factor: 'Cuotas atrasadas',
-        impacto: 'Negativo',
-        valor: `${result.cuotasAtrasadas} cuota(s)`,
-        icon: XCircle,
-        color: 'text-red-600',
-        bgColor: 'bg-red-50'
-      });
+    // Si hay factores SHAP dinámicos, usarlos
+    if (result.riskFactors && result.riskFactors.length > 0) {
+      return result.riskFactors.map(factor => ({
+        factor: FACTOR_LABELS[factor.name] || factor.name,
+        name: factor.name,
+        impacto: factor.direction === 'positive' ? 'Aumenta Riesgo' : 'Reduce Riesgo',
+        impact: factor.impact,
+        icon: factor.direction === 'positive' ? AlertCircle : CheckCircle,
+        color: factor.direction === 'positive' ? 'text-red-600' : 'text-green-600',
+        bgColor: factor.direction === 'positive' ? 'bg-red-50' : 'bg-green-50',
+        barColor: factor.direction === 'positive' ? 'bg-red-400' : 'bg-green-400'
+      }));
     }
 
-    if (result.historialPagos >= 85) {
-      factores.push({
-        factor: 'Historial de pagos',
-        impacto: 'Positivo',
-        valor: `${result.historialPagos.toFixed(0)}% a tiempo`,
-        icon: CheckCircle,
-        color: 'text-green-600',
-        bgColor: 'bg-green-50'
-      });
-    } else if (result.historialPagos < 60) {
-      factores.push({
-        factor: 'Historial de pagos',
-        impacto: 'Negativo',
-        valor: `${result.historialPagos.toFixed(0)}% a tiempo`,
-        icon: XCircle,
-        color: 'text-red-600',
-        bgColor: 'bg-red-50'
-      });
-    }
-
-    const ratioDeuda = (result.ultimaCuota / result.estimatedSalary) * 100;
-    if (ratioDeuda > 40) {
-      factores.push({
-        factor: 'Ratio cuota/ingreso',
-        impacto: 'Negativo',
-        valor: `${ratioDeuda.toFixed(1)}% de ingresos`,
-        icon: AlertCircle,
-        color: 'text-orange-600',
-        bgColor: 'bg-orange-50'
-      });
-    } else if (ratioDeuda < 25) {
-      factores.push({
-        factor: 'Ratio cuota/ingreso',
-        impacto: 'Positivo',
-        valor: `${ratioDeuda.toFixed(1)}% de ingresos`,
-        icon: CheckCircle,
-        color: 'text-green-600',
-        bgColor: 'bg-green-50'
-      });
-    }
-
-    if (result.antiguedadMeses > 24) {
-      factores.push({
-        factor: 'Antigüedad como cliente',
-        impacto: 'Positivo',
-        valor: `${Math.floor(result.antiguedadMeses / 12)} año(s)`,
-        icon: CheckCircle,
-        color: 'text-green-600',
-        bgColor: 'bg-green-50'
-      });
-    } else if (result.antiguedadMeses < 6) {
-      factores.push({
-        factor: 'Antigüedad como cliente',
-        impacto: 'Negativo',
-        valor: `${result.antiguedadMeses} mes(es)`,
-        icon: MinusCircle,
-        color: 'text-orange-600',
-        bgColor: 'bg-orange-50'
-      });
-    }
-
-    // Factor principal del modelo
-    factores.push({
-      factor: 'Factor principal (ML)',
-      impacto: result.defaultPayment ? 'Negativo' : 'Positivo',
-      valor: result.mainRiskFactor,
+    // Fallback: si no hay factores SHAP, mostrar mensaje
+    return [{
+      factor: 'Factor principal',
+      name: result.mainRiskFactor,
+      impacto: result.defaultPayment ? 'Aumenta Riesgo' : 'Reduce Riesgo',
+      impact: 100,
       icon: result.defaultPayment ? AlertCircle : CheckCircle,
-      color: result.defaultPayment ? 'text-orange-600' : 'text-green-600',
-      bgColor: result.defaultPayment ? 'bg-orange-50' : 'bg-green-50'
-    });
-
-    return factores;
+      color: result.defaultPayment ? 'text-red-600' : 'text-green-600',
+      bgColor: result.defaultPayment ? 'bg-red-50' : 'bg-green-50',
+      barColor: result.defaultPayment ? 'bg-red-400' : 'bg-green-400'
+    }];
   };
 
   const getRecomendaciones = (result: ClientePredictionDetail) => {
@@ -399,6 +375,21 @@ export function ClientPredictionPage() {
               </span>
             </div>
 
+            {/* Badges de clasificación y comparación */}
+            <div className="flex flex-wrap gap-3 mb-6">
+              <span className={`px-3 py-1.5 rounded-lg text-sm font-medium ${SBS_COLORS[predictionResult.clasificacionSBS]}`}>
+                SBS: {predictionResult.clasificacionSBS}
+              </span>
+              <span className="px-3 py-1.5 rounded-lg text-sm bg-zinc-100 text-zinc-700">
+                Más riesgoso que el {predictionResult.percentilRiesgo}% de la cartera
+              </span>
+              {predictionResult.estimatedLoss > 0 && (
+                <span className="px-3 py-1.5 rounded-lg text-sm bg-red-50 text-red-700">
+                  Pérdida estimada: ${predictionResult.estimatedLoss.toLocaleString()}
+                </span>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div>
                 <div className="flex items-center gap-3 mb-2">
@@ -476,17 +467,32 @@ export function ClientPredictionPage() {
                     )}
                   </div>
 
-                  {/* Barra de progreso */}
-                  <div className="w-full bg-white/20 rounded-full h-3 overflow-hidden backdrop-blur-sm">
+                  {/* Barra de progreso con umbral */}
+                  <div className="relative w-full">
+                    <div className="w-full bg-white/20 rounded-full h-3 overflow-hidden backdrop-blur-sm">
+                      <div
+                        className="h-3 bg-white rounded-full transition-all shadow-lg"
+                        style={{ width: `${predictionResult.probabilidadPago}%` }}
+                      />
+                    </div>
+                    {/* Línea de umbral */}
                     <div
-                      className="h-3 bg-white rounded-full transition-all shadow-lg"
-                      style={{ width: `${predictionResult.probabilidadPago}%` }}
+                      className="absolute top-0 h-3 w-0.5 bg-yellow-400"
+                      style={{ left: `${predictionResult.umbralPolitica}%` }}
+                      title={`Umbral de política: ${predictionResult.umbralPolitica}%`}
                     />
+                    <div
+                      className="absolute -top-1 text-xs text-yellow-300"
+                      style={{ left: `${predictionResult.umbralPolitica}%`, transform: 'translateX(-50%)' }}
+                    >
+                      ▼
+                    </div>
                   </div>
 
                   <div className="flex justify-between text-xs text-blue-100 mt-2">
                     <span>0% No pagará</span>
-                    <span>100% Pagará con certeza</span>
+                    <span className="text-yellow-300">Umbral: {predictionResult.umbralPolitica.toFixed(0)}%</span>
+                    <span>100% Pagará</span>
                   </div>
                 </div>
 
@@ -528,29 +534,40 @@ export function ClientPredictionPage() {
               <h3 className="text-lg text-zinc-900">Factores de Influencia</h3>
               <p className="text-sm text-zinc-500 mt-1">Variables que afectan la predicción</p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-3">
               {getFactoresInfluencia(predictionResult).map((factor, index) => {
                 const Icon = factor.icon;
                 return (
                   <Card
                     key={index}
-                    className={`p-6 border-0 shadow-sm ${factor.bgColor}`}
+                    className={`p-4 border-0 shadow-sm ${factor.bgColor}`}
                   >
-                    <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-3">
                         <Icon className={`w-5 h-5 ${factor.color}`} />
-                        <p className="text-zinc-900">{factor.factor}</p>
+                        <p className="font-medium text-zinc-900">{factor.factor}</p>
                       </div>
                       <span
-                        className={`px-3 py-1 rounded-full text-xs ${factor.impacto === 'Positivo'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-red-100 text-red-700'
+                        className={`px-3 py-1 rounded-full text-xs font-medium ${factor.impacto === 'Reduce Riesgo'
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-red-100 text-red-700'
                           }`}
                       >
                         {factor.impacto}
                       </span>
                     </div>
-                    <p className="text-sm text-zinc-600">{factor.valor}</p>
+                    {/* Barra de impacto */}
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${factor.barColor}`}
+                          style={{ width: `${Math.abs(factor.impact)}%` }}
+                        />
+                      </div>
+                      <span className={`text-sm font-semibold min-w-[50px] text-right ${factor.color}`}>
+                        {factor.impact > 0 ? '+' : ''}{factor.impact.toFixed(0)}%
+                      </span>
+                    </div>
                   </Card>
                 );
               })}
