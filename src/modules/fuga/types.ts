@@ -33,6 +33,10 @@ export interface CustomerDashboard {
     country: string;
     risk: number;
     name: string;
+    // New fields from backend (real data from DB)
+    tenure?: number;   // Years as customer
+    since?: string;    // Year registered
+    products?: number; // Number of products
 }
 
 // Datos extendidos del cliente para dashboard profesional
@@ -135,9 +139,9 @@ export interface ScenarioResult {
     clientsAtRiskAfter: number;
     capitalAtRiskBefore: number;
     capitalAtRiskAfter: number;
-    retentionImprovement: number; 
+    retentionImprovement: number;
     campaignCost: number;
-    roi: number; 
+    roi: number;
 }
 
 // -- TIPOS PARA GESTIÓN DE CAMPAÑAS (Execution & History) --
