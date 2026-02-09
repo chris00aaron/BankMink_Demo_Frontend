@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Clock, CheckCircle, XCircle } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import { Badge } from '@shared/components/ui/badge';
+import { apiRequest } from '@shared/services/apiClient';
 
 interface PasswordRequest {
     id: number;
@@ -23,10 +24,9 @@ export function PasswordRequestsTab() {
 
     const fetchRequests = async () => {
         try {
-            const response = await fetch('http://localhost:8080/api/admin/password-requests', {
-                credentials: 'include'
-            });
-            const data = await response.json();
+            const data = await apiRequest<{ success: boolean; data: PasswordRequest[] }>(
+                '/admin/password-requests'
+            );
             if (data.success) {
                 setRequests(data.data);
             }
@@ -44,15 +44,10 @@ export function PasswordRequestsTab() {
 
         setProcessingId(id);
         try {
-            const response = await fetch(`http://localhost:8080/api/admin/password-requests/${id}/approve`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                credentials: 'include',
-            });
-
-            const data = await response.json();
+            const data = await apiRequest<{ success: boolean; message?: string }>(
+                `/admin/password-requests/${id}/approve`,
+                'POST'
+            );
             if (data.success) {
                 alert('Contraseña reseteada a "admin123". El usuario deberá cambiarla al iniciar sesión.');
                 fetchRequests();
@@ -71,16 +66,11 @@ export function PasswordRequestsTab() {
 
         setProcessingId(id);
         try {
-            const response = await fetch(`http://localhost:8080/api/admin/password-requests/${id}/reject`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                credentials: 'include',
-                body: JSON.stringify({ notes: 'Rechazado por administrador' }),
-            });
-
-            const data = await response.json();
+            const data = await apiRequest<{ success: boolean; message?: string }>(
+                `/admin/password-requests/${id}/reject`,
+                'POST',
+                { notes: 'Rechazado por administrador' }
+            );
             if (data.success) {
                 alert('Solicitud rechazada');
                 fetchRequests();

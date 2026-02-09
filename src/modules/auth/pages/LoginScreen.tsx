@@ -150,19 +150,6 @@ export function LoginScreen({ onLogin, onForgotPassword, loginError, isLoading =
             )}
           </form>
 
-          {/* Forgot Password Link */}
-          {onForgotPassword && (
-            <div className="mt-4 text-center">
-              <button
-                type="button"
-                onClick={onForgotPassword}
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors"
-              >
-                ¿Olvidaste tu contraseña?
-              </button>
-            </div>
-          )}
-
           {/* Footer */}
           <div className="mt-6 text-center">
             <p className="text-xs text-gray-500">

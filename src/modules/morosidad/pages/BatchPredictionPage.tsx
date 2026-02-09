@@ -315,11 +315,6 @@ export function BatchPredictionPage() {
                             value={filterInputs.fechaHasta}
                             onChange={(e) => setFilterInputs({ ...filterInputs, fechaHasta: e.target.value })}
                         />
-                        <Input
-                            type="date"
-                            value={filterInputs.fechaHasta}
-                            onChange={(e) => setFilterInputs({ ...filterInputs, fechaHasta: e.target.value })}
-                        />
                     </div>
                 </div>
 

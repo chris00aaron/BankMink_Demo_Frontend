@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Shield, Activity, Brain, ArrowRight, Sparkles, ChevronDown, TrendingDown, AlertTriangle, DollarSign } from 'lucide-react';
+import { Shield, Activity, Brain, ArrowRight, Sparkles, ChevronDown, TrendingDown, AlertTriangle, DollarSign, LogOut } from 'lucide-react';
 import { useAuth } from '@shared/contexts/AuthContext';
 import { ServiceType } from '@shared/types/index';
 import bankMindLogo from '@shared/assets/logo_BankMind.png';
@@ -142,12 +142,16 @@ export function HomePage({ onNavigateToService, onLogout }: HomePageProps) {
                   {isAdmin() ? 'Administrador' : 'Operario'}
                 </p>
               </div>
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white text-sm font-semibold">
+                {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+              </div>
               <button
                 onClick={onLogout}
-                className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white text-sm font-semibold hover:shadow-lg transition-shadow"
+                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-gray-200 hover:border-red-200"
                 title="Cerrar sesión"
               >
-                {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+                <LogOut className="w-4 h-4" />
+                <span className="hidden lg:inline">Cerrar sesión</span>
               </button>
             </div>
           </div>
