@@ -1,5 +1,5 @@
-import { Home, X} from 'lucide-react';
-import bankMindLogo from '@shared/assets/logo_BankMind.png';
+import { Home, TrendingDown, LogOut } from "lucide-react";
+import bankMindLogo from "@shared/assets/logo_BankMind.png";
 
 // Definimos la interfaz de cada item del menú
 export interface ISidebarItem {
@@ -8,104 +8,101 @@ export interface ISidebarItem {
   icon: React.ElementType;
 }
 
-interface ISidebarMenu {
-  items: ISidebarItem[];         // Los items ahora son dinámicos
-  currentScreen: string;
-  onNavigate: (screen: string) => void;
-  onBackToHome?: () => void;
-  isOpen: boolean;               // Controla visibilidad en móvil
-  setIsOpen: (open: boolean) => void; 
+export interface ISidebarMenu {
+  nameModule: string; // Nombre del módulo
+  nameKey: string; // Nombre de la clave
+  menuItems: ISidebarItem[]; // Los items ahora son dinámicos
+  currentScreen: string; // Pantalla actual
+  onNavigate: (screen: string) => void; // Navegación
+  onBackToHome?: () => void; // Volver al inicio
+  onLogout: () => void; // Cerrar sesión
 }
 
-export function SidebarMenu({ 
-  items, 
-  currentScreen, 
-  onNavigate, 
-  onBackToHome, 
-  isOpen, 
-  setIsOpen,
+export function SidebarMenu({
+  nameModule,
+  nameKey,
+  menuItems,
+  currentScreen,
+  onNavigate,
+  onBackToHome,
+  onLogout,
 }: ISidebarMenu) {
-
   return (
-    <>
-      {/* OVERLAY: Fondo oscuro cuando el menú está abierto en móvil */}
-      {isOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm"
-          onClick={() => setIsOpen(false)}
-        />
-      )}
-
-      {/* CONTENEDOR PRINCIPAL */}
-      <aside className={`
-        fixed left-0 top-0 h-screen w-64 bg-white border-r border-gray-200 
-        flex flex-col shadow-lg z-50 transition-transform duration-300
-        ${isOpen ? 'translate-x-0' : '-translate-x-full'} 
-        md:translate-x-0
-      `}>
-        
-        {/* Header con Botón de Cerrar (Solo Móvil) */}
-        <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img src={bankMindLogo} alt="Logo" className="w-10 h-10 object-contain" />
-            <div>
-              <h1 className="text-xl font-bold text-gray-900 leading-tight">BankMind</h1>
-              <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Fraud Detection</p>
-            </div>
+    <div className="fixed left-0 top-0 h-screen w-64 bg-white border-r border-gray-200 flex flex-col shadow-lg">
+      {/* Logo Section */}
+      <div className="p-6 border-b border-gray-200">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center">
+            <img
+              src={bankMindLogo}
+              alt="BankMind"
+              className="w-full h-full object-contain"
+            />
           </div>
-          <button onClick={() => setIsOpen(false)} className="md:hidden text-gray-400 hover:text-gray-600">
-            <X size={24} />
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">BankMind</h1>
+            <p className="text-xs text-gray-500">{nameModule}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Back to Home Button - Solo para Admin */}
+      {onBackToHome && (
+        <div className="px-4 pt-4">
+          <button
+            onClick={onBackToHome}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-gray-600 hover:bg-blue-50 hover:text-blue-600 border border-gray-200 hover:border-blue-200"
+          >
+            <Home className="w-5 h-5" />
+            <span className="text-sm font-medium">Página Principal</span>
           </button>
         </div>
+      )}
 
-        {/* Navegación */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-1">
-          {onBackToHome && (
+      {/* Navigation Menu */}
+      <nav className="flex-1 p-4 space-y-2">
+        <div className="mb-2 px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+          Análisis
+        </div>
+        {menuItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = currentScreen === item.id;
+
+          return (
             <button
-              onClick={() => { onBackToHome(); setIsOpen(false); }}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-500 hover:bg-blue-50 hover:text-blue-600 transition-all mb-4 group"
+              key={item.id}
+              onClick={() => onNavigate(item.id)}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${isActive ? "bg-blue-50 text-blue-600 border border-blue-200 shadow-sm" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 border border-transparent"}`}
             >
-              <Home className="w-5 h-5 group-hover:scale-110 transition-transform" />
-              <span className="text-sm font-semibold">Página Principal</span>
+              <Icon className="w-5 h-5" />
+              <span className="text-sm font-medium">{item.label}</span>
             </button>
-          )}
+          );
+        })}
+      </nav>
 
-          <div className="text-[10px] font-bold text-gray-400 uppercase px-4 mb-2 tracking-widest">
-            Menú del Módulo
-          </div>
+      {/* Footer Section with Logout */}
+      <div className="p-4 border-t border-gray-200 space-y-3">
+        {/* Logout Button */}
+        <button
+          onClick={onLogout}
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200"
+        >
+          <LogOut className="w-5 h-5" />
+          <span className="text-sm font-medium">Cerrar Sesión</span>
+        </button>
 
-          <nav className="space-y-1">
-            {items.map((item) => {
-              const Icon = item.icon;
-              const isActive = currentScreen === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => { onNavigate(item.id); setIsOpen(false); }}
-                  className={`
-                    w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all
-                    ${isActive
-                      ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
-                      : 'text-gray-600 hover:bg-gray-100'
-                    }
-                  `}
-                >
-                  <Icon className={`w-5 h-5 ${isActive ? 'animate-pulse' : ''}`} />
-                  <span className="text-sm font-medium">{item.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-
-        {/* Footer (Versión) */}
-        <div className="p-4 bg-gray-50/50 border-t border-gray-100">
-          <div className="flex items-center justify-between px-2">
-            <span className="text-[10px] font-medium text-gray-400">STATUS: ACTIVE</span>
-            <span className="text-[10px] font-bold text-blue-500">V2.1.0</span>
+        {/* System Status */}
+        <div className="px-4 py-3 rounded-lg bg-gray-50 backdrop-blur-sm border border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <TrendingDown className="w-4 h-4 text-blue-600" />
+              <p className="text-xs font-medium text-gray-700">{nameKey}</p>
+            </div>
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
           </div>
         </div>
-      </aside>
-    </>
+      </div>
+    </div>
   );
 }

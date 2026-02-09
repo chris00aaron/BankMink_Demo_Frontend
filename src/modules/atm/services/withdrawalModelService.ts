@@ -54,7 +54,7 @@ export const withdrawalModelService = {
    */
   async getProductionModel(): Promise<ApiResponse<ModelProductionDTO>> {
     const response =
-      await apiClient.get<ApiResponse<ModelProductionDTO>>("/model/production");
+      await apiClient.get<ApiResponse<ModelProductionDTO>>("/atm/model/production");
     return response.data;
   },
 
@@ -67,7 +67,7 @@ export const withdrawalModelService = {
   ): Promise<ApiResponse<SpringPage<RegistroAutoentrenamientoDTO>>> {
     const response = await apiClient.get<
       ApiResponse<SpringPage<RegistroAutoentrenamientoDTO>>
-    >("/self-training/history", {
+    >("/atm/self-training/history", {
       params: { page, size },
     });
     return response.data;
@@ -81,7 +81,7 @@ export const withdrawalModelService = {
   ): Promise<ApiResponse<RegistroAutoentrenamientoDetailsDTO>> {
     const response = await apiClient.get<
       ApiResponse<RegistroAutoentrenamientoDetailsDTO>
-    >(`/self-training/${id}`);
+    >(`/atm/self-training/${id}`);
     return response.data;
   },
 };

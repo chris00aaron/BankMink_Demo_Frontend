@@ -99,7 +99,7 @@ export const atmService = {
     params: SimulationParams,
   ): Promise<PrediccionDeRetirosDTO> {
     const response = await apiClient.post<PrediccionDeRetirosDTO>(
-      "/simulador/retiro-efectivo-atm/historico",
+      "/atm/simulador/retiro-efectivo-atm/historico",
       params,
     );
     return response.data;

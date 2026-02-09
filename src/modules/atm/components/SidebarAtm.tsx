@@ -1,15 +1,14 @@
-import { LayoutDashboard, Brain, Calculator, Scale } from 'lucide-react';
+import { LayoutDashboard, Calculator, Scale } from 'lucide-react';
 import { SidebarMenu } from '@shared/components/SidebarMenu';
 
 interface ISidebarAtmProps {
   currentScreen: string;
   onNavigate: (screen: string) => void;
   onBackToHome?: () => void;
-  isOpen: boolean; 
-  setIsOpen: (open: boolean) => void; 
+  onLogout: () => void;
 }
 
-export function SidebarAtm({ currentScreen, onNavigate, onBackToHome, isOpen, setIsOpen }: ISidebarAtmProps) {
+export function SidebarAtm({currentScreen, onNavigate, onBackToHome, onLogout }: ISidebarAtmProps) {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard Retiros', icon: LayoutDashboard },
     { id: 'simulator', label: 'Simulador', icon: Calculator },
@@ -17,13 +16,14 @@ export function SidebarAtm({ currentScreen, onNavigate, onBackToHome, isOpen, se
   ];
 
   return (
-    <SidebarMenu 
-      items={menuItems} 
-      currentScreen={currentScreen} 
+    <SidebarMenu
+      nameModule="Módulo de Retiros ATM"
+      nameKey="Retiros ATM"
+      menuItems={menuItems}
+      currentScreen={currentScreen}
       onNavigate={onNavigate}
       onBackToHome={onBackToHome}
-      isOpen={isOpen}
-      setIsOpen={setIsOpen}
+      onLogout={onLogout}
     />
   );
 }

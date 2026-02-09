@@ -1,44 +1,33 @@
-import { ModuleLayout } from "@shared/Layout/ModuleLayout";
 import { SidebarAtm } from "./components/SidebarAtm";
 import Dashboard from "./page/Dashboard";
 import { Simulator } from "./page/Simulator";
 import ModelAudit from "./page/ModelAudit";
 
 interface IAtmModule {
-  title: string;
-  currentScreen: string;
-  onNavigate: (screen: string) => void;
-  onBack?: () => void;
-  isMobileMenuOpen: boolean;
-  setIsMobileMenuOpen: (open: boolean) => void;
+    currentScreen: string;
+    onNavigate: (screen: string) => void;
+    onBackToHome?: () => void;
+    onLogout: () => void;
 }
 
-export function AtmModule({
-  title,
-  currentScreen,
-  onNavigate,
-  onBack,
-  isMobileMenuOpen,
-  setIsMobileMenuOpen,
-}: IAtmModule) {
-  return (
-    <ModuleLayout
-      title={title}
-      sidebar={
+export function AtmModule({currentScreen, onNavigate, onBackToHome, onLogout }: IAtmModule) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex">
         <SidebarAtm
           currentScreen={currentScreen}
           onNavigate={onNavigate}
-          onBackToHome={onBack}
-          isOpen={isMobileMenuOpen}
-          setIsOpen={setIsMobileMenuOpen}
+          onBackToHome={onBackToHome}
+          onLogout={onLogout}
         />
-      }
-      chanceStateMenuOpen={setIsMobileMenuOpen}
-    >
-      {/* El Layout inyectará esto en {children} */}
-      {currentScreen === "dashboard" && <Dashboard />}
-      {currentScreen === "simulator" && <Simulator />}
-      {currentScreen === "model-audit" && <ModelAudit />}
-    </ModuleLayout>
-  );
+        <div className="flex-1 ml-64">
+          {/* Page Content */}
+          <main className="p-8">
+            {/* El Layout inyectará esto en {children} */}
+            {currentScreen === "dashboard" && <Dashboard />}
+            {currentScreen === "simulator" && <Simulator />}
+            {currentScreen === "model-audit" && <ModelAudit />}
+          </main>
+        </div>
+      </div>
+    );
 }

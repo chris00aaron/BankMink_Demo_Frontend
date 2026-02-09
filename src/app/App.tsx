@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { AlertTriangle, DollarSign, TrendingDown } from 'lucide-react';
 import { AuthProvider, useAuth, ServiceType } from '@shared/contexts/AuthContext';
 import {
   FraudeSidebar,
@@ -22,7 +21,7 @@ import {
 } from '@modules/fuga';
 import type { FugaScreen } from '@modules/fuga';
 import { HomePage } from './pages/HomePage';
-import { ServicePlaceholder } from '@shared/components/ServicePlaceholder';
+import { AtmModule } from '@modules/atm/AtmModule';
 import { AuditoriaModule } from '@admin/auditoria/AuditoriaModule';
 import { GestionUsuariosModule } from '@admin/usuarios/GestionUsuariosModule';
 import { OtpVerificationScreen } from '@shared/components/OtpVerificationScreen';
@@ -264,11 +263,11 @@ function AppContent() {
   // Servicio: Demanda Efectivo
   if (currentView === 'demanda-efectivo') {
     return (
-      <ServicePlaceholder
-        serviceName="Demanda Efectivo"
-        icon={DollarSign}
-        description="Predicción de demanda de efectivo en cajeros automáticos y sucursales bancarias"
-        onBack={handleBackToHome}
+      <AtmModule
+        currentScreen={currentScreen}
+        onNavigate={handleNavigate}
+        onBackToHome={isAdmin() ? handleBackToHome : undefined}
+        onLogout={handleLogout}
       />
     );
   }

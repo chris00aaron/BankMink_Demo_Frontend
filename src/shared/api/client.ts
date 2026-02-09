@@ -47,8 +47,7 @@ function createApiClient(): AxiosInstance {
   client.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
       // Obtener token del localStorage (o de donde lo almacenes)
-      const token = localStorage.getItem("auth_token");
-
+      const token = getAuthToken();
       if (token && config.headers) {
         config.headers.Authorization = `Bearer ${token}`;
       }
@@ -148,9 +147,9 @@ export const apiClient = createApiClient();
  */
 export function setAuthToken(token: string | null): void {
   if (token) {
-    localStorage.setItem("auth_token", token);
+    localStorage.getItem('bankmind-token');
   } else {
-    localStorage.removeItem("auth_token");
+    localStorage.removeItem('bankmind-token');
   }
 }
 
@@ -158,7 +157,7 @@ export function setAuthToken(token: string | null): void {
  * Helper para obtener el token actual
  */
 export function getAuthToken(): string | null {
-  return localStorage.getItem("auth_token");
+  return localStorage.getItem('bankmind-token');
 }
 
 /**
