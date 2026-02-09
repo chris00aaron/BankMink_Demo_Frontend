@@ -71,6 +71,42 @@ export interface ATMFilters extends PaginationParams {
   ubicacion?: string;
 }
 
+// ===== DTOs para Dashboard (DashboardATMController.java) =====
+
+export interface ResumeOperativoDTO {
+  activos: number;
+  inactivos: number;
+}
+
+export interface SegmentacionRetiroDTO {
+  ubicaciones: Record<string, number>;
+}
+
+export interface DashboardATMDTO {
+  resumenRetiroEfectivoAtm: RetiroEfectivoAtmPrediccionResumenDTO;
+  resumenOperativoAtms: ResumeOperativoDTO;
+  atmsConPotencialDeFaltaStock: number;
+  retirosPredichos: RetiroEfectivoAtmPrediccionDTO[];
+  retirosHistoricos: RetiroHistoricoDTO[];
+  featuresImportancia: Record<string, number>;
+  segmentacionRetiro: SegmentacionRetiroDTO;
+}
+
+// ===== DTOs para Estados ATM (DailyWithdrawalPredictionController.java) =====
+
+export interface EstadoAtmDTO {
+  idAtm: string;
+  direccion: string;
+  tipoLugar: string;
+  balanceActual: number;
+  porcentaje: number;
+  estado: string;
+}
+
+export interface EstadosAtmsResponse {
+  estadosAtms: EstadoAtmDTO[];
+}
+
 // ===== SERVICIO =====
 
 export const atmService = {
@@ -119,6 +155,25 @@ export const atmService = {
     }>
   > {
     const response = await apiClient.get("/atm/stats");
+    return response.data;
+  },
+
+  /**
+   * Obtener datos del dashboard ATM
+   * Endpoint: GET /atm/dashboard (DashboardATMController.java)
+   */
+  async getDashboard(): Promise<DashboardATMDTO> {
+    const response = await apiClient.get<DashboardATMDTO>("/atm/dashboard");
+    return response.data;
+  },
+
+  /**
+   * Obtener estados de ATMs con predicciones
+   * Endpoint: GET /atm/prediccion (DailyWithdrawalPredictionController.java)
+   */
+  async getEstadosAtms(): Promise<EstadosAtmsResponse> {
+    const response =
+      await apiClient.get<EstadosAtmsResponse>("/atm/prediccion");
     return response.data;
   },
 };

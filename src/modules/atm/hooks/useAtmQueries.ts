@@ -5,10 +5,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { atmService } from "../services/atmService";
-import type {
-  ATMFilters,
-  SimulationParams,
-} from "../services/atmService";
+import type { ATMFilters, SimulationParams } from "../services/atmService";
 
 // ===== QUERY KEYS =====
 // Centralizamos las claves de query para facilitar la invalidación
@@ -58,6 +55,30 @@ export function useATMStats() {
     queryFn: () => atmService.getStats(),
     // Refrescar cada 5 minutos
     refetchInterval: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Hook para obtener datos del Dashboard ATM
+ * Endpoint: GET /atm/dashboard
+ */
+export function useAtmDashboard() {
+  return useQuery({
+    queryKey: [...atmKeys.all, "dashboard"] as const,
+    queryFn: () => atmService.getDashboard(),
+    staleTime: 5 * 60 * 1000, // 5 minutos
+  });
+}
+
+/**
+ * Hook para obtener estados de ATMs con predicciones
+ * Endpoint: GET /atm/prediccion
+ */
+export function useEstadosAtms() {
+  return useQuery({
+    queryKey: [...atmKeys.all, "prediccion", "estados"] as const,
+    queryFn: () => atmService.getEstadosAtms(),
+    staleTime: 5 * 60 * 1000, // 5 minutos
   });
 }
 
