@@ -100,9 +100,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateToCustomer }) =
             risk: c.risk,
             segment: c.balance > 100000 ? 'Corporate' as const : c.balance > 50000 ? 'SME' as const : 'Personal' as const,
             country: c.country,
-            products: Math.floor(Math.random() * 3) + 1,
-            tenure: Math.floor(Math.random() * 10) + 1,
-            since: `${2020 - Math.floor(Math.random() * 5)}`
+            // Use REAL data from backend instead of Math.random()
+            products: c.products ?? 1,
+            tenure: c.tenure ?? 0,
+            since: c.since ?? 'N/A'
         }));
     };
 
@@ -136,7 +137,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateToCustomer }) =
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
-                    <button 
+                    <button
                         onClick={() => window.location.reload()}
                         className="px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm transition-all"
                     >
@@ -399,7 +400,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateToCustomer }) =
                                 </p>
                             </div>
                         ) : enhancedCustomers.length === 0 ? (
-                             <div className="text-center py-12">
+                            <div className="text-center py-12">
                                 <p className="text-slate-500">No hay resultados para "{searchTerm}"</p>
                             </div>
                         ) : null}
