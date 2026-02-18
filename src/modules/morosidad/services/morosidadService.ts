@@ -8,8 +8,7 @@ import type {
     DashboardData,
     DefaultPolicy,
     PolicyRequest,
-    EarlyWarningsPreview,
-    ModelHealthData
+    EarlyWarningsPreview
 } from '../types/morosidad.types';
 
 const API_BASE_URL = 'http://localhost:8080/api';
@@ -193,12 +192,70 @@ export async function simulatePrediction(data: import('../types/morosidad.types'
 
 // ============ MONITOREO DEL MODELO ============
 
+import type {
+    ProductionModel,
+    DriftLog,
+    ValidationLog,
+    TrainingHistoryEntry,
+    VersionCheck
+} from '../types/morosidad.types';
+
 /**
- * Obtiene datos del modelo en producción para monitoreo.
+ * Obtiene el modelo activo en producción.
  */
-export async function getModelHealth(): Promise<ModelHealthData> {
-    const response = await fetch(`${API_BASE_URL}/model/health`);
-    if (!response.ok) throw new Error('Error al obtener estado del modelo');
+export async function getProductionModel(): Promise<ProductionModel> {
+    const response = await fetch(`${API_BASE_URL}/model/production`);
+    if (!response.ok) throw new Error('Error al obtener modelo en producción');
+    return response.json();
+}
+
+/**
+ * Obtiene logs de drift PSI de los últimos N días.
+ */
+export async function getDriftLogs(days: number = 30): Promise<DriftLog[]> {
+    const response = await fetch(`${API_BASE_URL}/model/monitoring/drift?days=${days}`);
+    if (!response.ok) throw new Error('Error al obtener datos de drift');
+    return response.json();
+}
+
+/**
+ * Obtiene logs de validación mensual (predicción vs realidad).
+ */
+export async function getValidationLogs(): Promise<ValidationLog[]> {
+    const response = await fetch(`${API_BASE_URL}/model/monitoring/validation`);
+    if (!response.ok) throw new Error('Error al obtener validaciones');
+    return response.json();
+}
+
+/**
+ * Obtiene el historial completo de entrenamientos.
+ */
+export async function getTrainingHistory(): Promise<TrainingHistoryEntry[]> {
+    const response = await fetch(`${API_BASE_URL}/model/training-history`);
+    if (!response.ok) throw new Error('Error al obtener historial');
+    return response.json();
+}
+
+/**
+ * Verifica si la versión del modelo en BD coincide con la API de predicción.
+ */
+export async function checkModelVersion(): Promise<VersionCheck> {
+    const response = await fetch(`${API_BASE_URL}/model/version-check`);
+    if (!response.ok) throw new Error('Error al verificar versión');
+    return response.json();
+}
+
+/**
+ * Dispara el auto-entrenamiento manual.
+ */
+export async function triggerSelfTraining(optunaTrials: number = 30): Promise<Record<string, unknown>> {
+    const response = await fetch(`${API_BASE_URL}/default/self-training/trigger?optunaTrials=${optunaTrials}`, {
+        method: 'POST',
+    });
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || 'Error al iniciar entrenamiento');
+    }
     return response.json();
 }
 

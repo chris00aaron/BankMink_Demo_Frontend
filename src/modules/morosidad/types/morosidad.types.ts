@@ -233,52 +233,82 @@ export interface SimulationResponse {
     model_version: string;
 }
 
-// Tipos para Monitoreo del Modelo
-export interface ModelHealthData {
-    version: string;
-    deploymentDate: string;
-    daysActive: number;
+// Tipos para Monitoreo del Modelo (datos reales)
+
+// Modelo activo en producción (GET /api/model/production)
+export interface ProductionModel {
     active: boolean;
-    metricas: ModelHealthMetrics;
-    arquitectura: ModelArchitecture;
-    tendencia: ModelTrend[];
-    dataset: DatasetSummary;
+    version?: string;
+    deploymentDate?: string;
+    daysActive?: number;
+    aucRoc?: string;
+    giniCoefficient?: string;
+    ksStatistic?: string;
+    assemblyConfiguration?: AssemblyConfig;
+    message?: string;
 }
 
-export interface ModelHealthMetrics {
-    aucRoc: number;
-    precision: number;
-    recall: number;
-    f1Score: number;
-    giniCoefficient: number;
-    ksStatistic: number;
-    accuracy: number;
+export interface AssemblyConfig {
+    architecture: string;
+    voting_strategy: string;
+    weights_assigned: number[];
+    order_estimators: string[];
+    random_seed: number;
+    features_input: string[];
+    internal_components: Record<string, Record<string, unknown>>;
 }
 
-export interface ModelArchitecture {
-    tipo: string;
-    estrategia: string;
-    componentes: ModelComponent[];
+// Log de drift PSI diario (GET /api/model/monitoring/drift)
+export interface DriftLog {
+    monitoringDate: string;
+    psiFeatures: Record<string, number>;
+    driftDetected: boolean;
+    consecutiveDaysDrift: number;
 }
 
-export interface ModelComponent {
-    nombre: string;
-    peso: number;
-    parametros: Record<string, unknown>;
+// Log de validación mensual (GET /api/model/monitoring/validation)
+export interface ValidationLog {
+    monitoringDate: string;
+    aucRocReal: number;
+    ksReal: number;
+    predictedDefaultRate: number;
+    actualDefaultRate: number;
 }
 
-export interface ModelTrend {
-    mes: string;
-    morosidadReal: number;
-    prediccion: number;
-    diferencia: number;
+// Historial de entrenamientos (GET /api/model/training-history)
+export interface TrainingHistoryEntry {
+    idTrainingHistory: number;
+    trainingDate: string;
+    bestCadidateModel: string;
+    inProduction: boolean;
+    metricsResults: {
+        auc_roc: number;
+        ks_statistic: number;
+        gini_coefficient: number;
+        accuracy: number;
+        precision: number;
+        recall: number;
+        f1_score: number;
+        training_time_sec: number;
+    };
+    parametersOptuna: {
+        best_value: number;
+        best_params: Record<string, unknown>;
+        n_trials: number;
+    };
+    datasetInfo?: {
+        dataAmount: number;
+        dataTraining: number;
+        dataTesting: number;
+        creationDate: string;
+    };
 }
 
-export interface DatasetSummary {
-    totalRegistros: number;
-    datosEntrenamiento: number;
-    datosPrueba: number;
-    fechaDataset: string;
-    fuente: string;
+// Verificación de versión (GET /api/model/version-check)
+export interface VersionCheck {
+    bdVersion: string;
+    apiVersion: string;
+    match: boolean;
+    error?: string;
 }
 
