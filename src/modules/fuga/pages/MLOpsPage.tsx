@@ -18,11 +18,15 @@ import {
     RefreshCw,
     Download,
     CheckCircle2,
-    Zap
+    Zap,
+    AlertTriangle,
+    Loader2,
+    X as XIcon
 } from 'lucide-react';
 import { ChurnService } from '../churn.service';
+import type { TrainResult, MLOpsMetrics, PerformanceStatus } from '../types';
 
-// Mock data for ROC Curve
+// Curva ROC sintética para visualización (datos reales de AUC vienen del backend)
 const rocCurveData = [
     { fpr: 0, tpr: 0 },
     { fpr: 0.05, tpr: 0.52 },
@@ -39,7 +43,7 @@ const rocCurveData = [
     { fpr: 1.0, tpr: 1.0 },
 ];
 
-// Mock data for Training Loss
+// Curva de pérdida sintética para visualización (XGBoost no usa epochs lineales)
 const trainingLossData = [
     { epoch: 1, training: 0.85, validation: 0.88 },
     { epoch: 2, training: 0.62, validation: 0.68 },
@@ -102,26 +106,99 @@ const MetricRing: React.FC<{
 };
 
 const MLOpsPage: React.FC = () => {
-    const [metrics, setMetrics] = useState<import('../types').MLOpsMetrics | null>(null);
+    const [metrics, setMetrics] = useState<MLOpsMetrics | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        const fetchMetrics = async () => {
-            try {
-                setLoading(true);
-                const data = await ChurnService.getMLOpsMetrics();
-                setMetrics(data);
-            } catch (err) {
-                console.error("Error fetching MLOps metrics:", err);
-                setError("No se pudieron cargar las métricas MLOps.");
-            } finally {
-                setLoading(false);
-            }
-        };
+    // Training states
+    const [isTraining, setIsTraining] = useState(false);
+    const [trainResult, setTrainResult] = useState<TrainResult | null>(null);
+    const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
+    const fetchMetrics = async () => {
+        try {
+            setLoading(true);
+            const data = await ChurnService.getMLOpsMetrics();
+            setMetrics(data);
+            setError(null);
+        } catch (err) {
+            console.error("Error fetching MLOps metrics:", err);
+            setError("No se pudieron cargar las métricas MLOps.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
         fetchMetrics();
     }, []);
+
+    // ============================================================
+    // PERFORMANCE MONITOR STATE
+    // ============================================================
+    const [monitorStatus, setMonitorStatus] = useState<PerformanceStatus | null>(null);
+    const [monitorLoading, setMonitorLoading] = useState(false);
+    const [isEvaluating, setIsEvaluating] = useState(false);
+
+    const fetchMonitorStatus = async () => {
+        try {
+            setMonitorLoading(true);
+            const data = await ChurnService.getMonitorStatus();
+            setMonitorStatus(data);
+        } catch (err) {
+            console.error('Error fetching monitor status:', err);
+        } finally {
+            setMonitorLoading(false);
+        }
+    };
+
+    const handleEvaluateNow = async () => {
+        setIsEvaluating(true);
+        try {
+            const result = await ChurnService.triggerEvaluation();
+            setMonitorStatus(result);
+            // If auto-training was triggered, refresh main metrics too
+            if (result.autoTrainingTriggered) {
+                await fetchMetrics();
+            }
+        } catch (err) {
+            console.error('Error evaluating performance:', err);
+        } finally {
+            setIsEvaluating(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchMonitorStatus();
+    }, []);
+
+    // Handle training trigger
+    const handleTrainClick = () => {
+        setShowConfirmDialog(true);
+    };
+
+    const handleConfirmTrain = async () => {
+        setShowConfirmDialog(false);
+        setIsTraining(true);
+        setTrainResult(null);
+
+        try {
+            const result = await ChurnService.trainModel();
+            setTrainResult(result);
+
+            // If training succeeded, refresh metrics
+            if (result.status === 'success') {
+                await fetchMetrics();
+            }
+        } catch (err: any) {
+            setTrainResult({
+                status: 'error',
+                error: err.message || 'Error inesperado durante el entrenamiento.'
+            });
+        } finally {
+            setIsTraining(false);
+        }
+    };
 
     if (loading) {
         return (
@@ -147,6 +224,120 @@ const MLOpsPage: React.FC = () => {
 
     return (
         <div className="p-8 bg-[#F8FAFC] min-h-screen">
+            {/* Confirmation Dialog */}
+            {showConfirmDialog && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+                    <div className="bg-white rounded-2xl p-8 max-w-md mx-4 shadow-2xl">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
+                                <AlertTriangle className="w-6 h-6 text-amber-600" />
+                            </div>
+                            <h3 className="text-xl font-bold text-slate-800">Confirmar Re-entrenamiento</h3>
+                        </div>
+                        <p className="text-slate-600 mb-6">
+                            ¿Está seguro de iniciar el re-entrenamiento del modelo? Este proceso:
+                        </p>
+                        <ul className="text-sm text-slate-500 mb-6 space-y-1 ml-4">
+                            <li>• Extraerá datos actuales de la base de datos</li>
+                            <li>• Entrenará un nuevo modelo XGBoost</li>
+                            <li>• Registrará métricas en MLflow/DagsHub</li>
+                            <li>• Actualizará el modelo en producción</li>
+                        </ul>
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={() => setShowConfirmDialog(false)}
+                                className="px-4 py-2.5 text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-all font-medium text-sm"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleConfirmTrain}
+                                className="px-6 py-2.5 bg-[#0F172A] text-white rounded-lg hover:bg-slate-800 transition-all font-medium text-sm shadow-lg"
+                            >
+                                Iniciar Entrenamiento
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Training Result Banner */}
+            {trainResult && (
+                <div className={`mb-6 rounded-xl p-5 border flex items-start gap-4 ${trainResult.status === 'success'
+                    ? 'bg-emerald-50 border-emerald-200'
+                    : 'bg-red-50 border-red-200'
+                    }`}>
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${trainResult.status === 'success' ? 'bg-emerald-100' : 'bg-red-100'
+                        }`}>
+                        {trainResult.status === 'success'
+                            ? <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                            : <AlertTriangle className="w-5 h-5 text-red-600" />
+                        }
+                    </div>
+                    <div className="flex-1">
+                        <h4 className={`font-semibold ${trainResult.status === 'success' ? 'text-emerald-800' : 'text-red-800'
+                            }`}>
+                            {trainResult.status === 'success' ? '✅ Entrenamiento Exitoso' : '❌ Error en Entrenamiento'}
+                        </h4>
+                        <p className={`text-sm mt-1 ${trainResult.status === 'success' ? 'text-emerald-700' : 'text-red-700'
+                            }`}>
+                            {trainResult.message || trainResult.error}
+                        </p>
+
+                        {/* Show metrics on success */}
+                        {trainResult.status === 'success' && trainResult.metrics && (
+                            <div className="mt-3 grid grid-cols-2 md:grid-cols-5 gap-3">
+                                <div className="bg-white/70 rounded-lg p-2 text-center">
+                                    <p className="text-xs text-emerald-600 font-medium">Accuracy</p>
+                                    <p className="text-lg font-bold text-slate-800">
+                                        {(trainResult.metrics.accuracy * 100).toFixed(1)}%
+                                    </p>
+                                </div>
+                                <div className="bg-white/70 rounded-lg p-2 text-center">
+                                    <p className="text-xs text-emerald-600 font-medium">F1 Score</p>
+                                    <p className="text-lg font-bold text-slate-800">
+                                        {(trainResult.metrics.f1Score * 100).toFixed(1)}%
+                                    </p>
+                                </div>
+                                <div className="bg-white/70 rounded-lg p-2 text-center">
+                                    <p className="text-xs text-emerald-600 font-medium">Precision</p>
+                                    <p className="text-lg font-bold text-slate-800">
+                                        {(trainResult.metrics.precision * 100).toFixed(1)}%
+                                    </p>
+                                </div>
+                                <div className="bg-white/70 rounded-lg p-2 text-center">
+                                    <p className="text-xs text-emerald-600 font-medium">Recall</p>
+                                    <p className="text-lg font-bold text-slate-800">
+                                        {(trainResult.metrics.recall * 100).toFixed(1)}%
+                                    </p>
+                                </div>
+                                <div className="bg-white/70 rounded-lg p-2 text-center">
+                                    <p className="text-xs text-emerald-600 font-medium">AUC-ROC</p>
+                                    <p className="text-lg font-bold text-slate-800">
+                                        {(trainResult.metrics.aucRoc * 100).toFixed(1)}%
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* MLflow Run ID */}
+                        {trainResult.runId && (
+                            <p className="mt-2 text-xs text-emerald-600 font-mono">
+                                MLflow Run: {trainResult.runId}
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Dismiss button */}
+                    <button
+                        onClick={() => setTrainResult(null)}
+                        className="text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                        <XIcon className="w-4 h-4" />
+                    </button>
+                </div>
+            )}
+
             {/* Header */}
             <div className="flex justify-between items-center mb-8">
                 <div>
@@ -154,9 +345,25 @@ const MLOpsPage: React.FC = () => {
                     <p className="text-slate-500 mt-1">Monitoreo de métricas del modelo de predicción de fuga (Backend: {metrics.modelStatus})</p>
                 </div>
                 <div className="flex gap-3">
-                    <button className="flex items-center gap-2 px-4 py-2.5 bg-[#0F172A] text-white rounded-lg hover:bg-slate-800 transition-all font-medium text-sm shadow-lg shadow-slate-900/10">
-                        <RefreshCw className="w-4 h-4" />
-                        Re-entrenar Modelo
+                    <button
+                        onClick={handleTrainClick}
+                        disabled={isTraining}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all font-medium text-sm shadow-lg ${isTraining
+                            ? 'bg-slate-400 text-white cursor-not-allowed shadow-none'
+                            : 'bg-[#0F172A] text-white hover:bg-slate-800 shadow-slate-900/10'
+                            }`}
+                    >
+                        {isTraining ? (
+                            <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Entrenando...
+                            </>
+                        ) : (
+                            <>
+                                <RefreshCw className="w-4 h-4" />
+                                Re-entrenar Modelo
+                            </>
+                        )}
                     </button>
                     <button className="flex items-center gap-2 px-4 py-2.5 bg-white text-slate-700 rounded-lg hover:bg-slate-50 transition-all font-medium text-sm border border-slate-200">
                         <Download className="w-4 h-4" />
@@ -174,8 +381,10 @@ const MLOpsPage: React.FC = () => {
                     <div>
                         <p className="text-xs text-slate-500 uppercase tracking-wide font-medium">Estado</p>
                         <div className="flex items-center gap-2 mt-1">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                            <span className="text-lg font-bold text-emerald-600">{metrics.modelStatus}</span>
+                            <span className={`w-2 h-2 rounded-full ${isTraining ? 'bg-amber-500' : 'bg-emerald-500'} animate-pulse`}></span>
+                            <span className={`text-lg font-bold ${isTraining ? 'text-amber-600' : 'text-emerald-600'}`}>
+                                {isTraining ? 'Entrenando...' : metrics.modelStatus}
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -223,6 +432,167 @@ const MLOpsPage: React.FC = () => {
                     <MetricRing value={metrics.f1Score} label="F1 Score" color="#8B5CF6" />
                     <MetricRing value={metrics.aucRoc} label="AUC-ROC" color="#F59E0B" />
                 </div>
+            </div>
+
+            {/* ============================================================ */}
+            {/* PERFORMANCE MONITOR CARD */}
+            {/* ============================================================ */}
+            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm mb-8">
+                <div className="flex items-center gap-3 mb-5">
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${monitorStatus?.status === 'healthy' ? 'bg-gradient-to-br from-emerald-400 to-green-500'
+                        : monitorStatus?.status === 'degraded' ? 'bg-gradient-to-br from-red-400 to-rose-500'
+                            : 'bg-gradient-to-br from-slate-400 to-slate-500'
+                        }`}>
+                        <Activity className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-semibold text-slate-800">Monitor de Rendimiento</h2>
+                        <p className="text-sm text-slate-500">
+                            Evaluación automática contra ground truth (account_details.exited)
+                        </p>
+                    </div>
+                    <div className="ml-auto flex items-center gap-3">
+                        {monitorStatus && monitorStatus.status !== 'no_evaluations' && monitorStatus.status !== 'error' && (
+                            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${monitorStatus.status === 'healthy'
+                                ? 'bg-emerald-50 text-emerald-700'
+                                : monitorStatus.status === 'degraded'
+                                    ? 'bg-red-50 text-red-700'
+                                    : 'bg-amber-50 text-amber-700'
+                                }`}>
+                                <span className={`w-2 h-2 rounded-full ${monitorStatus.status === 'healthy' ? 'bg-emerald-500'
+                                    : monitorStatus.status === 'degraded' ? 'bg-red-500'
+                                        : 'bg-amber-500'
+                                    } animate-pulse`}></span>
+                                {monitorStatus.status === 'healthy' ? 'Saludable'
+                                    : monitorStatus.status === 'degraded' ? 'Degradado'
+                                        : 'Datos Insuficientes'}
+                            </div>
+                        )}
+                        <button
+                            onClick={handleEvaluateNow}
+                            disabled={isEvaluating}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${isEvaluating
+                                ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                }`}
+                        >
+                            {isEvaluating ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    Evaluando...
+                                </>
+                            ) : (
+                                <>
+                                    <Zap className="w-4 h-4" />
+                                    Evaluar Ahora
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </div>
+
+                {/* Auto-Training Alert Banner */}
+                {monitorStatus?.autoTrainingTriggered && (
+                    <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-3">
+                        <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                        <div>
+                            <p className="text-sm font-medium text-amber-800">
+                                ⚡ Re-entrenamiento automático disparado
+                            </p>
+                            <p className="text-xs text-amber-600 mt-0.5">
+                                Razón: Decay de rendimiento • Run ID: {monitorStatus.trainingRunId || 'N/A'}
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {monitorLoading ? (
+                    <div className="flex justify-center py-8">
+                        <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+                    </div>
+                ) : monitorStatus?.status === 'no_evaluations' ? (
+                    <div className="text-center py-8 text-slate-400">
+                        <Activity className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">No se ha realizado ninguna evaluación aún.</p>
+                        <p className="text-xs mt-1">Haz clic en "Evaluar Ahora" para iniciar la primera evaluación.</p>
+                    </div>
+                ) : monitorStatus?.status === 'error' ? (
+                    <div className="text-center py-8 text-red-400">
+                        <AlertTriangle className="w-8 h-8 mx-auto mb-2 opacity-70" />
+                        <p className="text-sm">{monitorStatus.message}</p>
+                    </div>
+                ) : monitorStatus ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Metrics Summary */}
+                        <div className="space-y-3">
+                            <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Métricas de Producción</h3>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className={`rounded-lg p-3 border ${(monitorStatus.recall ?? 0) < (monitorStatus.recallThreshold ?? 0.75)
+                                    ? 'bg-red-50 border-red-200'
+                                    : 'bg-emerald-50 border-emerald-200'
+                                    }`}>
+                                    <p className="text-xs text-slate-500 font-medium">Recall</p>
+                                    <p className="text-2xl font-bold text-slate-800">
+                                        {monitorStatus.recall != null ? (monitorStatus.recall * 100).toFixed(1) : '--'}%
+                                    </p>
+                                    <p className="text-xs text-slate-400">
+                                        Umbral: {((monitorStatus.recallThreshold ?? 0.75) * 100).toFixed(0)}%
+                                    </p>
+                                </div>
+                                <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                                    <p className="text-xs text-slate-500 font-medium">F1-Score</p>
+                                    <p className="text-2xl font-bold text-slate-800">
+                                        {monitorStatus.f1Score != null ? (monitorStatus.f1Score * 100).toFixed(1) : '--'}%
+                                    </p>
+                                </div>
+                                <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                                    <p className="text-xs text-slate-500 font-medium">Precision</p>
+                                    <p className="text-2xl font-bold text-slate-800">
+                                        {monitorStatus.precision != null ? (monitorStatus.precision * 100).toFixed(1) : '--'}%
+                                    </p>
+                                </div>
+                                <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                                    <p className="text-xs text-slate-500 font-medium">Accuracy</p>
+                                    <p className="text-2xl font-bold text-slate-800">
+                                        {monitorStatus.accuracy != null ? (monitorStatus.accuracy * 100).toFixed(1) : '--'}%
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Confusion Matrix + Info */}
+                        <div className="space-y-3">
+                            <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Matriz de Confusión</h3>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="bg-emerald-50 rounded-lg p-3 text-center border border-emerald-100">
+                                    <p className="text-xs text-emerald-600 font-medium">Verdaderos Positivos</p>
+                                    <p className="text-xl font-bold text-emerald-800">{monitorStatus.truePositives ?? '--'}</p>
+                                </div>
+                                <div className="bg-red-50 rounded-lg p-3 text-center border border-red-100">
+                                    <p className="text-xs text-red-600 font-medium">Falsos Positivos</p>
+                                    <p className="text-xl font-bold text-red-800">{monitorStatus.falsePositives ?? '--'}</p>
+                                </div>
+                                <div className="bg-amber-50 rounded-lg p-3 text-center border border-amber-100">
+                                    <p className="text-xs text-amber-600 font-medium">Falsos Negativos</p>
+                                    <p className="text-xl font-bold text-amber-800">{monitorStatus.falseNegatives ?? '--'}</p>
+                                </div>
+                                <div className="bg-blue-50 rounded-lg p-3 text-center border border-blue-100">
+                                    <p className="text-xs text-blue-600 font-medium">Verdaderos Negativos</p>
+                                    <p className="text-xl font-bold text-blue-800">{monitorStatus.trueNegatives ?? '--'}</p>
+                                </div>
+                            </div>
+                            <div className="flex justify-between text-xs text-slate-400 mt-2">
+                                <span>Muestras: {monitorStatus.evaluatedSamples ?? '--'} / mín. {monitorStatus.minSamplesRequired ?? 50}</span>
+                                <span>Maduración: {monitorStatus.maturationDays ?? 30} días</span>
+                            </div>
+                            {monitorStatus.lastEvaluationDate && (
+                                <p className="text-xs text-slate-400">
+                                    Última evaluación: {new Date(monitorStatus.lastEvaluationDate).toLocaleString()}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                ) : null}
             </div>
 
             {/* Charts Grid */}
@@ -335,18 +705,18 @@ const MLOpsPage: React.FC = () => {
                     </div>
                     <div>
                         <p className="text-xs text-slate-400 uppercase tracking-wide mb-1">Features</p>
-                        <p className="font-semibold">10 variables</p>
+                        <p className="font-semibold">14 variables</p>
                     </div>
                     <div>
-                        <p className="text-xs text-slate-400 uppercase tracking-wide mb-1">Entrenamiento</p>
-                        <p className="font-semibold">6,800 muestras</p>
+                        <p className="text-xs text-slate-400 uppercase tracking-wide mb-1">Repositorio</p>
+                        <p className="font-semibold">DagsHub MLflow</p>
                     </div>
                 </div>
             </div>
 
-            {/* Mock Notice */}
+            {/* Info Notice */}
             <div className="mt-6 text-center text-sm text-slate-400">
-                <p>📊 Métricas globales obtenidas del servidor. Gráficos de entrenamiento mostrados a modo de ejemplo.</p>
+                <p>📊 Métricas de rendimiento obtenidas del servidor en tiempo real. Curvas ROC y Loss mostradas como referencia visual.</p>
             </div>
         </div>
     );

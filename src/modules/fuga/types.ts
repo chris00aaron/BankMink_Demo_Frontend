@@ -73,6 +73,29 @@ export interface PriorityMatrixPoint {
     z: number;  // Tamaño burbuja
     name: string;
     id: number;
+    country: string; // País para tooltip enriquecido
+}
+
+// KPIs globales calculados server-side
+export interface DashboardKpis {
+    totalCustomers: number;
+    customersAtRisk: number;
+    capitalAtRisk: number;
+    retentionRate: number;
+    scatterData: PriorityMatrixPoint[];
+    highRiskCount: number;
+    mediumRiskCount: number;
+    lowRiskCount: number;
+}
+
+// Respuesta paginada del endpoint GET /customers
+export interface CustomerPageResponse {
+    content: CustomerDashboard[];
+    totalElements: number;
+    totalPages: number;
+    page: number;
+    size: number;
+    kpis: DashboardKpis;
 }
 
 // Datos para tendencia de riesgo
@@ -175,4 +198,52 @@ export interface CreateCampaignRequest {
     targets: number[]; // IDs de clientes
 }
 
+// -- TIPOS PARA AUTO-ENTRENAMIENTO (Self-Training API) --
 
+export interface TrainMetrics {
+    accuracy: number;
+    f1Score: number;
+    precision: number;
+    recall: number;
+    aucRoc: number;
+}
+
+export interface TrainResult {
+    status: 'success' | 'error';
+    message?: string;
+    runId?: string;
+    metrics?: TrainMetrics;
+    trainSamples?: number;
+    testSamples?: number;
+    error?: string;
+    uploadWarnings?: string[];
+}
+
+// -- TIPOS PARA PERFORMANCE MONITOR (Auto-Retraining by Decay) --
+
+export interface PerformanceStatus {
+    status: 'healthy' | 'degraded' | 'insufficient_data' | 'no_evaluations' | 'error';
+    message?: string;
+    recall?: number;
+    f1Score?: number;
+    precision?: number;
+    accuracy?: number;
+    recallThreshold?: number;
+    evaluatedSamples?: number;
+    minSamplesRequired?: number;
+    maturationDays?: number;
+    monitorEnabled?: boolean;
+    monitorIntervalHours?: number;
+    lastEvaluationDate?: string;
+    nextEvaluationDate?: string;
+    autoTrainingTriggered?: boolean;
+    triggerReason?: string;
+    // Confusion matrix
+    truePositives?: number;
+    falsePositives?: number;
+    trueNegatives?: number;
+    falseNegatives?: number;
+    // Training result
+    trainingRunId?: string;
+    trainingError?: string;
+}

@@ -1,17 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { MapPin, Users, TrendingUp, Globe, AlertCircle, Info } from 'lucide-react';
+import { Globe, AlertCircle, Info, TrendingUp } from 'lucide-react';
 import { ChurnService } from '../churn.service';
 import { GeographyStats } from '../types';
 
-// Ciudades con mayor riesgo por país (MOCK - Data no disponible en backend aún)
-const HIGH_RISK_CITIES = [
-    { city: 'Berlín', country: 'Alemania', customers: 342, riskScore: 78 },
-    { city: 'Munich', country: 'Alemania', customers: 189, riskScore: 71 },
-    { city: 'París', country: 'Francia', customers: 267, riskScore: 65 },
-    { city: 'Lyon', country: 'Francia', customers: 145, riskScore: 58 },
-    { city: 'Madrid', country: 'España', customers: 98, riskScore: 45 },
-    { city: 'Barcelona', country: 'España', customers: 87, riskScore: 42 },
-];
+
 
 const GeographyPage: React.FC = () => {
     const [countryData, setCountryData] = useState<GeographyStats[]>([]);
@@ -74,24 +66,24 @@ const GeographyPage: React.FC = () => {
             <svg viewBox="0 0 600 500" className="w-full h-full drop-shadow-xl filter">
                 {/* Background Ocean/Map Area */}
                 <rect width="600" height="500" fill="#f8fafc" />
-                
+
                 {mapConfig.map((geo) => {
                     // Buscar datos reales
                     const stats = countryData.find(c => geo.names.includes(c.country));
                     const churnRate = stats ? stats.churnRate : 0;
                     const fill = stats ? getColorByChurn(churnRate) : '#cbd5e1';
-                    
+
                     return (
-                        <g 
+                        <g
                             key={geo.id}
                             onMouseEnter={() => stats && setHoveredCountry(stats)}
                             onMouseLeave={() => setHoveredCountry(null)}
                             style={{ cursor: 'pointer', transition: 'all 0.3s ease' }}
                         >
-                            <path 
-                                d={geo.d} 
-                                fill={fill} 
-                                stroke="white" 
+                            <path
+                                d={geo.d}
+                                fill={fill}
+                                stroke="white"
                                 strokeWidth="2"
                                 className="hover:opacity-80 transition-opacity"
                             />
@@ -99,7 +91,7 @@ const GeographyPage: React.FC = () => {
                             <text x={geo.cx} y={geo.cy} textAnchor="middle" fill="white" fontSize="12" fontWeight="bold" style={{ pointerEvents: 'none' }}>
                                 {geo.names[0]}
                             </text>
-                             {/* Etiqueta % */}
+                            {/* Etiqueta % */}
                             <text x={geo.cx} y={geo.cy + 15} textAnchor="middle" fill="white" fontSize="10" style={{ pointerEvents: 'none' }}>
                                 {stats ? `${stats.churnRate.toFixed(1)}%` : 'N/A'}
                             </text>
@@ -170,10 +162,10 @@ const GeographyPage: React.FC = () => {
                             </div>
                         )}
                     </div>
-                    
+
                     <div className="h-96 w-full bg-slate-50 rounded-lg border border-slate-100 relative">
                         <EuropeMap />
-                        
+
                         {/* Leyenda del Mapa */}
                         <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm p-3 rounded-lg border border-slate-200 shadow-sm text-xs">
                             <p className="font-bold text-slate-700 mb-2">Nivel de Riesgo</p>
@@ -225,16 +217,16 @@ const GeographyPage: React.FC = () => {
                     </div>
 
                     <div className="bg-blue-50 rounded-xl border border-blue-100 p-6">
-                         <div className="flex gap-3">
-                             <Info className="w-5 h-5 text-blue-600 flex-shrink-0" />
-                             <div>
-                                 <h4 className="font-bold text-blue-800 text-sm">Análisis Regional</h4>
-                                 <p className="text-xs text-blue-700 mt-1 leading-relaxed">
-                                     Las regiones con colores cálidos (Naranja/Rojo) requieren intervención inmediata. 
-                                     Revise las políticas de precios en esas zonas.
-                                 </p>
-                             </div>
-                         </div>
+                        <div className="flex gap-3">
+                            <Info className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                            <div>
+                                <h4 className="font-bold text-blue-800 text-sm">Análisis Regional</h4>
+                                <p className="text-xs text-blue-700 mt-1 leading-relaxed">
+                                    Las regiones con colores cálidos (Naranja/Rojo) requieren intervención inmediata.
+                                    Revise las políticas de precios en esas zonas.
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -315,69 +307,6 @@ const GeographyPage: React.FC = () => {
                         );
                     })}
                 </div>
-            </div>
-
-            {/* Ciudades de Alto Riesgo */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-                <div className="p-6 border-b border-slate-100">
-                    <div className="flex items-center gap-2">
-                        <MapPin className="w-5 h-5 text-red-500" />
-                        <h2 className="text-lg font-semibold text-slate-800">Ciudades con Mayor Riesgo de Fuga</h2>
-                    </div>
-                    <p className="text-sm text-slate-500 mt-1">Ubicaciones con concentración de clientes en riesgo</p>
-                </div>
-                <table className="w-full">
-                    <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                        <tr>
-                            <th className="px-6 py-4 text-left font-medium">Ciudad</th>
-                            <th className="px-6 py-4 text-left font-medium">País</th>
-                            <th className="px-6 py-4 text-left font-medium">Clientes en Riesgo</th>
-                            <th className="px-6 py-4 text-left font-medium">Score de Riesgo</th>
-                            <th className="px-6 py-4 text-left font-medium">Nivel</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                        {HIGH_RISK_CITIES.map((city, idx) => {
-                            const level = city.riskScore >= 70 ? { text: 'Crítico', color: 'bg-red-100 text-red-700' }
-                                : city.riskScore >= 50 ? { text: 'Alto', color: 'bg-orange-100 text-orange-700' }
-                                    : { text: 'Moderado', color: 'bg-yellow-100 text-yellow-700' };
-
-                            return (
-                                <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-2">
-                                            <MapPin className="w-4 h-4 text-slate-400" />
-                                            <span className="font-medium text-slate-700">{city.city}</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4 text-slate-600">{city.country}</td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-2">
-                                            <Users className="w-4 h-4 text-slate-400" />
-                                            <span className="text-slate-700">{city.customers}</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-3">
-                                            <span className="font-bold text-slate-700">{city.riskScore}%</span>
-                                            <div className="w-20 h-2 bg-slate-100 rounded-full overflow-hidden">
-                                                <div
-                                                    className={`h-full rounded-full ${city.riskScore >= 70 ? 'bg-red-500' : city.riskScore >= 50 ? 'bg-orange-500' : 'bg-yellow-500'}`}
-                                                    style={{ width: `${city.riskScore}%` }}
-                                                />
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className={`text-xs font-medium px-2 py-1 rounded ${level.color}`}>
-                                            {level.text}
-                                        </span>
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
             </div>
 
             {/* Insights */}

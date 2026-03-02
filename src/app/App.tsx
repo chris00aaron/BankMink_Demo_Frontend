@@ -15,7 +15,7 @@ import {
   DashboardPage as FugaDashboard,
   SimulatorPage as FugaSimulator,
   MLOpsPage as FugaMLOps,
-  GeographyPage as FugaGeography,
+  RiskIntelligencePage as FugaRiskIntelligence,
   CustomerDetailPage as FugaCustomerDetail,
   CampaignsPage as FugaCampaigns
 } from '@modules/fuga';
@@ -289,7 +289,7 @@ function AppContent() {
             )}
             {fugaScreen === 'simulador' && <FugaSimulator />}
             {fugaScreen === 'mlops' && <FugaMLOps />}
-            {fugaScreen === 'geografia' && <FugaGeography />}
+            {fugaScreen === 'geografia' && <FugaRiskIntelligence />}
             {fugaScreen === 'campañas' && <FugaCampaigns />}
             {fugaScreen === 'cliente' && selectedCustomerId && (
               <FugaCustomerDetail

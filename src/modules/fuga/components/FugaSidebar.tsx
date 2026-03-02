@@ -1,7 +1,7 @@
 import React from 'react';
 import {
     LayoutDashboard,
-    Map,
+    BarChart2,
     FlaskConical,
     BrainCircuit,
     ArrowLeft,
@@ -24,7 +24,7 @@ const FugaSidebar: React.FC<FugaSidebarProps> = ({
 }) => {
     const menuItems = [
         { id: 'dashboard' as FugaScreen, label: 'Centro de Mando', icon: LayoutDashboard },
-        { id: 'geografia' as FugaScreen, label: 'Geografía', icon: Map },
+        { id: 'geografia' as FugaScreen, label: 'Inteligencia de Riesgo', icon: BarChart2 },
         { id: 'simulador' as FugaScreen, label: 'Simulador', icon: FlaskConical },
         { id: 'campañas' as FugaScreen, label: 'Campañas', icon: Megaphone },
         { id: 'mlops' as FugaScreen, label: 'MLOps', icon: BrainCircuit },

@@ -37,16 +37,16 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ customerId, onB
             try {
                 setLoading(true);
                 // 1. Obtener info básica
-                const customers = await ChurnService.getAllCustomers();
-                const found = customers.find(c => c.id === customerId);
-                
+                const page = await ChurnService.getCustomersPaginated(0, 10, String(customerId));
+                const found = page.content.find(c => c.id === customerId);
+
                 if (found) {
                     setCustomer(found);
-                    
+
                     // 2. Ejecutar análisis en tiempo real para obtener factores
                     const analysis = await ChurnService.analyzeCustomer(customerId);
                     console.log("--> Analysis Response:", analysis); // DEBUG
-                    
+
                     if (analysis.risk_factors) {
                         setRiskFactors(analysis.risk_factors);
                     }
@@ -81,7 +81,7 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ customerId, onB
     // Componente auxiliar para validación
     const ModelValidationBadge = ({ prediction }: { prediction: boolean }) => {
         if (realExit === undefined) return <span className="text-gray-400 italic">Desconocido</span>;
-        
+
         const isCorrect = realExit === prediction;
         return (
             <div>
@@ -235,7 +235,7 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ customerId, onB
                                 🧠 <strong>Análisis en Tiempo Real:</strong> Estos factores han sido calculados dinámicamente por el motor de IA (Python) basándose en el comportamiento actual del cliente.
                             </p>
                         </div>
-                        
+
                         {/* VALIDACIÓN DEL MODELO (NUEVO) */}
                         {customer && riskFactors.length > 0 && (
                             <div className="mt-6 p-4 bg-slate-50 rounded-xl border border-slate-200">
@@ -263,7 +263,7 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ customerId, onB
                     {/* GRÁFICO DE HISTORIA */}
                     <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                         <h3 className="text-lg font-bold text-[#0F172A] mb-4">Evolución del Riesgo (Real)</h3>
-                        
+
                         {historyData.length > 0 ? (
                             <div className="h-64 w-full">
                                 <ResponsiveContainer width="100%" height="100%">
@@ -309,12 +309,12 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ customerId, onB
                             <h3 className="text-xl font-bold mb-2">{recommendation.name}</h3>
                             <p className="text-indigo-100/80 text-sm mb-6 leading-relaxed">
                                 {recommendation.description}
-                                <br/>
+                                <br />
                                 <span className="block mt-2 font-semibold text-emerald-300">
                                     Impacto Esperado: -{(recommendation.impactFactor * 100).toFixed(0)}% Riesgo
                                 </span>
                             </p>
-                            <button 
+                            <button
                                 onClick={() => handleInteraction(`APPLY_STRATEGY_${recommendation.id}`)}
                                 className="w-full bg-white text-[#0F172A] font-bold py-3 rounded-lg hover:bg-indigo-50 transition-colors shadow-md"
                             >
@@ -322,31 +322,31 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ customerId, onB
                             </button>
                         </div>
                     ) : (
-                         <div className="bg-slate-100 p-6 rounded-xl text-center text-slate-400">
-                             <TrendingUp className="w-8 h-8 mx-auto mb-2 opacity-50"/>
-                             <p className="text-sm">Sin recomendación disponible</p>
-                         </div>
+                        <div className="bg-slate-100 p-6 rounded-xl text-center text-slate-400">
+                            <TrendingUp className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                            <p className="text-sm">Sin recomendación disponible</p>
+                        </div>
                     )}
 
                     {/* CONTACTO RÁPIDO */}
                     <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                         <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Contactar Cliente</h3>
                         <div className="space-y-3">
-                            <button 
+                            <button
                                 onClick={() => handleInteraction('CALL_MOBILE')}
                                 className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all text-slate-700"
                             >
                                 <Phone className="w-4 h-4 text-slate-400" />
                                 <span className="text-sm font-medium">Llamar a Móvil</span>
                             </button>
-                            <button 
+                            <button
                                 onClick={() => handleInteraction('SEND_EMAIL')}
                                 className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all text-slate-700"
                             >
                                 <Mail className="w-4 h-4 text-slate-400" />
                                 <span className="text-sm font-medium">Enviar Email Personalizado</span>
                             </button>
-                            <button 
+                            <button
                                 onClick={() => handleInteraction('SCHEDULE_MEETING')}
                                 className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all text-slate-700"
                             >
