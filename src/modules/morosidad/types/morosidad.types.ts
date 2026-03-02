@@ -44,7 +44,6 @@ export interface ClientePredictionDetail {
     // Predicción
     defaultPayment: boolean;
     probabilidadPago: number;
-    nivelRiesgo: 'Crítico' | 'Alto' | 'Medio' | 'Bajo';
     mainRiskFactor: string;
     riskFactors: RiskFactor[];  // Top 5 factores SHAP
     modelVersion: string;
@@ -83,7 +82,7 @@ export interface BatchAccountPrediction {
     limitBal: number;
     balance: number;
     probabilidadPago: number;
-    nivelRiesgo: string;
+    clasificacionSBS: string;
     montoCuota: number;
     estimatedLoss: number;  // Pérdida estimada (EAD × PD × LGD)
 }
@@ -103,6 +102,7 @@ export interface DashboardData {
     segmentacionRiesgo: SegmentacionRiesgo[];
     tendenciaMensual: TendenciaMensual[];
     clientesAltoRiesgo: ClienteAltoRiesgo[];
+    distribucionSBS: DistribucionSBS[];
 }
 
 export interface MetricasResumen {
@@ -140,9 +140,14 @@ export interface ClienteAltoRiesgo {
     recordId: number;           // ID de la cuenta (record_id)
     nombre: string;
     probabilidadPago: number;
-    nivelRiesgo: string;
+    clasificacionSBS: string;
     montoCuota: number;
     cuotasAtrasadas: number;
+}
+
+export interface DistribucionSBS {
+    categoria: string;
+    cantidad: number;
 }
 
 // Tipos para Políticas
@@ -175,23 +180,58 @@ export interface PolicyRequest {
     sbsClassificationMatrix?: ClassificationRuleSBS[];
 }
 
-// Tipos para Alertas Tempranas
-export interface EarlyWarningsPreview {
-    totalCuentasEnAlerta: number;
-    totalDineroEnRiesgo: number;
-    alertas: Alerta[];
+// Tipos para Estrategias de Mitigación de Riesgo
+
+export interface Campaign {
+    idCampaign: number;
+    campaignName: string;
+    description: string;
+    targetSegment: string;
+    reductionFactor: number;
+    estimatedCost: number;
+    isActive: boolean;
+    createdDate: string;
 }
 
-export interface Alerta {
-    id: string;
-    tipo: 'critico' | 'alto' | 'tendencia' | 'vencimiento';
-    titulo: string;
-    descripcion: string;
-    cuentasAfectadas: number;
-    dineroEnRiesgo: number;
-    prioridad: 'urgente' | 'alta' | 'media';
-    fecha: string;
-    accionRecomendada: string;
+export interface CampaignRequest {
+    campaignName: string;
+    description: string;
+    targetSegment: string;
+    reductionFactor: number;
+    estimatedCost: number;
+}
+
+export interface StrategySummary {
+    totalCuentas: number;
+    perdidaTotal: number;
+    tasaMorosidad: number;
+}
+
+export interface SegmentSummary {
+    segmento: string;
+    totalCuentas: number;
+    perdidaEstimada: number;
+    probabilidadPromedio: number;
+    factorPrincipal: string;
+}
+
+export interface StrategyResponse {
+    resumen: StrategySummary;
+    segmentos: SegmentSummary[];
+}
+
+export interface SimulationResult {
+    segmento: string;
+    campaignName: string;
+    totalCuentasSegmento: number;
+    perdidaActual: number;
+    perdidaProyectada: number;
+    reduccionPerdida: number;
+    tasaMorosidadActual: number;
+    tasaMorosidadProyectada: number;
+    cuentasMejoradas: number;
+    costoTotal: number;
+    roi: number;
 }
 
 // Tipos para Simulación
@@ -231,6 +271,26 @@ export interface SimulationResponse {
     umbral_politica: number;
     clasificacion_sbs: string;
     model_version: string;
+}
+
+// Timeline de predicción individual por cuenta
+export interface PredictionTimelineEntry {
+    date: string;
+    defaultProbability: number;
+    defaultCategory: string;
+    payX: number;
+}
+
+// Historial de pagos mensual por cuenta (máx. 10 meses)
+export interface ClientPaymentHistoryEntry {
+    period: string;           // "Ene 2024"
+    payX: number;             // Código del modelo: -2, -1, 0, 1..9
+    monthsLate: number;       // Meses de retraso real (max(0, payX))
+    billAmt: number;          // Monto facturado
+    payAmt: number;           // Monto pagado
+    didPay: boolean;          // ¿Pagó ese mes?
+    daysLate: number | null;  // Días de retraso (null si no hay fechas en BD)
+    paymentStatus: string;    // "Sin consumo" | "A tiempo" | "Crédito renovable" | "N mes(es) de retraso"
 }
 
 // Tipos para Monitoreo del Modelo (datos reales)
@@ -312,3 +372,29 @@ export interface VersionCheck {
     error?: string;
 }
 
+// Política de monitoreo (GET /api/monitoring-policy)
+export interface MonitoringPolicy {
+    idMonitoringPolicy: number;
+    policyName: string;
+    psiThreshold: number;
+    consecutiveDaysTrigger: number;
+    aucDropThreshold: number;
+    ksDropThreshold: number;
+    optunaTrialsDrift: number;
+    optunaTrialsValidation: number;
+    activationDate: string;
+    cancellationDate: string | null;
+    isActive: boolean;
+    createdBy: string;
+}
+
+export interface MonitoringPolicyRequest {
+    policyName: string;
+    psiThreshold: number;
+    consecutiveDaysTrigger: number;
+    aucDropThreshold: number;
+    ksDropThreshold: number;
+    optunaTrialsDrift: number;
+    optunaTrialsValidation: number;
+    createdBy: string;
+}

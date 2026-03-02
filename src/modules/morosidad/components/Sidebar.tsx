@@ -1,4 +1,4 @@
-import { FileSearch, Home, TrendingDown, LayoutDashboard, AlertTriangle, LogOut, Calculator, Activity } from 'lucide-react';
+import { FileSearch, Home, TrendingDown, LayoutDashboard, Target, LogOut, Calculator, Activity } from 'lucide-react';
 import bankMindLogo from '@shared/assets/logo_BankMind.png';
 
 interface MorosidadSidebarProps {
@@ -13,7 +13,7 @@ export function Sidebar({ currentScreen, onNavigate, onBackToHome, onLogout }: M
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'individual', label: 'Predicción Individual', icon: FileSearch },
         { id: 'batch', label: 'Predicción por Lotes', icon: TrendingDown },
-        { id: 'alerts', label: 'Alertas Tempranas', icon: AlertTriangle },
+        { id: 'strategy', label: 'Estrategias', icon: Target },
         { id: 'simulation', label: 'Simulador de Riesgo', icon: Calculator },
         { id: 'model-health', label: 'Monitoreo del Modelo', icon: Activity },
     ];

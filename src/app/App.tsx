@@ -20,9 +20,10 @@ import {
   Dashboard as MorosidadDashboard,
   MorosidadSidebar,
   BatchPrediction as MorosidadBatchPrediction,
-  EarlyWarnings,
+  Strategy,
   Simulation,
   ModelHealth,
+  DashboardProvider,
 } from "@modules/morosidad";
 import {
   FugaSidebar,
@@ -265,25 +266,27 @@ function AppContent() {
   // Servicio: Morosidad Detalle
   if (currentView === "morosidad-detalle") {
     return (
-      <div className="min-h-screen bg-gray-50 flex">
-        <MorosidadSidebar
-          currentScreen={morosidadScreen}
-          onNavigate={handleMorosidadNavigate}
-          onBackToHome={isAdmin() ? handleBackToHome : undefined}
-          onLogout={handleLogout}
-        />
-        <div className="flex-1 ml-64">
-          {/* Page Content */}
-          <main className="p-8">
-            {morosidadScreen === "dashboard" && <MorosidadDashboard />}
-            {morosidadScreen === "individual" && <ClientPrediction />}
-            {morosidadScreen === "batch" && <MorosidadBatchPrediction />}
-            {morosidadScreen === "alerts" && <EarlyWarnings />}
-            {morosidadScreen === "simulation" && <Simulation />}
-            {morosidadScreen === "model-health" && <ModelHealth />}
-          </main>
+      <DashboardProvider>
+        <div className="min-h-screen bg-gray-50 flex">
+          <MorosidadSidebar
+            currentScreen={morosidadScreen}
+            onNavigate={handleMorosidadNavigate}
+            onBackToHome={isAdmin() ? handleBackToHome : undefined}
+            onLogout={handleLogout}
+          />
+          <div className="flex-1 ml-64">
+            {/* Page Content */}
+            <main className="p-8">
+              {morosidadScreen === "dashboard" && <MorosidadDashboard />}
+              {morosidadScreen === "individual" && <ClientPrediction />}
+              {morosidadScreen === "batch" && <MorosidadBatchPrediction />}
+              {morosidadScreen === "strategy" && <Strategy />}
+              {morosidadScreen === "simulation" && <Simulation />}
+              {morosidadScreen === "model-health" && <ModelHealth />}
+            </main>
+          </div>
         </div>
-      </div>
+      </DashboardProvider>
     );
   }
 

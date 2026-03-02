@@ -1,10 +1,14 @@
 // [PAGE COMPONENT]: This component acts as a Page.
 // It orchestrates the Client Prediction view, including search state and displaying results.
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@shared/components/ui/card';
 import { UserHeader } from '../components/UserHeader';
 import { Input } from '@shared/components/ui/input';
 import { Button } from '@shared/components/ui/button';
+import {
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Legend, ReferenceLine, ComposedChart, Cell
+} from 'recharts';
 import {
   Search,
   User,
@@ -23,46 +27,15 @@ import {
   Loader2
 } from 'lucide-react';
 
-import { searchCustomers, predictMorosidad } from '../services/morosidadService';
-import type { CustomerSearchResult, ClientePredictionDetail, AccountSummary } from '../types/morosidad.types';
+import { searchCustomers, predictMorosidad, getPredictionTimeline, getClientPaymentHistory } from '../services/morosidadService';
+import type { CustomerSearchResult, ClientePredictionDetail, AccountSummary, PredictionTimelineEntry, ClientPaymentHistoryEntry } from '../types/morosidad.types';
 
-const RISK_COLORS = {
-  Crítico: {
-    bg: 'bg-blue-900',
-    text: 'text-white',
-    lightBg: 'bg-blue-50',
-    lightText: 'text-blue-900',
-    border: 'border-blue-900'
-  },
-  Alto: {
-    bg: 'bg-blue-700',
-    text: 'text-white',
-    lightBg: 'bg-blue-50',
-    lightText: 'text-blue-700',
-    border: 'border-blue-700'
-  },
-  Medio: {
-    bg: 'bg-blue-500',
-    text: 'text-white',
-    lightBg: 'bg-blue-50',
-    lightText: 'text-blue-600',
-    border: 'border-blue-500'
-  },
-  Bajo: {
-    bg: 'bg-blue-400',
-    text: 'text-white',
-    lightBg: 'bg-blue-50',
-    lightText: 'text-blue-500',
-    border: 'border-blue-400'
-  }
-};
-
-const SBS_COLORS = {
-  'Normal': 'bg-green-100 text-green-800',
-  'CPP': 'bg-yellow-100 text-yellow-800',
-  'Deficiente': 'bg-orange-100 text-orange-800',
-  'Dudoso': 'bg-red-100 text-red-800',
-  'Pérdida': 'bg-red-200 text-red-900'
+const SBS_COLORS: Record<string, { bg: string; text: string; range: string }> = {
+  'Normal': { bg: 'bg-emerald-50', text: 'text-emerald-700', range: '0-5%' },
+  'CPP': { bg: 'bg-amber-50', text: 'text-amber-700', range: '5-25%' },
+  'Deficiente': { bg: 'bg-orange-50', text: 'text-orange-700', range: '25-60%' },
+  'Dudoso': { bg: 'bg-red-50', text: 'text-red-700', range: '60-90%' },
+  'Pérdida': { bg: 'bg-red-100', text: 'text-red-900', range: '90-100%' },
 };
 
 export function ClientPredictionPage() {
@@ -74,6 +47,10 @@ export function ClientPredictionPage() {
   const [isSearching, setIsSearching] = useState(false);
   const [isPredicting, setIsPredicting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [timelineData, setTimelineData] = useState<PredictionTimelineEntry[]>([]);
+  const [isLoadingTimeline, setIsLoadingTimeline] = useState(false);
+  const [paymentHistory, setPaymentHistory] = useState<ClientPaymentHistoryEntry[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   const handleSearch = async (value: string) => {
     setSearchTerm(value);
@@ -112,6 +89,24 @@ export function ClientPredictionPage() {
     try {
       const result = await predictMorosidad(account.recordId);
       setPredictionResult(result);
+
+      // Cargar timeline de predicciones e historial de pagos en paralelo
+      setIsLoadingTimeline(true);
+      setIsLoadingHistory(true);
+      try {
+        const [timeline, history] = await Promise.all([
+          getPredictionTimeline(account.recordId).catch(() => [] as PredictionTimelineEntry[]),
+          getClientPaymentHistory(account.recordId).catch(() => [] as ClientPaymentHistoryEntry[])
+        ]);
+        setTimelineData(timeline);
+        setPaymentHistory(history);
+      } catch {
+        setTimelineData([]);
+        setPaymentHistory([]);
+      } finally {
+        setIsLoadingTimeline(false);
+        setIsLoadingHistory(false);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al realizar la predicción');
       setPredictionResult(null);
@@ -127,25 +122,52 @@ export function ClientPredictionPage() {
     'EDUCATION': 'Nivel Educativo',
     'MARRIAGE': 'Estado Civil',
     'AGE': 'Edad',
-    'PAY_0': 'Estado Pago Septiembre',
-    'PAY_2': 'Estado Pago Agosto',
-    'PAY_3': 'Estado Pago Julio',
-    'PAY_4': 'Estado Pago Junio',
-    'PAY_5': 'Estado Pago Mayo',
-    'PAY_6': 'Estado Pago Abril',
-    'BILL_AMT1': 'Factura Septiembre',
-    'BILL_AMT2': 'Factura Agosto',
-    'BILL_AMT3': 'Factura Julio',
-    'BILL_AMT4': 'Factura Junio',
-    'BILL_AMT5': 'Factura Mayo',
-    'BILL_AMT6': 'Factura Abril',
-    'PAY_AMT1': 'Pago Septiembre',
-    'PAY_AMT2': 'Pago Agosto',
-    'PAY_AMT3': 'Pago Julio',
-    'PAY_AMT4': 'Pago Junio',
-    'PAY_AMT5': 'Pago Mayo',
-    'PAY_AMT6': 'Pago Abril',
+    'PAY_0': 'Estado Pago (Mes Anterior)',
+    'PAY_2': 'Estado Pago (Hace 2 Meses)',
+    'PAY_3': 'Estado Pago (Hace 3 Meses)',
+    'PAY_4': 'Estado Pago (Hace 4 Meses)',
+    'PAY_5': 'Estado Pago (Hace 5 Meses)',
+    'PAY_6': 'Estado Pago (Hace 6 Meses)',
+    'BILL_AMT1': 'Factura (Mes Anterior)',
+    'BILL_AMT2': 'Factura (Hace 2 Meses)',
+    'BILL_AMT3': 'Factura (Hace 3 Meses)',
+    'BILL_AMT4': 'Factura (Hace 4 Meses)',
+    'BILL_AMT5': 'Factura (Hace 5 Meses)',
+    'BILL_AMT6': 'Factura (Hace 6 Meses)',
+    'PAY_AMT1': 'Pago (Mes Anterior)',
+    'PAY_AMT2': 'Pago (Hace 2 Meses)',
+    'PAY_AMT3': 'Pago (Hace 3 Meses)',
+    'PAY_AMT4': 'Pago (Hace 4 Meses)',
+    'PAY_AMT5': 'Pago (Hace 5 Meses)',
+    'PAY_AMT6': 'Pago (Hace 6 Meses)',
     'UTILIZATION_RATE': 'Tasa de Utilización'
+  };
+
+  const FACTOR_DESCRIPTIONS: Record<string, string> = {
+    'LIMIT_BAL': 'Límite de crédito asignado. Límites bajos pueden indicar perfil de mayor riesgo.',
+    'SEX': 'Género del cliente. Variable demográfica del perfil base.',
+    'EDUCATION': 'Nivel educativo. Puede correlacionar con estabilidad laboral y capacidad de pago.',
+    'MARRIAGE': 'Estado civil del cliente. Afecta la carga financiera del hogar.',
+    'AGE': 'Edad del cliente. Puede correlacionar con estabilidad financiera.',
+    'PAY_0': 'Meses de atraso en el pago más reciente. Valores > 0 indican falta de pago puntual.',
+    'PAY_2': 'Meses de atraso hace 2 períodos. Indica patrón histórico de pago.',
+    'PAY_3': 'Meses de atraso hace 3 períodos.',
+    'PAY_4': 'Meses de atraso hace 4 períodos.',
+    'PAY_5': 'Meses de atraso hace 5 períodos.',
+    'PAY_6': 'Meses de atraso hace 6 períodos.',
+    'BILL_AMT1': 'Monto facturado el mes reciente. Facturas altas presionan la capacidad de pago.',
+    'BILL_AMT2': 'Monto facturado hace 2 meses.',
+    'BILL_AMT3': 'Monto facturado hace 3 meses.',
+    'BILL_AMT4': 'Monto facturado hace 4 meses.',
+    'BILL_AMT5': 'Monto facturado hace 5 meses.',
+    'BILL_AMT6': 'Monto facturado hace 6 meses.',
+    'PAY_AMT1': 'Monto pagado el mes reciente. Pagos bajos respecto a la factura indican riesgo.',
+    'PAY_AMT2': 'Monto pagado hace 2 meses.',
+    'PAY_AMT3': 'Monto pagado hace 3 meses.',
+    'PAY_AMT4': 'Monto pagado hace 4 meses.',
+    'PAY_AMT5': 'Monto pagado hace 5 meses.',
+    'PAY_AMT6': 'Monto pagado hace 6 meses.',
+    'UTILIZATION_RATE': 'Porcentaje del crédito utilizado. Tasas > 80% indican sobreuso del crédito.'
   };
 
   const getFactoresInfluencia = (result: ClientePredictionDetail) => {
@@ -178,10 +200,11 @@ export function ClientPredictionPage() {
 
   const getRecomendaciones = (result: ClientePredictionDetail) => {
     const recomendaciones = [];
+    const sbs = result.clasificacionSBS;
 
-    if (result.probabilidadPago < 25) {
+    if (sbs === 'Pérdida' || sbs === 'Dudoso') {
       recomendaciones.push({
-        text: 'Cliente de riesgo crítico - Contactar urgentemente para evaluación de cuenta',
+        text: `Clasificación ${sbs} - Contactar urgentemente para evaluación de cuenta`,
         priority: 'critical'
       });
       recomendaciones.push({
@@ -192,9 +215,9 @@ export function ClientPredictionPage() {
         text: 'Asignar a gestor de cobranza especializado',
         priority: 'high'
       });
-    } else if (result.probabilidadPago < 50) {
+    } else if (sbs === 'Deficiente') {
       recomendaciones.push({
-        text: 'Cliente de riesgo alto - Programar llamada de seguimiento proactivo',
+        text: 'Clasificación Deficiente - Programar llamada de seguimiento proactivo',
         priority: 'high'
       });
       recomendaciones.push({
@@ -205,7 +228,7 @@ export function ClientPredictionPage() {
         text: 'Incluir en campaña de retención de clientes',
         priority: 'medium'
       });
-    } else if (result.probabilidadPago < 75) {
+    } else if (sbs === 'CPP') {
       recomendaciones.push({
         text: 'Realizar seguimiento preventivo en 2 semanas',
         priority: 'medium'
@@ -220,7 +243,7 @@ export function ClientPredictionPage() {
       });
     } else {
       recomendaciones.push({
-        text: 'Cliente de bajo riesgo - Mantener monitoreo estándar',
+        text: 'Clasificación Normal - Mantener monitoreo estándar',
         priority: 'low'
       });
       recomendaciones.push({
@@ -369,17 +392,16 @@ export function ClientPredictionPage() {
                 </div>
               </div>
               <span
-                className={`px-4 py-2 rounded-full text-sm ${RISK_COLORS[predictionResult.nivelRiesgo].bg} ${RISK_COLORS[predictionResult.nivelRiesgo].text}`}
+                className={`px-4 py-2 rounded-full text-sm font-medium ${(SBS_COLORS[predictionResult.clasificacionSBS] || SBS_COLORS['Normal']).bg
+                  } ${(SBS_COLORS[predictionResult.clasificacionSBS] || SBS_COLORS['Normal']).text
+                  }`}
               >
-                Riesgo {predictionResult.nivelRiesgo}
+                SBS: {predictionResult.clasificacionSBS} ({(SBS_COLORS[predictionResult.clasificacionSBS] || SBS_COLORS['Normal']).range})
               </span>
             </div>
 
-            {/* Badges de clasificación y comparación */}
+            {/* Badges de comparación */}
             <div className="flex flex-wrap gap-3 mb-6">
-              <span className={`px-3 py-1.5 rounded-lg text-sm font-medium ${SBS_COLORS[predictionResult.clasificacionSBS]}`}>
-                SBS: {predictionResult.clasificacionSBS}
-              </span>
               <span className="px-3 py-1.5 rounded-lg text-sm bg-zinc-100 text-zinc-700">
                 Más riesgoso que el {predictionResult.percentilRiesgo}% de la cartera
               </span>
@@ -516,7 +538,7 @@ export function ClientPredictionPage() {
                   <div className="flex items-center gap-3 text-white">
                     <AlertCircle className="w-5 h-5" />
                     <p className="text-sm">
-                      Este cliente tiene <span className="font-medium">{predictionResult.cuotasAtrasadas}</span> cuota(s) atrasada(s)
+                      Este cliente registra <span className="font-medium">{predictionResult.cuotasAtrasadas}</span> mes(es) con atraso en su historial
                     </p>
                   </div>
                 </div>
@@ -527,6 +549,144 @@ export function ClientPredictionPage() {
             <div className="absolute top-0 right-0 w-96 h-96 bg-blue-400 rounded-full blur-3xl opacity-20" />
             <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-800 rounded-full blur-3xl opacity-20" />
           </Card>
+
+          {/* Historial de Pagos del Cliente */}
+          {paymentHistory.length > 0 && (
+            <Card className="p-8 bg-white border-0 shadow-sm">
+              <div className="flex items-start gap-3 mb-6">
+                <div className="p-2 bg-violet-50 rounded-lg">
+                  <Calendar className="w-5 h-5 text-violet-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg text-zinc-900">Historial de Pagos del Cliente</h3>
+                  <p className="text-sm text-zinc-500 mt-1">Comportamiento financiero mensual — últimos {paymentHistory.length} meses</p>
+                </div>
+              </div>
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart
+                    data={paymentHistory.map(d => ({
+                      periodo: d.period,
+                      'Facturado': d.billAmt,
+                      'Pagado': d.payAmt,
+                      'Meses Atraso': d.monthsLate,
+                      payX: d.payX,
+                      paymentStatus: d.paymentStatus,
+                      daysLate: d.daysLate,
+                      didPay: d.didPay
+                    }))}
+                    margin={{ top: 10, right: 30, left: 10, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="periodo" stroke="#64748b" tick={{ fill: '#64748b', fontSize: 11 }} />
+                    <YAxis
+                      yAxisId="left"
+                      stroke="#6366f1"
+                      tick={{ fill: '#6366f1', fontSize: 11 }}
+                      tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+                      label={{ value: 'Monto ($)', angle: -90, position: 'insideLeft', fill: '#6366f1', fontSize: 11 }}
+                    />
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      stroke="#ef4444"
+                      tick={{ fill: '#ef4444', fontSize: 11 }}
+                      domain={[0, 'auto']}
+                      allowDecimals={false}
+                      label={{ value: 'Meses Atraso', angle: 90, position: 'insideRight', fill: '#ef4444', fontSize: 11 }}
+                    />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', borderRadius: '8px' }}
+                      labelStyle={{ color: '#1e293b', fontWeight: 'bold' }}
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload || payload.length === 0) return null;
+                        const data = payload[0]?.payload;
+                        const statusColor = data.payX === -2 ? '#94a3b8' : data.payX <= 0 ? '#10b981' : data.payX <= 2 ? '#f59e0b' : '#ef4444';
+                        return (
+                          <div className="bg-white border border-zinc-200 shadow-lg rounded-lg p-3 text-sm">
+                            <p className="font-bold text-zinc-900 mb-2">{label}</p>
+                            <div className="flex items-center gap-2 mb-1">
+                              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: statusColor }} />
+                              <span className="text-zinc-600">{data.paymentStatus}</span>
+                            </div>
+                            <p className="text-zinc-600">Facturado: <span className="font-medium text-indigo-600">${data['Facturado']?.toLocaleString() ?? 0}</span></p>
+                            <p className="text-zinc-600">Pagado: <span className="font-medium text-emerald-600">${data['Pagado']?.toLocaleString() ?? 0}</span></p>
+                            {data['Meses Atraso'] > 0 && (
+                              <p className="text-zinc-600">Meses de atraso: <span className="font-medium text-red-600">{data['Meses Atraso']}</span></p>
+                            )}
+                            {data.daysLate != null && data.daysLate > 0 && (
+                              <p className="text-zinc-600">Días de retraso: <span className="font-medium text-orange-600">{data.daysLate} días</span></p>
+                            )}
+                          </div>
+                        );
+                      }}
+                    />
+                    <Legend />
+                    <Bar yAxisId="left" dataKey="Facturado" fill="#a5b4fc" opacity={0.5} radius={[4, 4, 0, 0]} maxBarSize={35} />
+                    <Bar yAxisId="left" dataKey="Pagado" radius={[4, 4, 0, 0]} maxBarSize={35}>
+                      {paymentHistory.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={entry.payX === -2 ? '#94a3b8' : entry.payX <= 0 ? '#10b981' : entry.payX <= 2 ? '#f59e0b' : '#ef4444'}
+                        />
+                      ))}
+                    </Bar>
+                    <Line
+                      yAxisId="right"
+                      type="monotone"
+                      dataKey="Meses Atraso"
+                      stroke="#ef4444"
+                      strokeWidth={2}
+                      strokeDasharray="6 3"
+                      dot={(props: { cx?: number; cy?: number; index?: number }) => {
+                        const idx = props.index ?? 0;
+                        const entry = paymentHistory[idx];
+                        if (!entry || entry.monthsLate === 0) return <circle key={idx} cx={0} cy={0} r={0} fill="none" />;
+                        const color = entry.payX <= 2 ? '#f59e0b' : '#ef4444';
+                        return <circle key={idx} cx={props.cx ?? 0} cy={props.cy ?? 0} r={4} fill={color} stroke="#fff" strokeWidth={2} />;
+                      }}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+              {/* Leyenda de grupos */}
+              <div className="mt-4 flex flex-wrap gap-4 text-xs text-zinc-500">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-sm bg-[#94a3b8]" />
+                  <span>Sin consumo (payX = -2)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-sm bg-[#10b981]" />
+                  <span>A tiempo / Crédito renovable (payX ≤ 0)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-sm bg-[#f59e0b]" />
+                  <span>Retraso leve (1-2 meses)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-sm bg-[#ef4444]" />
+                  <span>Retraso severo (3+ meses)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-sm bg-[#a5b4fc] opacity-50" />
+                  <span>Barra clara = monto facturado</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-6 h-0.5 border-t-2 border-dashed border-red-500" />
+                  <span>Línea = meses de atraso</span>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {isLoadingHistory && (
+            <Card className="p-8 bg-white border-0 shadow-sm">
+              <div className="flex items-center justify-center gap-3 text-violet-600">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span className="text-sm">Cargando historial de pagos...</span>
+              </div>
+            </Card>
+          )}
 
           {/* Factores de influencia */}
           <div>
@@ -545,12 +705,17 @@ export function ClientPredictionPage() {
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-3">
                         <Icon className={`w-5 h-5 ${factor.color}`} />
-                        <p className="font-medium text-zinc-900">{factor.factor}</p>
+                        <div>
+                          <p className="font-medium text-zinc-900">{factor.factor}</p>
+                          {FACTOR_DESCRIPTIONS[factor.name] && (
+                            <p className="text-xs text-zinc-500 mt-0.5">{FACTOR_DESCRIPTIONS[factor.name]}</p>
+                          )}
+                        </div>
                       </div>
                       <span
                         className={`px-3 py-1 rounded-full text-xs font-medium ${factor.impacto === 'Reduce Riesgo'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-red-100 text-red-700'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-700'
                           }`}
                       >
                         {factor.impacto}
@@ -605,6 +770,112 @@ export function ClientPredictionPage() {
               ))}
             </div>
           </Card>
+
+          {/* Timeline de Predicción */}
+          {timelineData.length > 0 && (
+            <Card className="p-8 bg-white border-0 shadow-sm">
+              <div className="flex items-start gap-3 mb-6">
+                <div className="p-2 bg-indigo-50 rounded-lg">
+                  <TrendingUp className="w-5 h-5 text-indigo-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg text-zinc-900">Evolución de Predicción</h3>
+                  <p className="text-sm text-zinc-500 mt-1">Probabilidad de default y estado de pago real a lo largo del tiempo</p>
+                </div>
+              </div>
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart
+                    data={timelineData.map(d => ({
+                      fecha: new Date(d.date).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }),
+                      'Prob. Default (%)': +(d.defaultProbability * 100).toFixed(1),
+                      'Meses Atraso': d.payX,
+                      category: d.defaultCategory
+                    }))}
+                    margin={{ top: 10, right: 30, left: 10, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="fecha" stroke="#64748b" tick={{ fill: '#64748b', fontSize: 11 }} />
+                    <YAxis
+                      yAxisId="left"
+                      stroke="#3b82f6"
+                      tick={{ fill: '#3b82f6', fontSize: 11 }}
+                      tickFormatter={(v) => `${v}%`}
+                      domain={[0, 100]}
+                      label={{ value: 'Prob. Default (%)', angle: -90, position: 'insideLeft', fill: '#3b82f6', fontSize: 11 }}
+                    />
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      stroke="#ef4444"
+                      tick={{ fill: '#ef4444', fontSize: 11 }}
+                      domain={[0, 'auto']}
+                      allowDecimals={false}
+                      label={{ value: 'Meses Atraso', angle: 90, position: 'insideRight', fill: '#ef4444', fontSize: 11 }}
+                    />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', borderRadius: '8px' }}
+                      labelStyle={{ color: '#1e293b', fontWeight: 'bold' }}
+                      formatter={(value, name) => [
+                        name === 'Prob. Default (%)' ? `${value}%` : `${value} mes(es)`,
+                        String(name)
+                      ]}
+                    />
+                    <Legend />
+                    {predictionResult && (
+                      <ReferenceLine
+                        yAxisId="left"
+                        y={100 - predictionResult.umbralPolitica}
+                        stroke="#f59e0b"
+                        strokeDasharray="8 4"
+                        label={{ value: `Umbral (${(100 - predictionResult.umbralPolitica).toFixed(0)}%)`, position: 'insideTopRight', fill: '#f59e0b', fontSize: 11 }}
+                      />
+                    )}
+                    <Line
+                      yAxisId="left"
+                      type="monotone"
+                      dataKey="Prob. Default (%)"
+                      stroke="#3b82f6"
+                      strokeWidth={3}
+                      dot={{ fill: '#3b82f6', r: 4 }}
+                      activeDot={{ r: 6 }}
+                    />
+                    <Bar
+                      yAxisId="right"
+                      dataKey="Meses Atraso"
+                      fill="#fca5a5"
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={30}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+              {/* Leyenda de interpretación */}
+              <div className="mt-4 flex flex-wrap gap-4 text-xs text-zinc-500">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-0.5 bg-blue-500 rounded-full" />
+                  <span>Línea azul = % probabilidad de impago según el modelo</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 bg-red-300 rounded-sm" />
+                  <span>Barras rojas = meses de atraso real (pay_x)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-6 h-0.5 border-t-2 border-dashed border-amber-500" />
+                  <span>Línea amarilla = umbral de política</span>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {isLoadingTimeline && (
+            <Card className="p-8 bg-white border-0 shadow-sm">
+              <div className="flex items-center justify-center gap-3 text-indigo-600">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span className="text-sm">Cargando evolución de predicción...</span>
+              </div>
+            </Card>
+          )}
 
           {/* Botón para nueva búsqueda */}
           <div className="flex justify-center">
