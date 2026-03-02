@@ -8,8 +8,12 @@ import type {
     DashboardData,
     DefaultPolicy,
     PolicyRequest,
-    EarlyWarningsPreview,
-    ModelHealthData
+    StrategyResponse,
+    Campaign,
+    CampaignRequest,
+    SimulationResult,
+    PredictionTimelineEntry,
+    ClientPaymentHistoryEntry
 } from '../types/morosidad.types';
 
 const API_BASE_URL = 'http://localhost:8080/api';
@@ -22,7 +26,7 @@ export async function searchCustomers(searchTerm: string): Promise<CustomerSearc
         return [];
     }
 
-    const response = await fetch(`${API_BASE_URL}/customers/search?q=${encodeURIComponent(searchTerm)}`);
+    const response = await fetch(`${API_BASE_URL}/morosidad/customers/search?q=${encodeURIComponent(searchTerm)}`);
 
     if (!response.ok) {
         throw new Error('Error al buscar clientes');
@@ -56,7 +60,7 @@ export async function predictMorosidad(recordId: number): Promise<ClientePredict
  * Filtra clientes según criterios y retorna lista de recordIds.
  */
 export async function filterCustomers(filters: BatchFilters): Promise<number[]> {
-    const response = await fetch(`${API_BASE_URL}/customers/filter`, {
+    const response = await fetch(`${API_BASE_URL}/morosidad/customers/filter`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -94,7 +98,7 @@ export async function predictBatch(recordIds: number[], includeShap: boolean = f
  * Obtiene todos los datos del dashboard de morosidad.
  */
 export async function getDashboardData(): Promise<DashboardData> {
-    const response = await fetch(`${API_BASE_URL}/dashboard/morosidad`);
+    const response = await fetch(`${API_BASE_URL}/morosidad/dashboard/morosidad`);
 
     if (!response.ok) {
         throw new Error('Error al obtener datos del dashboard');
@@ -109,7 +113,7 @@ export async function getDashboardData(): Promise<DashboardData> {
  * Obtiene todas las políticas.
  */
 export async function getAllPolicies(): Promise<DefaultPolicy[]> {
-    const response = await fetch(`${API_BASE_URL}/policies`);
+    const response = await fetch(`${API_BASE_URL}/morosidad/policies`);
     if (!response.ok) throw new Error('Error al obtener políticas');
     return response.json();
 }
@@ -118,7 +122,7 @@ export async function getAllPolicies(): Promise<DefaultPolicy[]> {
  * Obtiene la política activa.
  */
 export async function getActivePolicy(): Promise<DefaultPolicy | null> {
-    const response = await fetch(`${API_BASE_URL}/policies/active`);
+    const response = await fetch(`${API_BASE_URL}/morosidad/policies/active`);
     if (response.status === 404) return null;
     if (!response.ok) throw new Error('Error al obtener política activa');
     return response.json();
@@ -128,7 +132,7 @@ export async function getActivePolicy(): Promise<DefaultPolicy | null> {
  * Crea una nueva política.
  */
 export async function createPolicy(policy: PolicyRequest): Promise<DefaultPolicy> {
-    const response = await fetch(`${API_BASE_URL}/policies`, {
+    const response = await fetch(`${API_BASE_URL}/morosidad/policies`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(policy),
@@ -141,7 +145,7 @@ export async function createPolicy(policy: PolicyRequest): Promise<DefaultPolicy
  * Actualiza una política existente.
  */
 export async function updatePolicy(id: number, policy: PolicyRequest): Promise<DefaultPolicy> {
-    const response = await fetch(`${API_BASE_URL}/policies/${id}`, {
+    const response = await fetch(`${API_BASE_URL}/morosidad/policies/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(policy),
@@ -154,22 +158,80 @@ export async function updatePolicy(id: number, policy: PolicyRequest): Promise<D
  * Activa una política.
  */
 export async function activatePolicy(id: number): Promise<DefaultPolicy> {
-    const response = await fetch(`${API_BASE_URL}/policies/${id}/activate`, {
+    const response = await fetch(`${API_BASE_URL}/morosidad/policies/${id}/activate`, {
         method: 'PUT',
     });
     if (!response.ok) throw new Error('Error al activar política');
     return response.json();
 }
 
-// ============ ALERTAS TEMPRANAS ============
+/**
+ * Obtiene el resumen de segmentos de riesgo.
+ */
+export async function getStrategySegments(): Promise<StrategyResponse> {
+    const response = await fetch(`${API_BASE_URL}/morosidad/strategy/segments`);
+    if (!response.ok) throw new Error('Error al obtener segmentos de riesgo');
+    return response.json();
+}
 
 /**
- * Obtiene preview de alertas con umbrales temporales.
+ * Simula el impacto de una campaña sobre un segmento.
  */
-export async function getWarningsPreview(threshold: number, days: number): Promise<EarlyWarningsPreview> {
-    const response = await fetch(`${API_BASE_URL}/warnings/preview?threshold=${threshold}&days=${days}`);
-    if (!response.ok) throw new Error('Error al obtener preview de alertas');
+export async function simulateCampaignImpact(campaignId: number, segment: string): Promise<SimulationResult> {
+    const response = await fetch(`${API_BASE_URL}/morosidad/strategy/simulate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaignId, segment }),
+    });
+    if (!response.ok) throw new Error('Error al simular campaña');
     return response.json();
+}
+
+// ============ CAMPAÑAS ============
+
+/**
+ * Obtiene todas las campañas activas.
+ */
+export async function getCampaigns(): Promise<Campaign[]> {
+    const response = await fetch(`${API_BASE_URL}/morosidad/campaigns`);
+    if (!response.ok) throw new Error('Error al obtener campañas');
+    return response.json();
+}
+
+/**
+ * Crea una nueva campaña.
+ */
+export async function createCampaign(data: CampaignRequest): Promise<Campaign> {
+    const response = await fetch(`${API_BASE_URL}/morosidad/campaigns`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error('Error al crear campaña');
+    return response.json();
+}
+
+/**
+ * Actualiza una campaña existente.
+ */
+export async function updateCampaign(id: number, data: CampaignRequest): Promise<Campaign> {
+    const response = await fetch(`${API_BASE_URL}/morosidad/campaigns/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error('Error al actualizar campaña');
+    return response.json();
+}
+
+/**
+ * Elimina (soft-delete) una campaña.
+ */
+export async function deleteCampaign(id: number): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/morosidad/campaigns/${id}`, {
+        method: 'DELETE',
+    });
+    if (!response.ok) throw new Error('Error al eliminar campaña');
 }
 
 /**
@@ -191,14 +253,148 @@ export async function simulatePrediction(data: import('../types/morosidad.types'
     return response.json();
 }
 
-// ============ MONITOREO DEL MODELO ============
-
 /**
- * Obtiene datos del modelo en producción para monitoreo.
+ * Obtiene el timeline de predicciones para una cuenta individual.
+ * Incluye probabilidad de default y estado de pago real (payX) por fecha.
  */
-export async function getModelHealth(): Promise<ModelHealthData> {
-    const response = await fetch(`${API_BASE_URL}/model/health`);
-    if (!response.ok) throw new Error('Error al obtener estado del modelo');
+export async function getPredictionTimeline(recordId: number): Promise<PredictionTimelineEntry[]> {
+    const response = await fetch(`${API_BASE_URL}/morosidad/prediction-timeline/${recordId}`);
+    if (!response.ok) throw new Error('Error al obtener timeline de predicción');
     return response.json();
 }
 
+/**
+ * Obtiene el historial mensual de pagos de una cuenta (máx. 10 meses).
+ */
+export async function getClientPaymentHistory(recordId: number): Promise<ClientPaymentHistoryEntry[]> {
+    const response = await fetch(`${API_BASE_URL}/morosidad/payment-history/${recordId}`);
+    if (!response.ok) throw new Error('Error al obtener historial de pagos');
+    return response.json();
+}
+
+// ============ MONITOREO DEL MODELO ============
+
+import type {
+    ProductionModel,
+    DriftLog,
+    ValidationLog,
+    TrainingHistoryEntry,
+    VersionCheck,
+    MonitoringPolicy,
+    MonitoringPolicyRequest
+} from '../types/morosidad.types';
+
+/**
+ * Obtiene el modelo activo en producción.
+ */
+export async function getProductionModel(): Promise<ProductionModel> {
+    const response = await fetch(`${API_BASE_URL}/morosidad/model-monitoring/production`);
+    if (!response.ok) throw new Error('Error al obtener modelo en producción');
+    return response.json();
+}
+
+/**
+ * Obtiene logs de drift PSI de los últimos N días.
+ */
+export async function getDriftLogs(days: number = 30): Promise<DriftLog[]> {
+    const response = await fetch(`${API_BASE_URL}/morosidad/model-monitoring/monitoring/drift?days=${days}`);
+    if (!response.ok) throw new Error('Error al obtener datos de drift');
+    return response.json();
+}
+
+/**
+ * Obtiene logs de validación mensual (predicción vs realidad).
+ */
+export async function getValidationLogs(): Promise<ValidationLog[]> {
+    const response = await fetch(`${API_BASE_URL}/morosidad/model-monitoring/monitoring/validation`);
+    if (!response.ok) throw new Error('Error al obtener validaciones');
+    return response.json();
+}
+
+/**
+ * Obtiene el historial completo de entrenamientos.
+ */
+export async function getTrainingHistory(): Promise<TrainingHistoryEntry[]> {
+    const response = await fetch(`${API_BASE_URL}/morosidad/model-monitoring/training-history`);
+    if (!response.ok) throw new Error('Error al obtener historial');
+    return response.json();
+}
+
+/**
+ * Verifica si la versión del modelo en BD coincide con la API de predicción.
+ */
+export async function checkModelVersion(): Promise<VersionCheck> {
+    const response = await fetch(`${API_BASE_URL}/morosidad/model-monitoring/version-check`);
+    if (!response.ok) throw new Error('Error al verificar versión');
+    return response.json();
+}
+
+/**
+ * Dispara el auto-entrenamiento manual.
+ */
+export async function triggerSelfTraining(optunaTrials: number = 30): Promise<Record<string, unknown>> {
+    const response = await fetch(`${API_BASE_URL}/morosidad/self-training/trigger?optunaTrials=${optunaTrials}`, {
+        method: 'POST',
+    });
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || 'Error al iniciar entrenamiento');
+    }
+    return response.json();
+}
+
+// ============ POLÍTICAS DE MONITOREO ============
+
+/**
+ * Obtiene todas las políticas de monitoreo.
+ */
+export async function getMonitoringPolicies(): Promise<MonitoringPolicy[]> {
+    const response = await fetch(`${API_BASE_URL}/morosidad/monitoring-policy`);
+    if (!response.ok) throw new Error('Error al obtener políticas de monitoreo');
+    return response.json();
+}
+
+/**
+ * Obtiene la política de monitoreo activa.
+ */
+export async function getActiveMonitoringPolicy(): Promise<MonitoringPolicy | null> {
+    const response = await fetch(`${API_BASE_URL}/morosidad/monitoring-policy/active`);
+    if (response.status === 204) return null;
+    if (!response.ok) throw new Error('Error al obtener política de monitoreo activa');
+    return response.json();
+}
+
+/**
+ * Crea una nueva política de monitoreo.
+ */
+export async function createMonitoringPolicy(data: MonitoringPolicyRequest): Promise<MonitoringPolicy> {
+    const response = await fetch(`${API_BASE_URL}/morosidad/monitoring-policy`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error('Error al crear política de monitoreo');
+    return response.json();
+}
+
+/**
+ * Activa una política de monitoreo.
+ */
+export async function activateMonitoringPolicy(id: number): Promise<MonitoringPolicy> {
+    const response = await fetch(`${API_BASE_URL}/morosidad/monitoring-policy/${id}/activate`, {
+        method: 'PUT',
+    });
+    if (!response.ok) throw new Error('Error al activar política de monitoreo');
+    return response.json();
+}
+
+/**
+ * Ejecuta manualmente el análisis PSI de data drift.
+ */
+export async function triggerDriftAnalysis(): Promise<{ status: string; message: string }> {
+    const response = await fetch(`${API_BASE_URL}/morosidad/model-monitoring/trigger-drift`, {
+        method: 'POST',
+    });
+    if (!response.ok) throw new Error('Error al ejecutar análisis PSI');
+    return response.json();
+}

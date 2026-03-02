@@ -2,7 +2,7 @@ export interface Client {
     id: string;
     nombre: string;
     cedula: string;
-    nivelRiesgo: 'Crítico' | 'Alto' | 'Medio' | 'Bajo';
+    clasificacionSBS: 'Normal' | 'CPP' | 'Deficiente' | 'Dudoso' | 'Pérdida';
     cuotasAtrasadas: number;
     historialPagos: number;
     montoCuota: number;
@@ -22,7 +22,7 @@ export const mockClients: Client[] = [
         id: 'C001',
         nombre: 'Juan Pérez',
         cedula: '1234567890',
-        nivelRiesgo: 'Bajo',
+        clasificacionSBS: 'Normal',
         cuotasAtrasadas: 0,
         historialPagos: 98,
         montoCuota: 350,
@@ -40,7 +40,7 @@ export const mockClients: Client[] = [
         id: 'C002',
         nombre: 'Ana García',
         cedula: '0987654321',
-        nivelRiesgo: 'Crítico',
+        clasificacionSBS: 'Pérdida',
         cuotasAtrasadas: 3,
         historialPagos: 45,
         montoCuota: 600,
@@ -58,7 +58,7 @@ export const mockClients: Client[] = [
         id: 'C003',
         nombre: 'Carlos López',
         cedula: '1122334455',
-        nivelRiesgo: 'Alto',
+        clasificacionSBS: 'Dudoso',
         cuotasAtrasadas: 1,
         historialPagos: 70,
         montoCuota: 450,
@@ -76,7 +76,7 @@ export const mockClients: Client[] = [
         id: 'C004',
         nombre: 'María Rodríguez',
         cedula: '5544332211',
-        nivelRiesgo: 'Medio',
+        clasificacionSBS: 'CPP',
         cuotasAtrasadas: 0,
         historialPagos: 85,
         montoCuota: 500,
@@ -94,7 +94,7 @@ export const mockClients: Client[] = [
         id: 'C005',
         nombre: 'Luis Fernández',
         cedula: '6677889900',
-        nivelRiesgo: 'Crítico',
+        clasificacionSBS: 'Pérdida',
         cuotasAtrasadas: 4,
         historialPagos: 35,
         montoCuota: 800,
@@ -112,7 +112,7 @@ export const mockClients: Client[] = [
         id: 'C006',
         nombre: 'Carmen Díaz',
         cedula: '1122556677',
-        nivelRiesgo: 'Alto',
+        clasificacionSBS: 'Dudoso',
         cuotasAtrasadas: 2,
         historialPagos: 55,
         montoCuota: 550,
@@ -150,10 +150,11 @@ export const distributionData = [
 
 // Risk level data for pie chart
 export const riskLevelData = [
-    { nivel: 'Crítico', cantidad: 89, dinero: 45000 },
-    { nivel: 'Alto', cantidad: 223, dinero: 78000 },
-    { nivel: 'Medio', cantidad: 534, dinero: 42000 },
-    { nivel: 'Bajo', cantidad: 1612, dinero: 20000 }
+    { nivel: 'Pérdida', cantidad: 89, dinero: 45000 },
+    { nivel: 'Dudoso', cantidad: 223, dinero: 78000 },
+    { nivel: 'Deficiente', cantidad: 534, dinero: 42000 },
+    { nivel: 'CPP', cantidad: 412, dinero: 20000 },
+    { nivel: 'Normal', cantidad: 1200, dinero: 5000 }
 ];
 
 // Trend data for area chart
@@ -168,5 +169,5 @@ export const trendData = [
 
 // High risk clients (filtered from mockClients for dashboard table)
 export const highRiskClients = mockClients.filter(
-    client => client.nivelRiesgo === 'Crítico' || client.nivelRiesgo === 'Alto'
+    client => client.clasificacionSBS === 'Pérdida' || client.clasificacionSBS === 'Dudoso'
 );

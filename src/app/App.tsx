@@ -1,5 +1,11 @@
-import { useState, useEffect } from 'react';
-import { AuthProvider, useAuth, ServiceType } from '@shared/contexts/AuthContext';
+import { useState, useEffect } from "react";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "@shared/api";
+import {
+  AuthProvider,
+  useAuth,
+  ServiceType,
+} from "@shared/contexts/AuthContext";
 import {
   FraudeSidebar,
   FraudeLoginScreen,
@@ -7,9 +13,18 @@ import {
   BatchPrediction,
   IndividualPrediction,
   RiskAnalysis,
-  ModelMonitoring
-} from '@modules/fraude';
-import { ClientPrediction, Dashboard as MorosidadDashboard, MorosidadSidebar, BatchPrediction as MorosidadBatchPrediction, EarlyWarnings, Simulation, ModelHealth } from '@modules/morosidad';
+  ModelMonitoring,
+} from "@modules/fraude";
+import {
+  ClientPrediction,
+  Dashboard as MorosidadDashboard,
+  MorosidadSidebar,
+  BatchPrediction as MorosidadBatchPrediction,
+  Strategy,
+  Simulation,
+  ModelHealth,
+  DashboardProvider,
+} from "@modules/morosidad";
 import {
   FugaSidebar,
   DashboardPage as FugaDashboard,
@@ -17,18 +32,18 @@ import {
   MLOpsPage as FugaMLOps,
   RiskIntelligencePage as FugaRiskIntelligence,
   CustomerDetailPage as FugaCustomerDetail,
-  CampaignsPage as FugaCampaigns
-} from '@modules/fuga';
-import type { FugaScreen } from '@modules/fuga';
-import { HomePage } from './pages/HomePage';
-import { AtmModule } from '@modules/atm/AtmModule';
-import { AuditoriaModule } from '@admin/auditoria/AuditoriaModule';
-import { GestionUsuariosModule } from '@admin/usuarios/GestionUsuariosModule';
-import { OtpVerificationScreen } from '@shared/components/OtpVerificationScreen';
-import { ForgotPasswordScreen } from '@shared/components/ForgotPasswordScreen';
-import { ChangePasswordScreen } from '@shared/components/ChangePasswordScreen';
+  CampaignsPage as FugaCampaigns,
+} from "@modules/fuga";
+import type { FugaScreen } from "@modules/fuga";
+import { HomePage } from "./pages/HomePage";
+import { AtmModule } from "@modules/atm/AtmModule";
+import { AuditoriaModule } from "@admin/auditoria/AuditoriaModule";
+import { GestionUsuariosModule } from "@admin/usuarios/GestionUsuariosModule";
+import { OtpVerificationScreen } from "@shared/components/OtpVerificationScreen";
+import { ForgotPasswordScreen } from "@shared/components/ForgotPasswordScreen";
+import { ChangePasswordScreen } from "@shared/components/ChangePasswordScreen";
 
-type AuthScreen = 'login' | 'otp' | 'forgot-password';
+type AuthScreen = "login" | "otp" | "forgot-password";
 
 function AppContent() {
   const {
@@ -45,32 +60,38 @@ function AppContent() {
     forgotPassword,
     hasAccessToService,
     isAdmin,
-    cancelMfa
+    cancelMfa,
   } = useAuth();
 
-  const [currentView, setCurrentView] = useState<'home' | ServiceType>('home');
-  const [currentScreen, setCurrentScreen] = useState('dashboard');
-  const [morosidadScreen, setMorosidadScreen] = useState('dashboard');
-  const [fugaScreen, setFugaScreen] = useState<FugaScreen>('dashboard');
-  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
-  const [loginError, setLoginError] = useState('');
-  const [otpError, setOtpError] = useState('');
-  const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
+  const [currentView, setCurrentView] = useState<"home" | ServiceType>("home");
+  const [currentScreen, setCurrentScreen] = useState("dashboard");
+  const [morosidadScreen, setMorosidadScreen] = useState("dashboard");
+  const [fugaScreen, setFugaScreen] = useState<FugaScreen>("dashboard");
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(
+    null,
+  );
+  const [loginError, setLoginError] = useState("");
+  const [otpError, setOtpError] = useState("");
+  const [authScreen, setAuthScreen] = useState<AuthScreen>("login");
 
   // Manejar cambio a pantalla OTP cuando se requiere MFA
   useEffect(() => {
     if (mfaState?.required) {
-      setAuthScreen('otp');
-      setLoginError('');
+      setAuthScreen("otp");
+      setLoginError("");
     }
   }, [mfaState]);
 
-  const handleLogin = async (username: string, password: string, _rememberPassword: boolean) => {
+  const handleLogin = async (
+    username: string,
+    password: string,
+    _rememberPassword: boolean,
+  ) => {
     const result = await login(username, password);
     if (!result.success && result.error) {
       setLoginError(result.error);
     } else {
-      setLoginError('');
+      setLoginError("");
     }
   };
 
@@ -79,8 +100,8 @@ function AppContent() {
     if (!result.success && result.error) {
       setOtpError(result.error);
     } else {
-      setOtpError('');
-      setAuthScreen('login');
+      setOtpError("");
+      setAuthScreen("login");
     }
   };
 
@@ -89,7 +110,7 @@ function AppContent() {
     if (!result.success && result.error) {
       setOtpError(result.error);
     } else {
-      setOtpError('');
+      setOtpError("");
     }
   };
 
@@ -98,9 +119,9 @@ function AppContent() {
   };
 
   const handleBackToLogin = () => {
-    setAuthScreen('login');
-    setLoginError('');
-    setOtpError('');
+    setAuthScreen("login");
+    setLoginError("");
+    setOtpError("");
     cancelMfa();
   };
 
@@ -109,24 +130,26 @@ function AppContent() {
     if (isAuthenticated && user) {
       if (!isAdmin()) {
         const serviceMap: Record<string, ServiceType> = {
-          'operario-morosidad': 'morosidad-detalle',
-          'operario-anomalias': 'anomalias-transaccionales',
-          'operario-demanda-efectivo': 'demanda-efectivo',
-          'operario-fuga-demanda': 'fuga-demanda',
+          "operario-morosidad": "morosidad-detalle",
+          "operario-anomalias": "anomalias-transaccionales",
+          "operario-demanda-efectivo": "demanda-efectivo",
+          "operario-fuga-demanda": "fuga-demanda",
         };
         const targetService = serviceMap[user.role];
         if (targetService) {
           setCurrentView(targetService);
         }
       } else {
-        if (currentView !== 'home' &&
-          currentView !== 'auditoria' &&
-          currentView !== 'gestion-usuarios' &&
-          currentView !== 'morosidad-detalle' &&
-          currentView !== 'anomalias-transaccionales' &&
-          currentView !== 'demanda-efectivo' &&
-          currentView !== 'fuga-demanda') {
-          setCurrentView('home');
+        if (
+          currentView !== "home" &&
+          currentView !== "auditoria" &&
+          currentView !== "gestion-usuarios" &&
+          currentView !== "morosidad-detalle" &&
+          currentView !== "anomalias-transaccionales" &&
+          currentView !== "demanda-efectivo" &&
+          currentView !== "fuga-demanda"
+        ) {
+          setCurrentView("home");
         }
       }
     }
@@ -138,8 +161,8 @@ function AppContent() {
       <ChangePasswordScreen
         onPasswordChanged={() => {
           finalizePasswordChange();
-          setAuthScreen('login');
-          setLoginError('');
+          setAuthScreen("login");
+          setLoginError("");
         }}
       />
     );
@@ -147,9 +170,9 @@ function AppContent() {
 
   const handleLogout = async () => {
     await logout();
-    setCurrentView('home');
-    setCurrentScreen('dashboard');
-    setAuthScreen('login');
+    setCurrentView("home");
+    setCurrentScreen("dashboard");
+    setAuthScreen("login");
   };
 
   const handleNavigate = (screen: string) => {
@@ -162,29 +185,29 @@ function AppContent() {
 
   const handleNavigateToCustomer = (id: number) => {
     setSelectedCustomerId(id);
-    setFugaScreen('cliente');
+    setFugaScreen("cliente");
   };
 
   const handleNavigateToService = (service: ServiceType) => {
     if (hasAccessToService(service)) {
       setCurrentView(service);
-      if (service === 'anomalias-transaccionales') {
-        setCurrentScreen('dashboard');
+      if (service === "anomalias-transaccionales") {
+        setCurrentScreen("dashboard");
       }
-      if (service === 'morosidad-detalle') {
-        setMorosidadScreen('dashboard');
+      if (service === "morosidad-detalle") {
+        setMorosidadScreen("dashboard");
       }
     }
   };
 
   const handleBackToHome = () => {
-    setCurrentView('home');
+    setCurrentView("home");
   };
 
   // PANTALLAS DE AUTENTICACIÓN
   if (!isAuthenticated) {
     // Pantalla de verificación OTP
-    if (authScreen === 'otp' && mfaState) {
+    if (authScreen === "otp" && mfaState) {
       return (
         <OtpVerificationScreen
           phoneHint={mfaState.phoneHint}
@@ -198,7 +221,7 @@ function AppContent() {
     }
 
     // Pantalla de olvidé mi contraseña
-    if (authScreen === 'forgot-password') {
+    if (authScreen === "forgot-password") {
       return (
         <ForgotPasswordScreen
           onSubmit={handleForgotPassword}
@@ -211,7 +234,7 @@ function AppContent() {
     return (
       <FraudeLoginScreen
         onLogin={handleLogin}
-        onForgotPassword={() => setAuthScreen('forgot-password')}
+        onForgotPassword={() => setAuthScreen("forgot-password")}
         loginError={loginError}
         isLoading={isLoading}
       />
@@ -221,47 +244,54 @@ function AppContent() {
   // PANTALLAS DE APLICACIÓN (Usuario autenticado)
 
   // Página Principal (HomePage) - Solo para admin
-  if (currentView === 'home' && isAdmin()) {
-    return <HomePage onNavigateToService={handleNavigateToService} onLogout={handleLogout} />;
+  if (currentView === "home" && isAdmin()) {
+    return (
+      <HomePage
+        onNavigateToService={handleNavigateToService}
+        onLogout={handleLogout}
+      />
+    );
   }
 
   // Módulo de Auditoría - Solo admin
-  if (currentView === 'auditoria') {
+  if (currentView === "auditoria") {
     return <AuditoriaModule onBack={handleBackToHome} />;
   }
 
   // Módulo de Gestión de Usuarios - Solo admin
-  if (currentView === 'gestion-usuarios') {
+  if (currentView === "gestion-usuarios") {
     return <GestionUsuariosModule onBack={handleBackToHome} />;
   }
 
   // Servicio: Morosidad Detalle
-  if (currentView === 'morosidad-detalle') {
+  if (currentView === "morosidad-detalle") {
     return (
-      <div className="min-h-screen bg-gray-50 flex">
-        <MorosidadSidebar
-          currentScreen={morosidadScreen}
-          onNavigate={handleMorosidadNavigate}
-          onBackToHome={isAdmin() ? handleBackToHome : undefined}
-          onLogout={handleLogout}
-        />
-        <div className="flex-1 ml-64">
-          {/* Page Content */}
-          <main className="p-8">
-            {morosidadScreen === 'dashboard' && <MorosidadDashboard />}
-            {morosidadScreen === 'individual' && <ClientPrediction />}
-            {morosidadScreen === 'batch' && <MorosidadBatchPrediction />}
-            {morosidadScreen === 'alerts' && <EarlyWarnings />}
-            {morosidadScreen === 'simulation' && <Simulation />}
-            {morosidadScreen === 'model-health' && <ModelHealth />}
-          </main>
+      <DashboardProvider>
+        <div className="min-h-screen bg-gray-50 flex">
+          <MorosidadSidebar
+            currentScreen={morosidadScreen}
+            onNavigate={handleMorosidadNavigate}
+            onBackToHome={isAdmin() ? handleBackToHome : undefined}
+            onLogout={handleLogout}
+          />
+          <div className="flex-1 ml-64">
+            {/* Page Content */}
+            <main className="p-8">
+              {morosidadScreen === "dashboard" && <MorosidadDashboard />}
+              {morosidadScreen === "individual" && <ClientPrediction />}
+              {morosidadScreen === "batch" && <MorosidadBatchPrediction />}
+              {morosidadScreen === "strategy" && <Strategy />}
+              {morosidadScreen === "simulation" && <Simulation />}
+              {morosidadScreen === "model-health" && <ModelHealth />}
+            </main>
+          </div>
         </div>
-      </div>
+      </DashboardProvider>
     );
   }
 
   // Servicio: Demanda Efectivo
-  if (currentView === 'demanda-efectivo') {
+  if (currentView === "demanda-efectivo") {
     return (
       <AtmModule
         currentScreen={currentScreen}
@@ -273,7 +303,7 @@ function AppContent() {
   }
 
   // Servicio: Fuga Demanda
-  if (currentView === 'fuga-demanda') {
+  if (currentView === "fuga-demanda") {
     return (
       <div className="min-h-screen bg-gray-50 flex">
         <FugaSidebar
@@ -284,7 +314,7 @@ function AppContent() {
         />
         <div className="flex-1 ml-64">
           <main className="p-8">
-            {fugaScreen === 'dashboard' && (
+            {fugaScreen === "dashboard" && (
               <FugaDashboard onNavigateToCustomer={handleNavigateToCustomer} />
             )}
             {fugaScreen === 'simulador' && <FugaSimulator />}
@@ -294,7 +324,7 @@ function AppContent() {
             {fugaScreen === 'cliente' && selectedCustomerId && (
               <FugaCustomerDetail
                 customerId={selectedCustomerId}
-                onBack={() => setFugaScreen('dashboard')}
+                onBack={() => setFugaScreen("dashboard")}
               />
             )}
           </main>
@@ -304,7 +334,7 @@ function AppContent() {
   }
 
   // Servicio: Anomalías Transaccionales (Detección de Fraude)
-  if (currentView === 'anomalias-transaccionales') {
+  if (currentView === "anomalias-transaccionales") {
     return (
       <div className="min-h-screen bg-gray-50 flex">
         <FraudeSidebar
@@ -315,11 +345,11 @@ function AppContent() {
         />
         <div className="flex-1 ml-64">
           <main className="p-8">
-            {currentScreen === 'dashboard' && <FraudeDashboard />}
-            {currentScreen === 'batch' && <BatchPrediction />}
-            {currentScreen === 'individual' && <IndividualPrediction />}
-            {currentScreen === 'risk-analysis' && <RiskAnalysis />}
-            {currentScreen === 'model-monitoring' && <ModelMonitoring />}
+            {currentScreen === "dashboard" && <FraudeDashboard />}
+            {currentScreen === "batch" && <BatchPrediction />}
+            {currentScreen === "individual" && <IndividualPrediction />}
+            {currentScreen === "risk-analysis" && <RiskAnalysis />}
+            {currentScreen === "model-monitoring" && <ModelMonitoring />}
           </main>
         </div>
       </div>
@@ -327,13 +357,20 @@ function AppContent() {
   }
 
   // Fallback a home
-  return <HomePage onNavigateToService={handleNavigateToService} onLogout={handleLogout} />;
+  return (
+    <HomePage
+      onNavigateToService={handleNavigateToService}
+      onLogout={handleLogout}
+    />
+  );
 }
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }

@@ -42,11 +42,16 @@ import {
 import { filterCustomers, predictBatch } from '../services/morosidadService';
 import type { BatchFilters, BatchAccountPrediction, RiskFactor } from '../types/morosidad.types';
 
-const COLORS = {
-    Crítico: '#dc2626',
-    Alto: '#ea580c',
-    Medio: '#f59e0b',
-    Bajo: '#22c55e'
+const SBS_COLORS: Record<string, string> = {
+    'Normal': '#10b981',
+    'CPP': '#f59e0b',
+    'Deficiente': '#f97316',
+    'Dudoso': '#ef4444',
+    'Pérdida': '#991b1b',
+};
+
+const SBS_RANGES: Record<string, string> = {
+    'Normal': '0-5%', 'CPP': '5-25%', 'Deficiente': '25-60%', 'Dudoso': '60-90%', 'Pérdida': '90-100%'
 };
 
 export function BatchPredictionPage() {
@@ -90,11 +95,12 @@ export function BatchPredictionPage() {
             enRiesgo,
             dineroEnRiesgo,
             promedioProb,
-            porNivel: {
-                Crítico: predictions.filter(c => c.nivelRiesgo === 'Crítico').length,
-                Alto: predictions.filter(c => c.nivelRiesgo === 'Alto').length,
-                Medio: predictions.filter(c => c.nivelRiesgo === 'Medio').length,
-                Bajo: predictions.filter(c => c.nivelRiesgo === 'Bajo').length
+            porSBS: {
+                Normal: predictions.filter(c => c.clasificacionSBS === 'Normal').length,
+                CPP: predictions.filter(c => c.clasificacionSBS === 'CPP').length,
+                Deficiente: predictions.filter(c => c.clasificacionSBS === 'Deficiente').length,
+                Dudoso: predictions.filter(c => c.clasificacionSBS === 'Dudoso').length,
+                Pérdida: predictions.filter(c => c.clasificacionSBS === 'Pérdida').length
             }
         };
     }, [predictions, currentThreshold]);
@@ -154,7 +160,7 @@ export function BatchPredictionPage() {
 
     const exportResults = () => {
         const csv = [
-            ['RecordID', 'ClienteID', 'Nombre', 'Edad', 'Educación', 'Estado Civil', 'Límite Crédito', 'Balance', 'Probabilidad Pago', 'Nivel Riesgo', 'Última Cuota'].join(','),
+            ['RecordID', 'ClienteID', 'Nombre', 'Edad', 'Educación', 'Estado Civil', 'Límite Crédito', 'Balance', 'Probabilidad Pago', 'Clasificación SBS', 'Última Cuota'].join(','),
             ...predictions.map(c => [
                 c.recordId,
                 c.idCustomer,
@@ -165,7 +171,7 @@ export function BatchPredictionPage() {
                 c.limitBal,
                 c.balance,
                 c.probabilidadPago.toFixed(2),
-                c.nivelRiesgo,
+                c.clasificacionSBS,
                 c.estimatedLoss?.toFixed(2) || '0.00'
             ].join(','))
         ].join('\n');
@@ -177,14 +183,6 @@ export function BatchPredictionPage() {
         a.download = `prediccion_lotes_${new Date().toISOString().split('T')[0]}.csv`;
         a.click();
     };
-
-    // Datos para gráficos
-    const riskDistributionData = [
-        { nivel: 'Crítico', cantidad: batchStats.porNivel.Crítico },
-        { nivel: 'Alto', cantidad: batchStats.porNivel.Alto },
-        { nivel: 'Medio', cantidad: batchStats.porNivel.Medio },
-        { nivel: 'Bajo', cantidad: batchStats.porNivel.Bajo }
-    ];
 
     const educationDistribution = useMemo(() => {
         const groups = ['Primaria', 'Secundaria', 'Universitaria', 'Postgrado'];
@@ -315,11 +313,6 @@ export function BatchPredictionPage() {
                             value={filterInputs.fechaHasta}
                             onChange={(e) => setFilterInputs({ ...filterInputs, fechaHasta: e.target.value })}
                         />
-                        <Input
-                            type="date"
-                            value={filterInputs.fechaHasta}
-                            onChange={(e) => setFilterInputs({ ...filterInputs, fechaHasta: e.target.value })}
-                        />
                     </div>
                 </div>
 
@@ -441,23 +434,23 @@ export function BatchPredictionPage() {
 
                     {/* Gráficos de distribución */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* Distribución por nivel de riesgo */}
+                        {/* Distribución por clasificación SBS */}
                         <Card className="p-6 bg-white border-0 shadow-sm">
-                            <h3 className="mb-4 font-semibold text-zinc-900">Distribución por Nivel de Riesgo</h3>
+                            <h3 className="mb-4 font-semibold text-zinc-900">Distribución por Clasificación SBS</h3>
                             <ResponsiveContainer width="100%" height={300}>
                                 <PieChart>
                                     <Pie
-                                        data={riskDistributionData}
+                                        data={Object.entries(batchStats.porSBS).map(([cat, cant]) => ({ categoria: `${cat} (${SBS_RANGES[cat]})`, cantidad: cant }))}
                                         cx="50%"
                                         cy="50%"
                                         labelLine={false}
-                                        label={(entry) => `${entry.nivel}: ${entry.cantidad}`}
+                                        label={(entry: any) => `${entry.categoria}: ${entry.cantidad}`}
                                         outerRadius={100}
                                         fill="#8884d8"
                                         dataKey="cantidad"
                                     >
-                                        {riskDistributionData.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={COLORS[entry.nivel as keyof typeof COLORS]} />
+                                        {Object.keys(batchStats.porSBS).map((cat, index) => (
+                                            <Cell key={`cell-${index}`} fill={SBS_COLORS[cat] || '#6b7280'} />
                                         ))}
                                     </Pie>
                                     <Tooltip />
@@ -497,21 +490,21 @@ export function BatchPredictionPage() {
                             </ResponsiveContainer>
                         </Card>
 
-                        {/* Resumen por nivel de riesgo */}
+                        {/* Resumen por Clasificación SBS */}
                         <Card className="p-6 bg-white border-0 shadow-sm">
-                            <h3 className="mb-4 font-semibold text-zinc-900">Resumen por Nivel de Riesgo</h3>
+                            <h3 className="mb-4 font-semibold text-zinc-900">Resumen por Clasificación SBS</h3>
                             <div className="space-y-3">
-                                {Object.entries(batchStats.porNivel).map(([nivel, cantidad]) => (
+                                {Object.entries(batchStats.porSBS).map(([cat, cantidad]) => (
                                     <div
-                                        key={nivel}
+                                        key={cat}
                                         className="flex items-center justify-between p-3 bg-zinc-50 rounded-lg"
                                     >
                                         <div className="flex items-center gap-3">
                                             <div
                                                 className="w-4 h-4 rounded"
-                                                style={{ backgroundColor: COLORS[nivel as keyof typeof COLORS] }}
+                                                style={{ backgroundColor: SBS_COLORS[cat] || '#6b7280' }}
                                             />
-                                            <span className="text-sm font-medium text-zinc-700">{nivel}</span>
+                                            <span className="text-sm font-medium text-zinc-700">{cat} ({SBS_RANGES[cat]})</span>
                                         </div>
                                         <div className="text-right">
                                             <p className="text-sm font-bold text-zinc-900">{cantidad} cuentas</p>
@@ -552,7 +545,7 @@ export function BatchPredictionPage() {
                                         <th className="text-left py-3 px-6 text-xs text-zinc-500 font-medium uppercase tracking-wider">Estado Civil</th>
                                         <th className="text-right py-3 px-6 text-xs text-zinc-500 font-medium uppercase tracking-wider">Límite</th>
                                         <th className="text-right py-3 px-6 text-xs text-zinc-500 font-medium uppercase tracking-wider">Prob. Pago</th>
-                                        <th className="text-left py-3 px-6 text-xs text-zinc-500 font-medium uppercase tracking-wider">Nivel Riesgo</th>
+                                        <th className="text-left py-3 px-6 text-xs text-zinc-500 font-medium uppercase tracking-wider">Clase SBS</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-zinc-100">
@@ -568,9 +561,9 @@ export function BatchPredictionPage() {
                                             <td className="py-3 px-6 text-sm">
                                                 <span
                                                     className="px-2 py-1 rounded-full text-xs text-white font-medium"
-                                                    style={{ backgroundColor: COLORS[pred.nivelRiesgo as keyof typeof COLORS] || '#6b7280' }}
+                                                    style={{ backgroundColor: SBS_COLORS[pred.clasificacionSBS] || '#6b7280' }}
                                                 >
-                                                    {pred.nivelRiesgo}
+                                                    {pred.clasificacionSBS}
                                                 </span>
                                             </td>
                                         </tr>
@@ -677,9 +670,9 @@ export function BatchPredictionPage() {
                                     <p className="text-sm text-blue-800">
                                         → Probabilidad promedio de pago: {batchStats.promedioProb.toFixed(1)}%
                                     </p>
-                                    {batchStats.porNivel.Crítico > 0 && (
+                                    {(batchStats.porSBS.Pérdida + batchStats.porSBS.Dudoso) > 0 && (
                                         <p className="text-sm text-red-700 font-medium">
-                                            → ⚠️ {batchStats.porNivel.Crítico} cuentas requieren atención inmediata (riesgo crítico)
+                                            → ⚠️ {batchStats.porSBS.Pérdida + batchStats.porSBS.Dudoso} cuentas requieren atención inmediata (SBS Dudoso/Pérdida)
                                         </p>
                                     )}
                                 </div>

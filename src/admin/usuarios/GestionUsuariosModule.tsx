@@ -5,6 +5,7 @@ import { Input } from '@shared/components/ui/input';
 import { Badge } from '@shared/components/ui/badge';
 import { CreateUserModal } from './components/CreateUserModal';
 import { PasswordRequestsTab } from './components/PasswordRequestsTab';
+import { apiRequest } from '@shared/services/apiClient';
 
 interface GestionUsuariosModuleProps {
   onBack: () => void;
@@ -38,10 +39,7 @@ export function GestionUsuariosModule({ onBack }: GestionUsuariosModuleProps) {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/admin/users', {
-        credentials: 'include'
-      });
-      const data = await response.json();
+      const data = await apiRequest<{ success: boolean; data: User[] }>('/admin/users');
       if (data.success) {
         setUsers(data.data);
       }
@@ -56,11 +54,10 @@ export function GestionUsuariosModule({ onBack }: GestionUsuariosModuleProps) {
     if (!confirm('¿Está seguro de eliminar este usuario?')) return;
 
     try {
-      const response = await fetch(`http://localhost:8080/api/admin/users/${userId}`, {
-        method: 'DELETE',
-        credentials: 'include'
-      });
-      const data = await response.json();
+      const data = await apiRequest<{ success: boolean; message?: string }>(
+        `/admin/users/${userId}`,
+        'DELETE'
+      );
       if (data.success) {
         fetchUsers();
       } else {
