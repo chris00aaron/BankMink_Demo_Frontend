@@ -49,6 +49,91 @@ const COUNTRY_COLORS: Record<string, string> = {
 
 const AGE_GROUPS = ['18-25', '26-35', '36-45', '46-55', '56+'];
 
+// ── Hybrid Priority Sampling Configuration ─────────────────────────────
+// Top-N + Random Sample: guarantees critical customers are always visible
+// while maintaining statistical diversity from the rest of the portfolio.
+const SAMPLE_CONFIG = {
+    TOP_N: 100,            // Always include the N highest-risk customers
+    RANDOM_PERCENT: 0.10,  // 10% random sample from the remaining pool
+    MIN_TOTAL: 50,         // Floor: never show fewer than this
+    MAX_TOTAL: 500,        // Ceiling: cap to keep charts readable
+} as const;
+
+/** Metadata describing the sample used for the current dashboard render. */
+interface SampleMeta {
+    totalAnalyzed: number;   // Total analyzed customers in DB
+    topN: number;            // How many came from the Top-N priority slice
+    randomCount: number;     // How many came from the random slice
+    totalSample: number;     // Final sample size shown in charts
+}
+
+/**
+ * Builds a hybrid priority sample from the analyzed customer pool.
+ *
+ * Strategy (used by SAS Risk Management / Salesforce Einstein):
+ *   1. ALWAYS include the Top-N highest-risk customers (never missed).
+ *   2. Random sample of RANDOM_PERCENT from the remaining pool.
+ *   3. Apply MIN/MAX caps for predictable chart performance.
+ *
+ * @param analyzed - Full list of analyzed customers (risk !== 50)
+ * @returns { customers, meta } - Sampled list + metadata for UI indicator
+ */
+function buildHybridSample(analyzed: CustomerDashboard[]): {
+    customers: CustomerDashboard[];
+    meta: SampleMeta;
+} {
+    const totalAnalyzed = analyzed.length;
+
+    // Edge case: if pool is smaller than MIN, return everything
+    if (totalAnalyzed <= SAMPLE_CONFIG.MIN_TOTAL) {
+        return {
+            customers: analyzed,
+            meta: { totalAnalyzed, topN: totalAnalyzed, randomCount: 0, totalSample: totalAnalyzed },
+        };
+    }
+
+    // 1. Sort descending by risk to identify critical customers
+    const sorted = [...analyzed].sort((a, b) => b.risk - a.risk);
+
+    // 2. Slice the Top-N highest-risk (always visible)
+    const topNCount = Math.min(SAMPLE_CONFIG.TOP_N, sorted.length);
+    const topSlice = sorted.slice(0, topNCount);
+    const topIds = new Set(topSlice.map(c => c.id));
+
+    // 3. Shuffle remaining pool (Fisher-Yates) for unbiased random sample
+    const remaining = sorted.filter(c => !topIds.has(c.id));
+    for (let i = remaining.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [remaining[i], remaining[j]] = [remaining[j], remaining[i]];
+    }
+    const randomCount = Math.ceil(remaining.length * SAMPLE_CONFIG.RANDOM_PERCENT);
+    const randomSlice = remaining.slice(0, randomCount);
+
+    // 4. Combine and apply floor / ceiling caps
+    let combined = [...topSlice, ...randomSlice];
+
+    // Floor: if still below MIN, pad from remaining
+    if (combined.length < SAMPLE_CONFIG.MIN_TOTAL) {
+        const needed = SAMPLE_CONFIG.MIN_TOTAL - combined.length;
+        combined = [...combined, ...remaining.slice(randomCount, randomCount + needed)];
+    }
+
+    // Ceiling: cap to MAX
+    if (combined.length > SAMPLE_CONFIG.MAX_TOTAL) {
+        combined = combined.slice(0, SAMPLE_CONFIG.MAX_TOTAL);
+    }
+
+    return {
+        customers: combined,
+        meta: {
+            totalAnalyzed,
+            topN: topSlice.length,
+            randomCount: combined.length - topSlice.length,
+            totalSample: combined.length,
+        },
+    };
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────
 const getQuadrant = (risk: number, balance: number) => {
     if (risk > RISK_THRESHOLD && balance > BALANCE_THRESHOLD) return 'danger';
@@ -198,8 +283,9 @@ const RiskIntelligencePage: React.FC = () => {
 
     // ── Customer data (for Bubble Chart) ─────────────────────────────────
     const [customers, setCustomers] = useState<CustomerDashboard[]>([]);
+    const [sampleMeta, setSampleMeta] = useState<SampleMeta | null>(null);
 
-    // Fetch strategy KPIs + scatterData + ALL customers for Bubble chart
+    // Fetch strategy KPIs + scatterData + customers for Bubble chart
     useEffect(() => {
         const load = async () => {
             try {
@@ -213,7 +299,24 @@ const RiskIntelligencePage: React.FC = () => {
                         retentionRate: parseFloat(String(data.kpis.retentionRate ?? 0)),
                     });
                 }
-                setCustomers(data.content || []);
+
+                // ── Hybrid Priority Sampling (Top-N + Random) ─────────────
+                const allCustomers = data.content || [];
+
+                // Filter only analyzed customers (risk !== 50 is the
+                // server-side default assigned to customers without a
+                // prediction — they haven't been scored yet).
+                let analyzedPool = allCustomers.filter(c => c.risk !== 50);
+
+                // Graceful fallback: if nobody has been analyzed yet,
+                // use the entire dataset so the dashboard is never empty.
+                if (analyzedPool.length === 0 && allCustomers.length > 0) {
+                    analyzedPool = allCustomers;
+                }
+
+                const { customers: sampled, meta } = buildHybridSample(analyzedPool);
+                setCustomers(sampled);
+                setSampleMeta(meta);
             } catch (e) {
                 console.error('Error cargando KPIs estratégicos:', e);
             } finally {
@@ -228,7 +331,10 @@ const RiskIntelligencePage: React.FC = () => {
         const load = async () => {
             try {
                 const data = await ChurnService.getGeographyStats();
-                setCountryData(data);
+                // Filtro estricto para mostrar solo los 3 países oficiales definidos en el diseño
+                const officialCountries = ['Spain', 'France', 'Germany', 'España', 'Francia', 'Alemania'];
+                const filteredData = data.filter(c => officialCountries.includes(c.country));
+                setCountryData(filteredData);
             } catch (e) {
                 console.error('Error cargando datos geográficos:', e);
                 setErrorGeo('No se pudieron cargar los datos geográficos.');
@@ -356,11 +462,14 @@ const RiskIntelligencePage: React.FC = () => {
         });
     }, [countryData]);
 
-    // ── Geography totals ─────────────────────────────────────────────────
-    const totalCustomers = countryData.reduce((sum, c) => sum + c.totalCustomers, 0);
-    const totalHighRisk = countryData.reduce((sum, c) => sum + c.highRisk, 0);
+    // ── Global header totals (from server-side KPIs — 100% of the DB) ────
+    // These MUST come from kpis (which uses customerRepository.count()),
+    // NOT from the geography API (which only loads up to 2000 clients
+    // and excludes those without financial data).
+    const totalCustomersGlobal = kpis?.totalCustomers ?? 0;
+    const totalHighRiskGlobal = kpis?.highRiskCount ?? 0;
 
-    const loading = loadingKpis && loadingGeo;
+    const loading = loadingKpis || loadingGeo;
 
     if (loading) {
         return (
@@ -386,11 +495,11 @@ const RiskIntelligencePage: React.FC = () => {
                 <div className="flex gap-4">
                     <div className="bg-white px-4 py-2 rounded-lg border border-slate-100 shadow-sm text-right">
                         <p className="text-xs text-slate-500 uppercase">Total Clientes</p>
-                        <p className="text-2xl font-bold text-slate-800">{totalCustomers.toLocaleString('es-ES')}</p>
+                        <p className="text-2xl font-bold text-slate-800">{totalCustomersGlobal.toLocaleString('es-ES')}</p>
                     </div>
                     <div className="bg-red-50 px-4 py-2 rounded-lg border border-red-100 text-right">
                         <p className="text-xs text-red-600 uppercase">Alto Riesgo Global</p>
-                        <p className="text-2xl font-bold text-red-600">{totalHighRisk.toLocaleString('es-ES')}</p>
+                        <p className="text-2xl font-bold text-red-600">{totalHighRiskGlobal.toLocaleString('es-ES')}</p>
                     </div>
                 </div>
             </div>
@@ -414,10 +523,20 @@ const RiskIntelligencePage: React.FC = () => {
                     {/* SCATTER — Matriz de Prioridad */}
                     <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
                         <div className="mb-4">
-                            <h3 className="text-lg font-bold text-slate-800">Matriz de Prioridad de Retención</h3>
-                            <p className="text-sm text-slate-500">
-                                Clientes analizados. Cada punto representa un cliente — posición por probabilidad de fuga vs balance.
-                            </p>
+                            <div className="flex items-start justify-between">
+                                <div>
+                                    <h3 className="text-lg font-bold text-slate-800">Matriz de Prioridad de Retención</h3>
+                                    <p className="text-sm text-slate-500 mt-0.5">
+                                        Muestra estratificada: hasta 150 clientes por cuadrante (máx. 600 total).
+                                        Cada punto representa un cliente real — posición por probabilidad de fuga vs balance.
+                                    </p>
+                                </div>
+                                {scatterData.length > 0 && (
+                                    <span className="ml-4 flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100">
+                                        {scatterData.length} clientes
+                                    </span>
+                                )}
+                            </div>
                         </div>
                         <div className="h-80 w-full">
                             <ResponsiveContainer width="100%" height="100%">
@@ -625,10 +744,21 @@ const RiskIntelligencePage: React.FC = () => {
                 {/* Bubble Chart */}
                 <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
                     <div className="mb-4">
-                        <h3 className="text-lg font-bold text-slate-800">Mapa de Riesgo: Edad × Productos</h3>
-                        <p className="text-sm text-slate-500">
-                            Cada burbuja = un segmento demográfico. Tamaño = cantidad de clientes. Color = riesgo promedio de fuga.
-                        </p>
+                        <div className="flex items-start justify-between">
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-800">Mapa de Riesgo: Edad × Productos</h3>
+                                <p className="text-sm text-slate-500 mt-0.5">
+                                    Muestreo híbrido: los {sampleMeta?.topN ?? 0} clientes de mayor riesgo (siempre visibles)
+                                    + muestra aleatoria del resto. Cada burbuja = segmento demográfico.
+                                    Tamaño = cantidad de clientes. Color = riesgo promedio.
+                                </p>
+                            </div>
+                            {sampleMeta && (
+                                <span className="ml-4 flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full bg-violet-50 text-violet-600 border border-violet-100 whitespace-nowrap">
+                                    {sampleMeta.totalSample} de {sampleMeta.totalAnalyzed} analizados
+                                </span>
+                            )}
+                        </div>
                     </div>
                     <div className="h-80 w-full">
                         <ResponsiveContainer width="100%" height="100%">

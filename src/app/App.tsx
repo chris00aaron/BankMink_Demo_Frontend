@@ -33,6 +33,7 @@ import {
   RiskIntelligencePage as FugaRiskIntelligence,
   CustomerDetailPage as FugaCustomerDetail,
   CampaignsPage as FugaCampaigns,
+  ExecutiveInsightsPage as FugaExecutive,
 } from "@modules/fuga";
 import type { FugaScreen } from "@modules/fuga";
 import { HomePage } from "./pages/HomePage";
@@ -329,6 +330,7 @@ function AppContent() {
             {fugaScreen === 'mlops' && <FugaMLOps />}
             {fugaScreen === 'geografia' && <FugaRiskIntelligence />}
             {fugaScreen === 'campañas' && <FugaCampaigns />}
+            {fugaScreen === 'executive' && <FugaExecutive />}
             {fugaScreen === 'cliente' && selectedCustomerId && (
               <FugaCustomerDetail
                 customerId={selectedCustomerId}

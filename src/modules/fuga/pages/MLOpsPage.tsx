@@ -26,7 +26,8 @@ import {
 import { ChurnService } from '../churn.service';
 import type { TrainResult, MLOpsMetrics, PerformanceStatus } from '../types';
 
-// Curva ROC sintética para visualización (datos reales de AUC vienen del backend)
+// Curva ROC sintética para referencia visual — la forma no representa el modelo real.
+// El valor AUC real viene del backend y se muestra en los anillos de métricas.
 const rocCurveData = [
     { fpr: 0, tpr: 0 },
     { fpr: 0.05, tpr: 0.52 },
@@ -43,18 +44,19 @@ const rocCurveData = [
     { fpr: 1.0, tpr: 1.0 },
 ];
 
-// Curva de pérdida sintética para visualización (XGBoost no usa epochs lineales)
+// Convergencia de XGBoost por número de árboles (referencia visual).
+// XGBoost no entrena por epochs — cada paso añade un árbol al ensemble.
 const trainingLossData = [
-    { epoch: 1, training: 0.85, validation: 0.88 },
-    { epoch: 2, training: 0.62, validation: 0.68 },
-    { epoch: 3, training: 0.45, validation: 0.52 },
-    { epoch: 4, training: 0.32, validation: 0.40 },
-    { epoch: 5, training: 0.24, validation: 0.33 },
-    { epoch: 6, training: 0.18, validation: 0.28 },
-    { epoch: 7, training: 0.14, validation: 0.24 },
-    { epoch: 8, training: 0.11, validation: 0.21 },
-    { epoch: 9, training: 0.09, validation: 0.19 },
-    { epoch: 10, training: 0.07, validation: 0.17 },
+    { epoch: 10,  training: 0.85, validation: 0.88 },
+    { epoch: 20,  training: 0.62, validation: 0.68 },
+    { epoch: 30,  training: 0.45, validation: 0.52 },
+    { epoch: 40,  training: 0.32, validation: 0.40 },
+    { epoch: 50,  training: 0.24, validation: 0.33 },
+    { epoch: 60,  training: 0.18, validation: 0.28 },
+    { epoch: 70,  training: 0.14, validation: 0.24 },
+    { epoch: 80,  training: 0.11, validation: 0.21 },
+    { epoch: 90,  training: 0.09, validation: 0.19 },
+    { epoch: 100, training: 0.07, validation: 0.17 },
 ];
 
 // Circular progress ring component
@@ -171,6 +173,34 @@ const MLOpsPage: React.FC = () => {
     useEffect(() => {
         fetchMonitorStatus();
     }, []);
+
+    // Handle metrics export
+    const handleExportMetrics = () => {
+        if (!metrics) return;
+        const exportData = {
+            exportedAt: new Date().toISOString(),
+            model: {
+                status: metrics.modelStatus,
+                version: metrics.modelVersion,
+                lastTrainingDate: metrics.lastTrainingDate,
+                totalPredictions: metrics.totalPredictions,
+            },
+            performance: {
+                precision: metrics.precision,
+                recall: metrics.recall,
+                f1Score: metrics.f1Score,
+                aucRoc: metrics.aucRoc,
+            },
+            monitor: monitorStatus ?? null,
+        };
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `churn_mlops_metrics_${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
 
     // Handle training trigger
     const handleTrainClick = () => {
@@ -365,7 +395,10 @@ const MLOpsPage: React.FC = () => {
                             </>
                         )}
                     </button>
-                    <button className="flex items-center gap-2 px-4 py-2.5 bg-white text-slate-700 rounded-lg hover:bg-slate-50 transition-all font-medium text-sm border border-slate-200">
+                    <button
+                        onClick={handleExportMetrics}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-white text-slate-700 rounded-lg hover:bg-slate-50 transition-all font-medium text-sm border border-slate-200"
+                    >
                         <Download className="w-4 h-4" />
                         Exportar Métricas
                     </button>
@@ -418,12 +451,27 @@ const MLOpsPage: React.FC = () => {
                     </div>
                     <div>
                         <h2 className="text-xl font-semibold text-slate-800">Métricas de Rendimiento</h2>
-                        <p className="text-sm text-slate-500">Última evaluación: {new Date().toLocaleDateString()}</p>
+                        <p className="text-sm text-slate-500">
+                            Último entrenamiento: {metrics.lastTrainingDate || 'N/A'}
+                        </p>
                     </div>
-                    <div className="ml-auto flex items-center gap-2 bg-emerald-50 px-3 py-1.5 rounded-full">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                        <span className="text-sm font-medium text-emerald-700">Modelo Óptimo</span>
-                    </div>
+                    {monitorStatus && monitorStatus.status !== 'no_evaluations' && monitorStatus.status !== 'error' && monitorStatus.status !== 'insufficient_data' && (
+                        <div className={`ml-auto flex items-center gap-2 px-3 py-1.5 rounded-full ${
+                            monitorStatus.status === 'healthy'
+                                ? 'bg-emerald-50'
+                                : 'bg-red-50'
+                        }`}>
+                            {monitorStatus.status === 'healthy'
+                                ? <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                : <AlertTriangle className="w-4 h-4 text-red-600" />
+                            }
+                            <span className={`text-sm font-medium ${
+                                monitorStatus.status === 'healthy' ? 'text-emerald-700' : 'text-red-700'
+                            }`}>
+                                {monitorStatus.status === 'healthy' ? 'Modelo Óptimo' : 'Modelo Degradado'}
+                            </span>
+                        </div>
+                    )}
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-8 justify-items-center">
@@ -600,7 +648,7 @@ const MLOpsPage: React.FC = () => {
                 {/* ROC Curve */}
                 <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
                     <h3 className="text-lg font-semibold text-slate-800 mb-4">Curva ROC</h3>
-                    <p className="text-sm text-slate-500 mb-6">AUC = {metrics.aucRoc}% • Umbral óptimo = 0.45</p>
+                    <p className="text-sm text-slate-500 mb-6">Referencia visual • Umbral óptimo = 0.45 • AUC real en anillos superiores</p>
                     <div className="h-72">
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={rocCurveData}>
@@ -650,15 +698,15 @@ const MLOpsPage: React.FC = () => {
 
                 {/* Training Loss */}
                 <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
-                    <h3 className="text-lg font-semibold text-slate-800 mb-4">Pérdida de Entrenamiento</h3>
-                    <p className="text-sm text-slate-500 mb-6">Training vs Validation • 10 epochs</p>
+                    <h3 className="text-lg font-semibold text-slate-800 mb-4">Convergencia del Modelo</h3>
+                    <p className="text-sm text-slate-500 mb-6">Training vs Validation • 100 árboles (referencia visual)</p>
                     <div className="h-72">
                         <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={trainingLossData}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
                                 <XAxis
                                     dataKey="epoch"
-                                    label={{ value: 'Epoch', position: 'bottom', offset: -5 }}
+                                    label={{ value: 'Árboles', position: 'bottom', offset: -5 }}
                                     stroke="#94A3B8"
                                 />
                                 <YAxis
@@ -716,7 +764,7 @@ const MLOpsPage: React.FC = () => {
 
             {/* Info Notice */}
             <div className="mt-6 text-center text-sm text-slate-400">
-                <p>📊 Métricas de rendimiento obtenidas del servidor en tiempo real. Curvas ROC y Loss mostradas como referencia visual.</p>
+                <p>📊 Métricas de rendimiento obtenidas del servidor en tiempo real. Curva ROC y gráfico de convergencia mostrados como referencia visual — no representan la curva real del modelo.</p>
             </div>
         </div>
     );

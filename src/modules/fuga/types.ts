@@ -37,6 +37,7 @@ export interface CustomerDashboard {
     tenure?: number;   // Years as customer
     since?: string;    // Year registered
     products?: number; // Number of products
+    email?: string;    // Contact email — used in customer detail contact section
 }
 
 // Datos extendidos del cliente para dashboard profesional
@@ -50,7 +51,10 @@ export interface CustomerRiskDetail {
     products: number;
     tenure: number;
     since: string;
+    score?: number;
+    age?: number;
     contact?: string;
+    email?: string;
 }
 
 // Factor de riesgo para XAI (Explicabilidad)
