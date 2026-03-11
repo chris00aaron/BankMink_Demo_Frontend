@@ -219,7 +219,7 @@ function AppContent() {
     if (authScreen === "otp" && mfaState) {
       return (
         <OtpVerificationScreen
-          phoneHint={mfaState.phoneHint}
+          emailHint={mfaState.emailHint}
           onVerify={handleVerifyOtp}
           onResendCode={handleResendOtp}
           onBack={handleBackToLogin}

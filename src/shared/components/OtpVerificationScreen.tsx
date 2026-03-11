@@ -5,7 +5,7 @@ import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
 
 interface OtpVerificationScreenProps {
-    phoneHint: string;
+    emailHint: string;
     onVerify: (code: string) => Promise<void>;
     onResendCode: () => Promise<void>;
     onBack: () => void;
@@ -13,8 +13,11 @@ interface OtpVerificationScreenProps {
     isLoading?: boolean;
 }
 
+const MAX_RESENDS = 3;
+const RESEND_COOLDOWN_SECONDS = 30;
+
 export function OtpVerificationScreen({
-    phoneHint,
+    emailHint,
     onVerify,
     onResendCode,
     onBack,
@@ -25,6 +28,7 @@ export function OtpVerificationScreen({
     const [timeLeft, setTimeLeft] = useState(300); // 5 minutos
     const [canResend, setCanResend] = useState(false);
     const [resendCooldown, setResendCooldown] = useState(0);
+    const [resendCount, setResendCount] = useState(0);
     const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
     // Timer de expiración
@@ -105,13 +109,26 @@ export function OtpVerificationScreen({
     };
 
     const handleResend = async () => {
-        if (resendCooldown > 0) return;
+        if (resendCooldown > 0 || resendCount >= MAX_RESENDS) return;
         await onResendCode();
+        setResendCount(prev => prev + 1);
         setTimeLeft(300);
         setCanResend(false);
-        setResendCooldown(60); // 60 segundos antes de poder reenviar
+        setResendCooldown(RESEND_COOLDOWN_SECONDS);
         setCode(['', '', '', '', '', '']);
         inputRefs.current[0]?.focus();
+    };
+
+    const isResendDisabled = resendCooldown > 0 || resendCount >= MAX_RESENDS || isLoading;
+
+    const getResendText = () => {
+        if (resendCount >= MAX_RESENDS) {
+            return 'Máximo de reenvíos alcanzado';
+        }
+        if (resendCooldown > 0) {
+            return `Reenviar código en ${resendCooldown}s`;
+        }
+        return '¿No recibiste el correo? Reenviar';
     };
 
     return (
@@ -134,7 +151,7 @@ export function OtpVerificationScreen({
                         <p className="text-gray-600 text-sm">
                             Ingresa el código de 6 dígitos enviado a
                         </p>
-                        <p className="text-blue-600 font-medium">{phoneHint}</p>
+                        <p className="text-blue-600 font-medium">{emailHint}</p>
                     </div>
 
                     {/* Timer */}
@@ -186,15 +203,18 @@ export function OtpVerificationScreen({
                     <div className="text-center">
                         <button
                             onClick={handleResend}
-                            disabled={resendCooldown > 0 || isLoading}
+                            disabled={isResendDisabled}
                             className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 
                          disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
                         >
-                            <RefreshCw className={`w-4 h-4 ${resendCooldown > 0 ? '' : 'hover:animate-spin'}`} />
-                            {resendCooldown > 0
-                                ? `Reenviar código en ${resendCooldown}s`
-                                : '¿No recibiste el código? Reenviar'}
+                            <RefreshCw className={`w-4 h-4 ${!isResendDisabled ? 'hover:animate-spin' : ''}`} />
+                            {getResendText()}
                         </button>
+                        {resendCount > 0 && resendCount < MAX_RESENDS && (
+                            <p className="text-xs text-gray-400 mt-1">
+                                Reenvíos restantes: {MAX_RESENDS - resendCount}
+                            </p>
+                        )}
                     </div>
 
                     {/* Back Button */}
