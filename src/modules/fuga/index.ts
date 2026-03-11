@@ -18,4 +18,5 @@ export { default as GeographyPage } from './pages/GeographyPage';
 export { default as RiskIntelligencePage } from './pages/RiskIntelligencePage';
 export { default as CustomerDetailPage } from './pages/CustomerDetailPage';
 export { default as CampaignsPage } from './pages/CampaignsPage';
+export { default as ExecutiveInsightsPage } from './pages/ExecutiveInsightsPage';
 

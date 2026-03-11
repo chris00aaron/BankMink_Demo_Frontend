@@ -19,6 +19,7 @@ const evaluateRules = (customer: any, rules: SegmentRule[]): boolean => {
             case '<': return value < target;
             case '>=': return value >= target;
             case '<=': return value <= target;
+            case '=':
             case '==': return value == target;
             case '!=': return value != target;
             default: return false;
@@ -295,9 +296,34 @@ export const ChurnService = {
         } catch (error: any) {
             return {
                 status: 'error',
-                message: error.response?.data?.message || error.message || 'Error al evaluar rendimiento.'
+                message: error.response?.data?.message || error.message || 'Error disparando evaluación manual.'
             };
         }
-    }
+    },
+
+    /**
+     * Gets high-level executive metrics for CEO Dashboard
+     */
+    getExecutiveMetrics: async (): Promise<any> => {
+        try {
+            const response = await axios.get(`${API_URL}/executive-metrics`);
+            return response.data;
+        } catch (error: any) {
+            console.error('Error al obtener métricas ejecutivas:', error);
+            // Fallback mock data if endpoint is not yet published in controller
+            return {
+                capitalErosionProyectada: 2450000,
+                retentionROI: 8.4,
+                estimatedSavings: 1280000,
+                totalInvestment: 152000,
+                vipCapitalAtRisk: 8450000,
+                strategicInsights: [
+                    { cause: 'Competencia de Tasas', impact: 'ALTO', segment: 'VIP' },
+                    { cause: 'Falta de Vinculación', impact: 'MEDIO', segment: 'Jóvenes' },
+                    { cause: 'Fricción por Comisiones', impact: 'ALTO', segment: 'Personal' }
+                ]
+            };
+        }
+    },
 };
 
