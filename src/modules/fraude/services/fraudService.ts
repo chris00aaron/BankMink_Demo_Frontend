@@ -52,6 +52,8 @@ export interface AlertsParams {
     order?: 'asc' | 'desc';
     veredicto?: string;
     search?: string;
+    /** 'today' → predicciones de hoy · 'week' → últimos 7 días · 'all' → sin límite */
+    dateFilter?: 'today' | 'week' | 'all';
 }
 
 // ==================== SERVICIO ====================
@@ -72,6 +74,7 @@ export const fraudService = {
         if (params.order) queryParams.append('order', params.order);
         if (params.veredicto && params.veredicto !== 'TODO') queryParams.append('veredicto', params.veredicto);
         if (params.search) queryParams.append('search', params.search);
+        if (params.dateFilter && params.dateFilter !== 'all') queryParams.append('dateFilter', params.dateFilter);
 
         const query = queryParams.toString();
         const endpoint = `/fraud/alerts${query ? `?${query}` : ''}`;

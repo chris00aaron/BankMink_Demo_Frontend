@@ -60,6 +60,7 @@ const getImpactBadge = (shapVal: number) => {
 export function RiskAnalysis() {
   const [searchInput, setSearchInput] = useState('');
   const [activeFilter, setActiveFilter] = useState<'TODO' | 'ALTO RIESGO' | 'LEGÍTIMO'>('TODO');
+  const [activeDateFilter, setActiveDateFilter] = useState<'today' | 'week' | 'all'>('all');
 
   const {
     alerts,
@@ -76,6 +77,7 @@ export function RiskAnalysis() {
     setPage,
     setVeredicto,
     setSearch,
+    setDateFilter,
     refresh,
   } = useFraudAlerts({
     autoRefresh: true,
@@ -92,7 +94,13 @@ export function RiskAnalysis() {
     return () => clearTimeout(timer);
   }, [searchInput, setSearch]);
 
-  // Cambiar filtro
+  // Cambiar filtro de fecha
+  const handleDateFilterChange = (df: 'today' | 'week' | 'all') => {
+    setActiveDateFilter(df);
+    setDateFilter(df);
+  };
+
+  // Cambiar filtro de veredicto
   const handleFilterChange = (filter: 'TODO' | 'ALTO RIESGO' | 'LEGÍTIMO') => {
     setActiveFilter(filter);
     setVeredicto(filter === 'TODO' ? '' : filter);
@@ -145,7 +153,7 @@ export function RiskAnalysis() {
           <div className="backdrop-blur-xl bg-white/90 rounded-xl border border-gray-200 p-4 shadow-lg">
 
             {/* Barra de Herramientas */}
-            <div className="space-y-4 mb-4">
+            <div className="space-y-3 mb-4">
               {/* Buscador */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -158,7 +166,27 @@ export function RiskAnalysis() {
                 />
               </div>
 
-              {/* Filtros Rápidos */}
+              {/* Filtro de Fecha */}
+              <div className="flex gap-1.5">
+                {(['today', 'week', 'all'] as const).map((df) => {
+                  const labels = { today: 'Hoy', week: '7 días', all: 'Todas' };
+                  const isActive = activeDateFilter === df;
+                  return (
+                    <button
+                      key={df}
+                      onClick={() => handleDateFilterChange(df)}
+                      className={`flex-1 px-2 py-1.5 text-[11px] font-semibold rounded-lg border transition-all ${isActive
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                        : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'
+                        }`}
+                    >
+                      {labels[df]}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Filtros por Veredicto */}
               <div className="flex gap-2">
                 {(['TODO', 'ALTO RIESGO', 'LEGÍTIMO'] as const).map((filter) => (
                   <button

@@ -250,8 +250,8 @@ function DriftBadge({ category }: { category: string }) {
 // ==================== MAIN COMPONENT ====================
 
 // Demo date range for [DEMO] mode — matches the historical dataset in DB
-const DEMO_START = '2019-07-01';
-const DEMO_END = '2019-09-30';
+const DEMO_START = '2019-01-01';   // [DEMO] Inicio del año → 12 meses de historia para el decay
+const DEMO_END = '2019-12-30';
 
 export function ModelMonitoring() {
     const [champion, setChampion] = useState<ChampionModel | null>(null);
