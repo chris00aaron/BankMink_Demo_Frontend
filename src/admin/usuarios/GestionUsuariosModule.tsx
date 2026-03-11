@@ -4,6 +4,7 @@ import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
 import { Badge } from '@shared/components/ui/badge';
 import { CreateUserModal } from './components/CreateUserModal';
+import { EditUserModal } from './components/EditUserModal';
 import { PasswordRequestsTab } from './components/PasswordRequestsTab';
 import { apiRequest } from '@shared/services/apiClient';
 
@@ -32,6 +33,7 @@ export function GestionUsuariosModule({ onBack }: GestionUsuariosModuleProps) {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
 
   useEffect(() => {
     fetchUsers();
@@ -281,6 +283,17 @@ export function GestionUsuariosModule({ onBack }: GestionUsuariosModuleProps) {
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2">
+                              {/* Edit Button */}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                                onClick={() => setEditingUser(user)}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                              </Button>
+
+                              {/* Delete Button */}
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -305,10 +318,17 @@ export function GestionUsuariosModule({ onBack }: GestionUsuariosModuleProps) {
         )}
       </main>
 
-      {/* Modal */}
+      {/* Modals */}
       <CreateUserModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
+        onSuccess={fetchUsers}
+      />
+
+      <EditUserModal
+        isOpen={!!editingUser}
+        user={editingUser}
+        onClose={() => setEditingUser(null)}
         onSuccess={fetchUsers}
       />
     </div>

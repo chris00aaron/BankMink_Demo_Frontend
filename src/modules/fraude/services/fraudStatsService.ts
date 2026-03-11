@@ -51,6 +51,20 @@ export interface LocationStats {
     fraud_rate: number;
 }
 
+export interface DemographicStats {
+    gender_label: 'Masculino' | 'Femenino';
+    age_band: '18-30' | '31-45' | '46-60' | '60+';
+    fraud_count: number;
+}
+
+export interface TemporalStats {
+    /** 1 = Lunes … 7 = Domingo */
+    day_of_week: number;
+    /** 'YYYY-MM' */
+    month_label: string;
+    fraud_count: number;
+}
+
 // ==================== SERVICIO ====================
 
 export const fraudStatsService = {
@@ -88,6 +102,21 @@ export const fraudStatsService = {
     getLocationStats: async (): Promise<LocationStats[]> => {
         return apiRequest<LocationStats[]>('/fraud/stats/locations');
     },
+
+    /**
+     * Obtiene perfil demográfico de los fraudes (género × rango de edad)
+     */
+    getDemographics: async (): Promise<DemographicStats[]> => {
+        return apiRequest<DemographicStats[]>('/fraud/stats/demographics');
+    },
+
+    /**
+     * Obtiene distribución temporal de fraudes (día semana × mes)
+     */
+    getTemporalStats: async (): Promise<TemporalStats[]> => {
+        return apiRequest<TemporalStats[]>('/fraud/stats/temporal');
+    },
 };
 
 export default fraudStatsService;
+

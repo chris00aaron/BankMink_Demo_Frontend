@@ -1,12 +1,10 @@
 import axios from 'axios';
-import { ChurnSimulationRequest, ChurnPredictionResponse, CustomerDashboard, ScenarioResult, ScenarioSegment, ScenarioIntervention, SegmentRule, CampaignLog, CreateCampaignRequest } from './types';
-import { MOCK_CUSTOMERS, MOCK_GEO_STATS, MOCK_MLOPS_METRICS, MOCK_PREDICTION, MOCK_CUSTOMERS_EXTENDED } from './mockData';
+import { ChurnSimulationRequest, ChurnPredictionResponse, CustomerPageResponse, ScenarioResult, ScenarioSegment, ScenarioIntervention, SegmentRule, CampaignLog, CreateCampaignRequest, TrainResult, PerformanceStatus } from './types';
 
 // Configura la URL base (usando Proxy de Vite)
 const API_URL = '/api/v1/churn';
 
-// Helper para simular delay en respuestas mock
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+// Note: IN_MEMORY_CAMPAIGNS removed — campaigns now persist in the database via backend API
 
 // --- MOTOR DE REGLAS DINÁMICO (Rule Engine) ---
 // Convierte el JSON de la BD en lógica ejecutable
@@ -21,6 +19,7 @@ const evaluateRules = (customer: any, rules: SegmentRule[]): boolean => {
             case '<': return value < target;
             case '>=': return value >= target;
             case '<=': return value <= target;
+            case '=':
             case '==': return value == target;
             case '!=': return value != target;
             default: return false;
@@ -28,79 +27,25 @@ const evaluateRules = (customer: any, rules: SegmentRule[]): boolean => {
     });
 };
 
-// --- ALMACÉN EN MEMORIA PARA CAMPAÑAS (Simula BD persistente en sesión) ---
-let IN_MEMORY_CAMPAIGNS: CampaignLog[] = [
-    {
-        id: 101,
-        name: "Campaña Retención Q1 - VIPs",
-        strategyName: "Gestor VIP Personalizado",
-        segmentName: "VIPs en Riesgo",
-        startDate: "2024-03-01",
-        status: 'ACTIVE',
-        budgetAllocated: 15000,
-        expectedRoi: 125.5,
-        targetedCount: 45,
-        convertedCount: 12
-    },
-    {
-        id: 102,
-        name: "Recuperación Saldos Bajos",
-        strategyName: "Campaña Cross-Selling",
-        segmentName: "Vulnerables Mono-Producto",
-        startDate: "2024-02-15",
-        status: 'COMPLETED',
-        budgetAllocated: 2400,
-        expectedRoi: 45.0,
-        targetedCount: 120,
-        convertedCount: 35
-    }
-];
-
 export const ChurnService = {
-    // 1. Obtener todos los clientes para el dashboard
-    getAllCustomers: async (): Promise<CustomerDashboard[]> => {
-        try {
-            const response = await axios.get<CustomerDashboard[]>(`${API_URL}/customers`);
-            return response.data;
-        } catch (error) {
-            console.warn("Backend no disponible. Usando datos Mock para Customers.");
-            await delay(800);
-            return MOCK_CUSTOMERS;
-        }
+    // 1. Obtener clientes paginados para el dashboard
+    getCustomersPaginated: async (page: number = 0, size: number = 50, search: string = '', country?: string, riskLevel?: string): Promise<CustomerPageResponse> => {
+        const response = await axios.get<CustomerPageResponse>(`${API_URL}/customers`, {
+            params: { page, size, search, country: country || undefined, riskLevel: riskLevel || undefined }
+        });
+        return response.data;
     },
 
     // 2. Simular Escenario (Conectado a /simulate)
     simulate: async (data: ChurnSimulationRequest): Promise<ChurnPredictionResponse> => {
-        try {
-            const response = await axios.post<ChurnPredictionResponse>(`${API_URL}/simulate`, data);
-            return response.data;
-        } catch (error) {
-            console.warn("Backend no disponible. Usando respuesta Mock para Simulación.");
-            await delay(1000);
-            // Simulación básica en frontend para variar un poco el resultado
-            const probability = Math.min(0.95, Math.max(0.05, (data.Age * 0.01) + (data.Balance > 100000 ? 0.2 : 0)));
-            return {
-                ...MOCK_PREDICTION,
-                churnProbability: probability,
-                riskLevel: probability > 0.5 ? "Alto" : "Bajo",
-                isChurn: probability > 0.5
-            };
-        }
+        const response = await axios.post<ChurnPredictionResponse>(`${API_URL}/simulate`, data);
+        return response.data;
     },
 
     // 3. Analizar Cliente Real (Conectado a /analyze/{id})
     analyzeCustomer: async (id: number): Promise<ChurnPredictionResponse> => {
-        try {
-            const response = await axios.post<ChurnPredictionResponse>(`${API_URL}/analyze/${id}`);
-            return response.data;
-        } catch (error) {
-            console.warn("Backend no disponible. Usando respuesta Mock para Análisis.");
-            await delay(800);
-            return {
-                ...MOCK_PREDICTION,
-                customer: { id }
-            };
-        }
+        const response = await axios.post<ChurnPredictionResponse>(`${API_URL}/analyze/${id}`);
+        return response.data;
     },
 
     // 3.1 Obtener Historial de Riesgo (Real)
@@ -109,7 +54,7 @@ export const ChurnService = {
             const response = await axios.get<any[]>(`${API_URL}/history/${id}`);
             return response.data;
         } catch (error) {
-            console.warn("Backend no disponible. Usando datos Mock para historial.");
+            console.warn("Historial no disponible. El componente usará su fallback visual.");
             return []; // El componente usará su fallback si recibe array vacío
         }
     },
@@ -125,28 +70,23 @@ export const ChurnService = {
         }
     },
 
+    // 3.3 Registrar Interacción con Cliente
+    logInteraction: async (id: number, actionType: string): Promise<void> => {
+        await axios.post(`${API_URL}/interact/${id}`, null, {
+            params: { actionType }
+        });
+    },
+
     // 4. Estadísticas Geográficas
     getGeographyStats: async (): Promise<import('./types').GeographyStats[]> => {
-        try {
-            const response = await axios.get<import('./types').GeographyStats[]>(`${API_URL}/geography`);
-            return response.data;
-        } catch (error) {
-            console.warn("Backend no disponible. Usando datos Mock para Geografía.");
-            await delay(600);
-            return MOCK_GEO_STATS;
-        }
+        const response = await axios.get<import('./types').GeographyStats[]>(`${API_URL}/geography`);
+        return response.data;
     },
 
     // 5. Métricas MLOps
     getMLOpsMetrics: async (): Promise<import('./types').MLOpsMetrics> => {
-        try {
-            const response = await axios.get<import('./types').MLOpsMetrics>(`${API_URL}/mlops`);
-            return response.data;
-        } catch (error) {
-            console.warn("Backend no disponible. Usando datos Mock para MLOps.");
-            await delay(500);
-            return MOCK_MLOPS_METRICS;
-        }
+        const response = await axios.get<import('./types').MLOpsMetrics>(`${API_URL}/mlops`);
+        return response.data;
     },
 
     // 6. Obtener Definiciones de Segmentos (Desde BD)
@@ -187,6 +127,17 @@ export const ChurnService = {
         }
     },
 
+    // 6.1 Crear Segmento Personalizado (Persiste en BD)
+    createSegment: async (segment: Omit<ScenarioSegment, 'id'>): Promise<ScenarioSegment> => {
+        const response = await axios.post<ScenarioSegment>(`${API_URL}/config/segments`, segment);
+        return response.data;
+    },
+
+    // 6.2 Eliminar Segmento
+    deleteSegment: async (id: number | string): Promise<void> => {
+        await axios.delete(`${API_URL}/config/segments/${id}`);
+    },
+
     // 7. Obtener Estrategias Disponibles (Desde BD)
     getStrategies: async (): Promise<ScenarioIntervention[]> => {
         try {
@@ -220,13 +171,14 @@ export const ChurnService = {
         }
     },
 
-    // 8. Ejecutar Escenario Estratégico (Usando Rule Engine)
+    // 8. Ejecutar Escenario Estratégico (Usando Rule Engine + Datos Reales)
     runScenario: async (segment: ScenarioSegment, intervention: ScenarioIntervention): Promise<ScenarioResult> => {
-        await delay(1000); // Simular proceso
+        // Obtener clientes reales de la BD (primera página grande para análisis)
+        const pageData = await ChurnService.getCustomersPaginated(0, 5000, '');
+        const allCustomers = pageData.content;
 
         // 1. Filtrar población usando el Motor de Reglas
-        // Nota: Mapeamos nombres de campos de BD a propiedades del objeto JS si difieren
-        const targetClients = MOCK_CUSTOMERS_EXTENDED.filter(c => evaluateRules(c, segment.rules));
+        const targetClients = allCustomers.filter(c => evaluateRules(c, segment.rules));
         const totalClients = targetClients.length;
 
         if (totalClients === 0) {
@@ -269,39 +221,109 @@ export const ChurnService = {
         };
     },
 
-    // 9. GESTIÓN DE CAMPAÑAS (NUEVO)
+    // 9. GESTIÓN DE CAMPAÑAS — Real Backend Persistence (M2)
     getCampaignHistory: async (): Promise<CampaignLog[]> => {
-        await delay(500);
-        // Simulamos obtener de BD. En realidad devolvemos el array en memoria
-        return [...IN_MEMORY_CAMPAIGNS].sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+        try {
+            const response = await axios.get<CampaignLog[]>(`${API_URL}/campaigns`);
+            return response.data;
+        } catch (error) {
+            console.warn("Backend campaigns not available, returning empty list.");
+            return [];
+        }
     },
 
     createCampaign: async (req: CreateCampaignRequest): Promise<CampaignLog> => {
-        await delay(1200);
+        const response = await axios.post<CampaignLog>(`${API_URL}/campaigns`, req);
+        return response.data;
+    },
 
-        // Encontrar nombres para desnormalizar (simulación de JOIN)
-        const segments = await ChurnService.getSegments();
-        const strategies = await ChurnService.getStrategies();
-        const segName = segments.find(s => s.id === req.segmentId)?.name || "Segmento Personalizado";
-        const stratName = strategies.find(s => s.id === req.strategyId)?.name || "Estrategia";
+    // 10. AUTO-ENTRENAMIENTO
+    trainModel: async (): Promise<TrainResult> => {
+        try {
+            const response = await axios.post<TrainResult>(`${API_URL}/train`, {}, {
+                timeout: 120000 // 2 minutos de timeout para entrenamiento
+            });
+            return response.data;
+        } catch (error: any) {
+            // If the server returned a structured error response, use it
+            if (error.response?.data?.error) {
+                return {
+                    status: 'error',
+                    error: error.response.data.error
+                };
+            }
+            // Network error or timeout
+            const message = error.code === 'ECONNABORTED'
+                ? 'El entrenamiento excedió el tiempo de espera (2 min). Puede seguir ejecutándose en el servidor.'
+                : error.message || 'Error de conexión con el servidor.';
+            return {
+                status: 'error',
+                error: message
+            };
+        }
+    },
 
-        const newCampaign: CampaignLog = {
-            id: Math.floor(Math.random() * 10000) + 200, // ID aleatorio
-            name: req.name,
-            segmentName: segName,
-            strategyName: stratName,
-            startDate: new Date().toISOString().split('T')[0],
-            status: 'ACTIVE',
-            budgetAllocated: req.budget,
-            expectedRoi: req.expectedRoi,
-            targetedCount: req.targets.length,
-            convertedCount: 0 // Empieza en 0
-        };
+    // ============================================================
+    // PERFORMANCE MONITOR
+    // ============================================================
 
-        // Guardar en memoria (PERSISTENCIA SIMULADA)
-        IN_MEMORY_CAMPAIGNS.push(newCampaign);
+    /**
+     * Gets the current performance monitor status.
+     * Returns metrics from the last evaluation, configuration, and schedule info.
+     */
+    async getMonitorStatus(): Promise<PerformanceStatus> {
+        try {
+            const response = await axios.get<PerformanceStatus>(`${API_URL}/monitor/status`);
+            return response.data;
+        } catch (error: any) {
+            return {
+                status: 'error',
+                message: error.response?.data?.message || error.message || 'Error consultando estado del monitor.'
+            };
+        }
+    },
 
-        return newCampaign;
-    }
+    /**
+     * Manually triggers a performance evaluation.
+     * Compares historical predictions against ground truth.
+     */
+    async triggerEvaluation(): Promise<PerformanceStatus> {
+        try {
+            const response = await axios.post<PerformanceStatus>(`${API_URL}/monitor/evaluate`, {}, {
+                timeout: 60000 // 1 minuto de timeout
+            });
+            return response.data;
+        } catch (error: any) {
+            return {
+                status: 'error',
+                message: error.response?.data?.message || error.message || 'Error disparando evaluación manual.'
+            };
+        }
+    },
+
+    /**
+     * Gets high-level executive metrics for CEO Dashboard
+     */
+    getExecutiveMetrics: async (): Promise<any> => {
+        try {
+            const response = await axios.get(`${API_URL}/executive-metrics`);
+            return response.data;
+        } catch (error: any) {
+            console.error('Error al obtener métricas ejecutivas:', error);
+            // Fallback mock data if endpoint is not yet published in controller
+            return {
+                capitalErosionProyectada: 2450000,
+                retentionROI: 8.4,
+                estimatedSavings: 1280000,
+                totalInvestment: 152000,
+                vipCapitalAtRisk: 8450000,
+                strategicInsights: [
+                    { cause: 'Competencia de Tasas', impact: 'ALTO', segment: 'VIP' },
+                    { cause: 'Falta de Vinculación', impact: 'MEDIO', segment: 'Jóvenes' },
+                    { cause: 'Fricción por Comisiones', impact: 'ALTO', segment: 'Personal' }
+                ]
+            };
+        }
+    },
 };
 

@@ -1,226 +1,111 @@
+// Importar cliente API centralizado con auto-refresh
+import { apiRequest } from '../../../shared/services/apiClient';
+
+// ==================== TIPOS ====================
+
+export interface RiskFactor {
+  feature_name: string;
+  feature_value: string;
+  shap_value: number;
+  risk_description: string;
+  impact_direction: string;
+}
+
+export interface AuditData {
+  xgboost_score: number;
+  iforest_score: number;
+  base_score: number;
+  prediction_id: number;
+}
+
+export interface FraudAlert {
+  prediction_id: number;
+  transaction_id: string;
+  transaction_db_id: number;
+  veredicto: string;
+  score_final: number;
+  amount: number;
+  merchant: string;
+  category: string;
+  customer_name: string;
+  prediction_date: string;
+  location: string;
+  detalles_riesgo?: RiskFactor[];
+  datos_auditoria?: AuditData;
+  recomendacion: string;
+}
+
+export interface FraudAlertsPage {
+  content: FraudAlert[];
+  page: number;
+  size: number;
+  total_elements: number;
+  total_pages: number;
+  has_next: boolean;
+  has_previous: boolean;
+}
+
+export interface AlertsParams {
+  page?: number;
+  size?: number;
+  sortBy?: 'score' | 'date';
+  order?: 'asc' | 'desc';
+  veredicto?: string;
+  search?: string;
+}
+
+// ==================== SERVICIO ====================
+
 /**
- * Servicio de detección de fraude
- * Centraliza todas las llamadas a la API relacionadas con anomalías transaccionales
+ * Servicio de Fraude - API calls
  */
-
-import { apiClient } from "@shared/api";
-import type {
-  ApiResponse,
-  PaginatedResponse,
-  PaginationParams,
-} from "@shared/api";
-
-// ===== TIPOS =====
-
-// Interfaces para el Dashboard (matching DashboardController.java DTOs)
-export interface RetiroEfectivoAtmPrediccionDTO {
-  idAtm: number;
-  retiroPrevisto: number;
-  lowerBound: number;
-  upperBound: number;
-  confidenceLevel: number;
-}
-
-export interface RetiroEfectivoAtmPrediccionResumenDTO {
-  totalRetirosPrevisto: number;
-  totalRetirosPrevistoOptimista: number;
-  totalRetirosPrevistoPesimista: number;
-}
-
-export interface ResumeOperativoDTO {
-  activos: number;
-  inactivos: number;
-}
-
-export interface RetiroHistoricoDTO {
-  atm: number;
-  retiroHistorico: number;
-  retiroPrevisto: number;
-}
-
-export interface SegmentacionRetiroDTO {
-  ubicaciones: Record<string, number>;
-}
-
-export interface DashboardDTO {
-  resumenRetiroEfectivoAtm: RetiroEfectivoAtmPrediccionResumenDTO;
-  resumenOperativoAtms: ResumeOperativoDTO;
-  atmsConPotencialDeFaltaStock: number;
-  retirosPredichos: RetiroEfectivoAtmPrediccionDTO[];
-  retirosHistoricos: RetiroHistoricoDTO[];
-  featuresImportancia: Record<string, unknown>;
-  segmentacionRetiro: SegmentacionRetiroDTO;
-}
-
-export interface Transaccion {
-  id: string;
-  clienteId: string;
-  fecha: string;
-  monto: number;
-  tipo: string;
-  canal: string;
-  ubicacion: string;
-  estado: "normal" | "sospechosa" | "fraudulenta";
-  scoreRiesgo: number;
-}
-
-export interface Alerta {
-  id: string;
-  transaccionId: string;
-  tipo: string;
-  severidad: "baja" | "media" | "alta" | "critica";
-  descripcion: string;
-  estado: "pendiente" | "revisando" | "resuelta" | "descartada";
-  creadaEn: string;
-  asignadoA?: string;
-}
-
-export interface ClienteRiesgo {
-  clienteId: string;
-  nombre: string;
-  scoreRiesgo: number;
-  categoriasRiesgo: string[];
-  transaccionesSospechosas: number;
-  ultimaActividad: string;
-}
-
-export interface TransaccionFilters extends PaginationParams {
-  clienteId?: string;
-  estado?: "normal" | "sospechosa" | "fraudulenta";
-  startDate?: string;
-  endDate?: string;
-  montoMin?: number;
-  montoMax?: number;
-}
-
-export interface AlertaFilters extends PaginationParams {
-  severidad?: "baja" | "media" | "alta" | "critica";
-  estado?: "pendiente" | "revisando" | "resuelta" | "descartada";
-  asignadoA?: string;
-}
-
-// ===== SERVICIO =====
-
-export const fraudeService = {
+export const fraudService = {
   /**
-   * Obtener transacciones con filtros
+   * Obtiene alertas paginadas con filtros y búsqueda
    */
-  async getTransacciones(
-    filters?: TransaccionFilters,
-  ): Promise<PaginatedResponse<Transaccion>> {
-    const response = await apiClient.get<PaginatedResponse<Transaccion>>(
-      "/fraude/transacciones",
-      { params: filters },
-    );
-    return response.data;
+  getAlerts: async (params: AlertsParams = {}): Promise<FraudAlertsPage> => {
+    const queryParams = new URLSearchParams();
+
+    if (params.page !== undefined) queryParams.append('page', params.page.toString());
+    if (params.size !== undefined) queryParams.append('size', params.size.toString());
+    if (params.sortBy) queryParams.append('sortBy', params.sortBy);
+    if (params.order) queryParams.append('order', params.order);
+    if (params.veredicto && params.veredicto !== 'TODO') queryParams.append('veredicto', params.veredicto);
+    if (params.search) queryParams.append('search', params.search);
+
+    const query = queryParams.toString();
+    const endpoint = `/fraud/alerts${query ? `?${query}` : ''}`;
+
+    return apiRequest<FraudAlertsPage>(endpoint);
   },
 
   /**
-   * Obtener detalles de una transacción
+   * Obtiene el detalle completo de una alerta (incluye SHAP)
    */
-  async getTransaccion(id: string): Promise<ApiResponse<Transaccion>> {
-    const response = await apiClient.get<ApiResponse<Transaccion>>(
-      `/fraude/transacciones/${id}`,
-    );
-    return response.data;
+  getAlertDetail: async (predictionId: number): Promise<FraudAlert> => {
+    return apiRequest<FraudAlert>(`/fraud/alerts/${predictionId}`);
   },
 
   /**
-   * Obtener alertas
+   * Verifica si la API de fraude (Python) está disponible
    */
-  async getAlertas(
-    filters?: AlertaFilters,
-  ): Promise<PaginatedResponse<Alerta>> {
-    const response = await apiClient.get<PaginatedResponse<Alerta>>(
-      "/fraude/alertas",
-      { params: filters },
-    );
-    return response.data;
+  checkHealth: async (): Promise<{ fraud_api_available: boolean; status: string }> => {
+    return apiRequest<{ fraud_api_available: boolean; status: string }>('/fraud/health');
   },
 
   /**
-   * Actualizar estado de una alerta
+   * Procesa una nueva transacción (simula POS)
    */
-  async updateAlertaEstado(
-    id: string,
-    estado: Alerta["estado"],
-    comentario?: string,
-  ): Promise<ApiResponse<Alerta>> {
-    const response = await apiClient.patch<ApiResponse<Alerta>>(
-      `/fraude/alertas/${id}`,
-      { estado, comentario },
-    );
-    return response.data;
-  },
-
-  /**
-   * Asignar alerta a un usuario
-   */
-  async asignarAlerta(
-    id: string,
-    userId: string,
-  ): Promise<ApiResponse<Alerta>> {
-    const response = await apiClient.patch<ApiResponse<Alerta>>(
-      `/fraude/alertas/${id}/asignar`,
-      { userId },
-    );
-    return response.data;
-  },
-
-  /**
-   * Obtener clientes con alto riesgo
-   */
-  async getClientesRiesgo(
-    limit?: number,
-  ): Promise<ApiResponse<ClienteRiesgo[]>> {
-    const response = await apiClient.get<ApiResponse<ClienteRiesgo[]>>(
-      "/fraude/clientes-riesgo",
-      { params: { limit } },
-    );
-    return response.data;
-  },
-
-  /**
-   * Obtener estadísticas de fraude
-   */
-  async getStats(): Promise<
-    ApiResponse<{
-      alertasPendientes: number;
-      transaccionesSospechosas24h: number;
-      montoEnRiesgo: number;
-      tasaDeteccion: number;
-    }>
-  > {
-    const response = await apiClient.get("/fraude/stats");
-    return response.data;
-  },
-
-  /**
-   * Reportar transacción como fraudulenta
-   */
-  async reportarFraude(
-    transaccionId: string,
-    data: {
-      motivo: string;
-      evidencia?: string;
-    },
-  ): Promise<ApiResponse<{ alertaId: string }>> {
-    const response = await apiClient.post(
-      `/fraude/transacciones/${transaccionId}/reportar`,
-      data,
-    );
-    return response.data;
-  },
-
-  /**
-   * Obtener datos del dashboard de predicciones ATM
-   * Endpoint: GET /dashboard (DashboardController.java)
-   */
-  async getDashboard(): Promise<DashboardDTO> {
-    const response = await apiClient.get<DashboardDTO>("/dashboard");
-    console.log("Dashboard data:", response.data);
-    return response.data;
+  processTransaction: async (data: {
+    cc_num: number;
+    amt: number;
+    merchant: string;
+    category: string;
+    merch_lat?: number;
+    merch_long?: number;
+  }): Promise<unknown> => {
+    return apiRequest('/transactions/process', 'POST', data);
   },
 };
 
-export default fraudeService;
+export default fraudService;
