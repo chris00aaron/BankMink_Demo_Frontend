@@ -4,13 +4,12 @@ import { UserHeader } from '../components/UserHeader';
 import {
     BarChart,
     Bar,
-    PieChart,
-    Pie,
     Cell,
     XAxis,
     YAxis,
     CartesianGrid,
     Tooltip,
+    Legend,
     ResponsiveContainer,
     Area,
     AreaChart
@@ -32,9 +31,9 @@ import {
     Briefcase,
     RefreshCw
 } from 'lucide-react';
-import { getAllPolicies, getActivePolicy, activatePolicy, createPolicy, getDashboardData } from '../services/morosidadService';
+import { getAllPolicies, getActivePolicy, activatePolicy, createPolicy, getDashboardClients } from '../services/morosidadService';
 import { useDashboard } from '../context/DashboardContext';
-import type { DashboardData, DefaultPolicy, PolicyRequest } from '../types/morosidad.types';
+import type { DefaultPolicy, PolicyRequest, PageResponse, ClienteAltoRiesgo } from '../types/morosidad.types';
 import {
     Dialog,
     DialogContent,
@@ -43,13 +42,6 @@ import {
     DialogFooter,
     DialogDescription,
 } from "@shared/components/ui/dialog";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@shared/components/ui/select";
 import { Button } from "@shared/components/ui/button";
 import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
@@ -67,15 +59,62 @@ const SBS_RANGES: Record<string, string> = {
     'Normal': '0-5%', 'CPP': '5-25%', 'Deficiente': '25-60%', 'Dudoso': '60-90%', 'Pérdida': '90-100%'
 };
 
-export function DashboardPage() {
-    const { data: dashboardData, isLoading, isRefreshing, error, refresh } = useDashboard();
-    const [showTotalLoss, setShowTotalLoss] = useState(false);
+export interface DashboardPageProps {
+    onNavigateToPrediction?: (recordId: number) => void;
+}
 
-    // Estado para ordenamiento de tabla (debe estar antes de cualquier return)
-    const [sortConfig, setSortConfig] = useState<{
-        key: 'recordId' | 'probabilidadPago' | 'clasificacionSBS' | 'montoCuota' | 'cuotasAtrasadas';
-        direction: 'asc' | 'desc';
-    } | null>(null);
+export function DashboardPage({ onNavigateToPrediction }: DashboardPageProps) {
+    const { data: dashboardData, isLoading, isRefreshing, error, refresh } = useDashboard();
+
+    // Estado para paginación y filtros de clientes
+    const [clientsPage, setClientsPage] = useState<PageResponse<ClienteAltoRiesgo> | null>(null);
+    const [isLoadingClients, setIsLoadingClients] = useState(false);
+    const [page, setPage] = useState(0);
+    const [pageSize] = useState(10);
+    const [filterName, setFilterName] = useState('');
+    const [filterSbs, setFilterSbs] = useState('Todas');
+    const [filterEducacion, setFilterEducacion] = useState('Todas');
+    const [filterEdadMin, setFilterEdadMin] = useState<number | ''>('');
+    const [filterEdadMax, setFilterEdadMax] = useState<number | ''>('');
+
+    // Applied filters
+    const [appliedName, setAppliedName] = useState('');
+    const [appliedSbs, setAppliedSbs] = useState('');
+    const [appliedEducacion, setAppliedEducacion] = useState('');
+    const [appliedEdadMin, setAppliedEdadMin] = useState<number | undefined>(undefined);
+    const [appliedEdadMax, setAppliedEdadMax] = useState<number | undefined>(undefined);
+
+    // Sort status
+    const [appliedSortBy, setAppliedSortBy] = useState<string>('probabilidadPago');
+    const [appliedSortDir, setAppliedSortDir] = useState<'asc' | 'desc'>('desc');
+
+    const fetchClients = async () => {
+        setIsLoadingClients(true);
+        try {
+            const data = await getDashboardClients(
+                page, pageSize, appliedName, appliedSbs,
+                appliedSortBy, appliedSortDir, appliedEducacion, appliedEdadMin, appliedEdadMax
+            );
+            setClientsPage(data);
+        } catch (error) {
+            console.error('Error fetching clients:', error);
+        } finally {
+            setIsLoadingClients(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchClients();
+    }, [page, appliedName, appliedSbs, appliedEducacion, appliedEdadMin, appliedEdadMax, appliedSortBy, appliedSortDir, pageSize]);
+
+    const handleSearch = () => {
+        setPage(0); // Reset to first page
+        setAppliedName(filterName);
+        setAppliedSbs(filterSbs === 'Todas' ? '' : filterSbs);
+        setAppliedEducacion(filterEducacion === 'Todas' ? '' : filterEducacion);
+        setAppliedEdadMin(filterEdadMin === '' ? undefined : filterEdadMin);
+        setAppliedEdadMax(filterEdadMax === '' ? undefined : filterEdadMax);
+    };
 
     const [policies, setPolicies] = useState<DefaultPolicy[]>([]);
     const [activePolicy, setActivePolicy] = useState<DefaultPolicy | null>(null);
@@ -102,12 +141,6 @@ export function DashboardPage() {
         }
     };
 
-    const handlePolicyChange = (value: string) => {
-        setSelectedPolicyId(value);
-        if (activePolicy && value !== activePolicy.idPolicy.toString()) {
-            setIsConfirmDialogOpen(true);
-        }
-    };
 
     const confirmPolicyChange = async () => {
         try {
@@ -149,35 +182,20 @@ export function DashboardPage() {
         loadPolicies();
     }, []);
 
-    // Ordenar cuentas según configuración (useMemo debe estar antes de cualquier return)
-    const clientesAltoRiesgo = dashboardData?.clientesAltoRiesgo ?? [];
-    const sortedClientes = useMemo(() => {
-        if (!sortConfig) return clientesAltoRiesgo;
-        return [...clientesAltoRiesgo].sort((a, b) => {
-            const aVal = a[sortConfig.key];
-            const bVal = b[sortConfig.key];
-            if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
-            if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
-            return 0;
-        });
-    }, [clientesAltoRiesgo, sortConfig]);
-
-    // Función para manejar clic en encabezado de columna
-    const handleSort = (key: 'recordId' | 'probabilidadPago' | 'clasificacionSBS' | 'montoCuota' | 'cuotasAtrasadas') => {
-        setSortConfig(current => {
-            if (current?.key === key) {
-                return current.direction === 'asc'
-                    ? { key, direction: 'desc' }
-                    : null;
-            }
-            return { key, direction: 'asc' };
-        });
+    const handleSort = (key: string) => {
+        if (appliedSortBy === key) {
+            setAppliedSortDir(prev => prev === 'asc' ? 'desc' : 'asc');
+        } else {
+            setAppliedSortBy(key);
+            setAppliedSortDir(key === 'probabilidadPago' || key === 'cuotasAtrasadas' || key === 'montoCuota' ? 'desc' : 'asc');
+        }
+        setPage(0); // Reset to first page on sort change
     };
 
     // Icono de ordenamiento
-    const SortIcon = ({ columnKey }: { columnKey: 'recordId' | 'probabilidadPago' | 'clasificacionSBS' | 'montoCuota' | 'cuotasAtrasadas' }) => {
-        if (sortConfig?.key !== columnKey) return null;
-        return sortConfig.direction === 'asc'
+    const SortIcon = ({ columnKey }: { columnKey: string }) => {
+        if (appliedSortBy !== columnKey) return null;
+        return appliedSortDir === 'asc'
             ? <ChevronUp className="w-3 h-3 inline ml-1" />
             : <ChevronDown className="w-3 h-3 inline ml-1" />;
     };
@@ -237,63 +255,30 @@ export function DashboardPage() {
                 }
             />
 
-            {/* Gestión de Políticas */}
-            <Card className="p-6 bg-white border-l-4 border-blue-600 shadow-sm">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div>
-                        <div className="flex items-center gap-2 mb-1">
-                            <Briefcase className="w-5 h-5 text-blue-600" />
-                            <h3 className="text-lg font-semibold text-gray-900">Política de Riesgo Activa</h3>
-                        </div>
-                        <p className="text-sm text-gray-500">
-                            Define los umbrales y parámetros para la evaluación automática de créditos.
-                        </p>
+            {/* Banner de Política de Riesgo Activa — compacto */}
+            <Card className="p-4 bg-white border-l-4 border-blue-600 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <Briefcase className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                        <span className="text-sm font-medium text-gray-700">Política activa:</span>
+                        {activePolicy ? (
+                            <span className="text-sm font-semibold text-gray-900">{activePolicy.policyName}</span>
+                        ) : (
+                            <span className="text-sm text-gray-400">Sin política activa</span>
+                        )}
                     </div>
-
-                    <div className="flex items-center gap-3 w-full md:w-auto">
-                        <div className="w-full md:w-64">
-                            <Select value={selectedPolicyId} onValueChange={handlePolicyChange}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Seleccionar política..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {policies.map(policy => (
-                                        <SelectItem key={policy.idPolicy} value={policy.idPolicy.toString()}>
-                                            {policy.policyName} {policy.isActive ? '(Activa)' : ''}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                    {activePolicy && (
+                        <div className="flex items-center gap-6 text-sm">
+                            <span className="text-gray-500">Umbral: <strong className="text-gray-900">{activePolicy.thresholdApproval}%</strong></span>
+                            <span className="text-gray-500">LGD: <strong className="text-gray-900">{activePolicy.factorLgd}%</strong></span>
+                            <span className="text-gray-500">Gracia: <strong className="text-gray-900">{activePolicy.daysGraceDefault}d</strong></span>
                         </div>
-                        <Button variant="outline" onClick={() => setIsCreateDialogOpen(true)}>
-                            Nueva Política
-                        </Button>
-                    </div>
+                    )}
+                    <Button variant="outline" size="sm" onClick={() => setIsCreateDialogOpen(true)}
+                        className="text-xs gap-1">
+                        Gestionar política
+                    </Button>
                 </div>
-
-                {activePolicy && (
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6 pt-6 border-t border-gray-100">
-                        <div>
-                            <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Umbral de Aprobación</p>
-                            <p className="text-2xl font-bold text-gray-900">{activePolicy.thresholdApproval}%</p>
-                        </div>
-                        <div>
-                            <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Factor LGD</p>
-                            <p className="text-2xl font-bold text-gray-900">{activePolicy.factorLgd}%</p>
-                        </div>
-                        <div>
-                            <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Días de Gracia</p>
-                            <p className="text-2xl font-bold text-gray-900">{activePolicy.daysGraceDefault} días</p>
-                        </div>
-                        <div>
-                            <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Aprobado Por</p>
-                            <div className="flex items-center gap-2 mt-1">
-                                <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                                <p className="text-sm font-medium text-gray-700">{activePolicy.approvedBy}</p>
-                            </div>
-                        </div>
-                    </div>
-                )}
             </Card>
 
             {/* Métricas principales - Diseño Fintech moderno */}
@@ -341,24 +326,19 @@ export function DashboardPage() {
                         <div className="p-3 bg-orange-50 rounded-xl">
                             <DollarSign className="w-6 h-6 text-orange-600" />
                         </div>
-                        <button
-                            onClick={() => setShowTotalLoss(!showTotalLoss)}
-                            className="flex items-center gap-1 text-xs text-orange-600 hover:text-orange-700 transition-colors cursor-pointer"
-                        >
+                        <div className="flex items-center gap-1 text-xs text-orange-600">
                             <TrendingUp className="w-3 h-3" />
-                            <span>{showTotalLoss ? 'Total' : 'Morosos'}</span>
-                        </button>
+                            <span>Exposición</span>
+                        </div>
                     </div>
                     <div>
-                        <p className="text-sm text-zinc-500 mb-1">
-                            {showTotalLoss ? 'Exposición Total' : 'Exposición Morosos'}
-                        </p>
-                        <p className="text-3xl text-zinc-900 mb-1">
-                            ${((showTotalLoss ? metricas.dineroEnRiesgoTotal : metricas.dineroEnRiesgo) / 1000).toFixed(1)}K
-                        </p>
-                        <p className="text-xs text-zinc-400">
-                            {showTotalLoss ? 'Pérdida de toda la cartera' : 'Pérdida solo morosos'}
-                        </p>
+                        <p className="text-sm text-zinc-500 mb-1">Exposición Morosos</p>
+                        <p className="text-2xl text-zinc-900 mb-1">${(metricas.dineroEnRiesgo / 1000).toFixed(1)}K</p>
+                        <p className="text-xs text-zinc-400 mb-3">Pérdida estimada morosos</p>
+                        <div className="border-t border-zinc-100 pt-2">
+                            <p className="text-xs text-zinc-400">Total cartera</p>
+                            <p className="text-lg text-zinc-700">${(metricas.dineroEnRiesgoTotal / 1000).toFixed(1)}K</p>
+                        </div>
                     </div>
                 </Card>
 
@@ -455,11 +435,11 @@ export function DashboardPage() {
                             <AreaChart data={tendenciaMensual}>
                                 <defs>
                                     <linearGradient id="colorMorosidad" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.1} />
+                                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.25} />
                                         <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
                                     </linearGradient>
                                     <linearGradient id="colorPrediccion" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} />
+                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.25} />
                                         <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                                     </linearGradient>
                                 </defs>
@@ -488,6 +468,7 @@ export function DashboardPage() {
                                     fill="url(#colorMorosidad)"
                                     strokeWidth={2}
                                     name="Real"
+                                    activeDot={{ r: 6, strokeWidth: 2 }}
                                 />
                                 <Area
                                     type="monotone"
@@ -497,6 +478,7 @@ export function DashboardPage() {
                                     strokeWidth={2}
                                     strokeDasharray="5 5"
                                     name="Predicción"
+                                    activeDot={{ r: 6, strokeWidth: 2 }}
                                 />
                             </AreaChart>
                         </ResponsiveContainer>
@@ -507,16 +489,16 @@ export function DashboardPage() {
                     )}
                 </Card>
 
-                {/* Distribución de probabilidades */}
+                {/* Distribución de Riesgo */}
                 <Card className="p-6 bg-white border-0 shadow-sm">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h3 className="text-lg text-zinc-900">Distribución de Riesgo</h3>
-                            <p className="text-xs text-zinc-500 mt-1">Probabilidad de pago</p>
+                            <p className="text-xs text-zinc-500 mt-1">Distribución de cuentas por probabilidad de impago</p>
                         </div>
                         <TrendingDown className="w-5 h-5 text-zinc-400" />
                     </div>
-                    <ResponsiveContainer width="100%" height={280}>
+                    <ResponsiveContainer width="100%" height={360}>
                         <BarChart data={distribucionProbabilidad}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                             <XAxis
@@ -527,6 +509,7 @@ export function DashboardPage() {
                             <YAxis
                                 tick={{ fill: '#71717a', fontSize: 12 }}
                                 axisLine={{ stroke: '#e5e7eb' }}
+                                label={{ value: 'N° Cuentas', angle: -90, position: 'insideLeft', fontSize: 11, fill: '#71717a', dx: -4 }}
                             />
                             <Tooltip
                                 contentStyle={{
@@ -538,284 +521,61 @@ export function DashboardPage() {
                             />
                             <Bar
                                 dataKey="cantidad"
-                                fill="#3b82f6"
+                                name="Cuentas"
                                 radius={[8, 8, 0, 0]}
-                            />
-                        </BarChart>
-                    </ResponsiveContainer>
-                </Card>
-
-                {/* Segmentación por Clasificación SBS */}
-                <Card className="p-6 bg-white border-0 shadow-sm">
-                    <div className="flex items-center justify-between mb-6">
-                        <div>
-                            <h3 className="text-lg text-zinc-900">Segmentación SBS</h3>
-                            <p className="text-xs text-zinc-500 mt-1">Distribución de clientes</p>
-                        </div>
-                        <Users className="w-5 h-5 text-zinc-400" />
-                    </div>
-                    <ResponsiveContainer width="100%" height={280}>
-                        <PieChart>
-                            <Pie
-                                data={segmentacionRiesgo as any[]}
-                                cx="50%"
-                                cy="50%"
-                                labelLine={false}
-                                label={(entry: any) => `${entry.name || entry.nivel}`}
-                                outerRadius={90}
-                                innerRadius={60}
-                                fill="#8884d8"
-                                dataKey="cantidad"
-                                paddingAngle={2}
                             >
-                                {segmentacionRiesgo.map((entry, index) => (
-                                    <Cell
-                                        key={`cell-${index}`}
-                                        fill={SBS_COLORS[entry.nivel] || '#a1a1aa'}
-                                    />
-                                ))}
-                            </Pie>
-                            <Tooltip
-                                contentStyle={{
-                                    backgroundColor: 'white',
-                                    border: 'none',
-                                    borderRadius: '8px',
-                                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
-                                }}
-                            />
-                        </PieChart>
-                    </ResponsiveContainer>
-                    {/* Leyenda con rangos porcentuales */}
-                    <div className="grid grid-cols-2 gap-3 mt-4">
-                        {segmentacionRiesgo.map((item) => (
-                            <div key={item.nivel} className="flex items-center gap-2">
-                                <div
-                                    className="w-3 h-3 rounded-full"
-                                    style={{ backgroundColor: SBS_COLORS[item.nivel] || '#a1a1aa' }}
-                                />
-                                <div className="text-xs">
-                                    <span className="text-zinc-600">{item.nivel}</span>
-                                    <span className="text-zinc-400 ml-1">({SBS_RANGES[item.nivel] || ''}) {item.cantidad}</span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </Card>
-
-                {/* Exposición financiera */}
-                <Card className="p-6 bg-white border-0 shadow-sm">
-                    <div className="flex items-center justify-between mb-6">
-                        <div>
-                            <h3 className="text-lg text-zinc-900">Exposición Financiera</h3>
-                            <p className="text-xs text-zinc-500 mt-1">Por clasificación SBS</p>
-                        </div>
-                        <DollarSign className="w-5 h-5 text-zinc-400" />
-                    </div>
-                    <ResponsiveContainer width="100%" height={280}>
-                        <BarChart data={segmentacionRiesgo} layout="vertical">
-                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                            <XAxis
-                                type="number"
-                                tick={{ fill: '#71717a', fontSize: 12 }}
-                                axisLine={{ stroke: '#e5e7eb' }}
-                            />
-                            <YAxis
-                                dataKey="nivel"
-                                type="category"
-                                tick={{ fill: '#71717a', fontSize: 12 }}
-                                axisLine={{ stroke: '#e5e7eb' }}
-                            />
-                            <Tooltip
-                                formatter={(value) => `$${Number(value).toLocaleString()}`}
-                                contentStyle={{
-                                    backgroundColor: 'white',
-                                    border: 'none',
-                                    borderRadius: '8px',
-                                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
-                                }}
-                            />
-                            <Bar dataKey="dinero" radius={[0, 8, 8, 0]}>
-                                {segmentacionRiesgo.map((entry, index) => (
-                                    <Cell
-                                        key={`cell-${index}`}
-                                        fill={SBS_COLORS[entry.nivel] || '#a1a1aa'}
-                                    />
-                                ))}
+                                {distribucionProbabilidad.map((_, i) => {
+                                    const RISK_GRADIENT = ['#22c55e', '#84cc16', '#eab308', '#f97316', '#ef4444'];
+                                    return <Cell key={i} fill={RISK_GRADIENT[Math.min(i, RISK_GRADIENT.length - 1)]} />;
+                                })}
                             </Bar>
                         </BarChart>
                     </ResponsiveContainer>
                 </Card>
 
-                {/* Distribución por Clasificación SBS Predicha */}
+                {/* Clasificación SBS: Real vs Predicha (agrupado) */}
                 <Card className="p-6 bg-white border-0 shadow-sm lg:col-span-2">
                     <div className="flex items-center justify-between mb-6">
                         <div>
-                            <h3 className="text-lg text-zinc-900">Clasificación SBS Predicha</h3>
-                            <p className="text-xs text-zinc-500 mt-1">Distribución de cuentas por categoría SBS del modelo</p>
+                            <h3 className="text-lg text-zinc-900">Clasificación SBS — Real vs Predicha</h3>
+                            <p className="text-xs text-zinc-500 mt-1">Comparación del estado actual con la predicción del modelo por categoría</p>
                         </div>
-                        <AlertTriangle className="w-5 h-5 text-zinc-400" />
+                        <Users className="w-5 h-5 text-zinc-400" />
                     </div>
-                    {distribucionSBS && distribucionSBS.length > 0 ? (
-                        <div className="flex flex-col lg:flex-row gap-6">
-                            <div className="flex-1">
-                                <ResponsiveContainer width="100%" height={280}>
-                                    <BarChart data={distribucionSBS}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                                        <XAxis
-                                            dataKey="categoria"
-                                            tick={{ fill: '#71717a', fontSize: 12 }}
-                                            axisLine={{ stroke: '#e5e7eb' }}
-                                        />
-                                        <YAxis
-                                            tick={{ fill: '#71717a', fontSize: 12 }}
-                                            axisLine={{ stroke: '#e5e7eb' }}
-                                        />
-                                        <Tooltip
-                                            contentStyle={{
-                                                backgroundColor: 'white',
-                                                border: 'none',
-                                                borderRadius: '8px',
-                                                boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
-                                            }}
-                                        />
-                                        <Bar dataKey="cantidad" radius={[8, 8, 0, 0]}>
-                                            {distribucionSBS.map((entry, index) => (
-                                                <Cell
-                                                    key={`sbs-cell-${index}`}
-                                                    fill={SBS_COLORS[entry.categoria] || '#a1a1aa'}
-                                                />
-                                            ))}
-                                        </Bar>
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
-                            <div className="flex flex-col justify-center gap-3 min-w-[180px]">
-                                {distribucionSBS.map((item) => (
-                                    <div key={item.categoria} className="flex items-center gap-3">
-                                        <div
-                                            className="w-3 h-3 rounded-full flex-shrink-0"
-                                            style={{ backgroundColor: SBS_COLORS[item.categoria] || '#a1a1aa' }}
-                                        />
-                                        <div className="flex justify-between w-full">
-                                            <span className="text-sm text-zinc-600">{item.categoria}</span>
-                                            <span className="text-sm font-medium text-zinc-900">{item.cantidad}</span>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="h-[280px] flex items-center justify-center text-zinc-400">
-                            No hay datos de clasificación SBS disponibles
-                        </div>
-                    )}
+                    <ResponsiveContainer width="100%" height={360}>
+                        <BarChart
+                            data={(() => {
+                                const ORDER = ['Normal', 'CPP', 'Deficiente', 'Dudoso', 'Pérdida'];
+                                const realMap = Object.fromEntries((segmentacionRiesgo || []).map(s => [s.nivel, s.cantidad]));
+                                const predMap = Object.fromEntries((distribucionSBS || []).map(s => [s.categoria, s.cantidad]));
+                                return ORDER.map(cat => ({ categoria: cat, real: realMap[cat] ?? 0, predicha: predMap[cat] ?? 0 }));
+                            })()}
+                            barGap={4}
+                        >
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                            <XAxis dataKey="categoria" tick={{ fill: '#71717a', fontSize: 12 }} axisLine={{ stroke: '#e5e7eb' }} />
+                            <YAxis tick={{ fill: '#71717a', fontSize: 12 }} axisLine={{ stroke: '#e5e7eb' }}
+                                label={{ value: 'N° Cuentas', angle: -90, position: 'insideLeft', fontSize: 11, fill: '#71717a', dx: -4 }} />
+                            <Tooltip contentStyle={{ backgroundColor: 'white', border: 'none', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                            <Legend wrapperStyle={{ fontSize: 12, paddingTop: 12 }} />
+                            <Bar dataKey="real" name="Real (actual)" fill="#475569" radius={[4, 4, 0, 0]} maxBarSize={36}>
+                                {['Normal', 'CPP', 'Deficiente', 'Dudoso', 'Pérdida'].map((cat, i) => <Cell key={i} fill={SBS_COLORS[cat]} />)}
+                            </Bar>
+                            <Bar dataKey="predicha" name="Predicha (modelo)" fill="#b0b3b6ff" radius={[4, 4, 0, 0]} maxBarSize={36}>
+                                {['Normal', 'CPP', 'Deficiente', 'Dudoso', 'Pérdida'].map((cat, i) => <Cell key={i} fill={SBS_COLORS[cat]} opacity={0.6} />)}
+                            </Bar>
+                        </BarChart>
+                    </ResponsiveContainer>
                 </Card>
             </div>
 
-            {/* Tabla de clientes de alto riesgo - Diseño moderno */}
-            <Card className="bg-white border-0 shadow-sm overflow-hidden">
-                <div className="p-6 border-b border-zinc-100">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-red-50 rounded-lg">
-                                <AlertTriangle className="w-5 h-5 text-red-600" />
-                            </div>
-                            <div>
-                                <h3 className="text-lg text-zinc-900">Cuentas de Alto Riesgo</h3>
-                                <p className="text-xs text-zinc-500 mt-1">Top 10 cuentas que requieren atención inmediata</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div className="overflow-x-auto">
-                    {sortedClientes.length > 0 ? (
-                        <table className="w-full">
-                            <thead className="bg-zinc-50">
-                                <tr>
-                                    <th
-                                        className="text-left py-4 px-6 text-xs text-zinc-500 uppercase tracking-wider cursor-pointer hover:bg-zinc-100 transition-colors"
-                                        onClick={() => handleSort('recordId')}
-                                    >
-                                        Cuenta <SortIcon columnKey="recordId" />
-                                    </th>
-                                    <th
-                                        className="text-right py-4 px-6 text-xs text-zinc-500 uppercase tracking-wider cursor-pointer hover:bg-zinc-100 transition-colors"
-                                        onClick={() => handleSort('probabilidadPago')}
-                                    >
-                                        Prob. Pago <SortIcon columnKey="probabilidadPago" />
-                                    </th>
-                                    <th
-                                        className="text-left py-4 px-6 text-xs text-zinc-500 uppercase tracking-wider cursor-pointer hover:bg-zinc-100 transition-colors"
-                                        onClick={() => handleSort('clasificacionSBS')}
-                                    >
-                                        Clase SBS <SortIcon columnKey="clasificacionSBS" />
-                                    </th>
-                                    <th
-                                        className="text-right py-4 px-6 text-xs text-zinc-500 uppercase tracking-wider cursor-pointer hover:bg-zinc-100 transition-colors"
-                                        onClick={() => handleSort('montoCuota')}
-                                    >
-                                        Monto <SortIcon columnKey="montoCuota" />
-                                    </th>
-                                    <th
-                                        className="text-right py-4 px-6 text-xs text-zinc-500 uppercase tracking-wider cursor-pointer hover:bg-zinc-100 transition-colors"
-                                        onClick={() => handleSort('cuotasAtrasadas')}
-                                    >
-                                        Atrasos <SortIcon columnKey="cuotasAtrasadas" />
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-zinc-100">
-                                {sortedClientes.map((client) => (
-                                    <tr key={client.recordId} className="hover:bg-zinc-50 transition-colors">
-                                        <td className="py-4 px-6">
-                                            <div>
-                                                <p className="text-sm text-zinc-900">{client.nombre}</p>
-                                                <p className="text-xs text-zinc-500">Cuenta: {client.recordId}</p>
-                                            </div>
-                                        </td>
-                                        <td className="py-4 px-6 text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                <span className="text-sm text-zinc-900">{client.probabilidadPago.toFixed(1)}%</span>
-                                                {client.probabilidadPago < 30 ? (
-                                                    <ArrowDownRight className="w-4 h-4 text-red-500" />
-                                                ) : (
-                                                    <ArrowUpRight className="w-4 h-4 text-orange-500" />
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="py-4 px-6">
-                                            <span
-                                                className="inline-flex items-center px-3 py-1 rounded-full text-xs text-white"
-                                                style={{ backgroundColor: SBS_COLORS[client.clasificacionSBS] || '#a1a1aa' }}
-                                            >
-                                                {client.clasificacionSBS}
-                                            </span>
-                                        </td>
-                                        <td className="py-4 px-6 text-right">
-                                            <span className="text-sm text-zinc-900">
-                                                ${client.montoCuota.toLocaleString()}
-                                            </span>
-                                        </td>
-                                        <td className="py-4 px-6 text-right">
-                                            <span className={`text-sm ${client.cuotasAtrasadas > 2 ? 'text-red-600' : 'text-orange-600'}`}>
-                                                {client.cuotasAtrasadas}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    ) : (
-                        <div className="p-8 text-center text-zinc-400">
-                            No hay cuentas de alto riesgo registradas
-                        </div>
-                    )}
-                </div>
-            </Card>
 
-            {/* Insights estratégicos — Dinámicos */}
-            <Card className="p-6 bg-zinc-50 border-0">
-                <div className="flex items-start gap-3 mb-4">
+
+
+
+            {/* Insights estratégicos — Posicionados antes de la tabla para mayor visibilidad */}
+            <Card className="p-5 bg-zinc-50 border-0">
+                <div className="flex items-start gap-3 mb-3">
                     <div className="p-2 bg-blue-100 rounded-lg">
                         <Target className="w-5 h-5 text-blue-600" />
                     </div>
@@ -824,9 +584,11 @@ export function DashboardPage() {
                         <p className="text-xs text-zinc-500 mt-1">Recomendaciones basadas en análisis predictivo</p>
                     </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {(() => {
                         const insights: { color: string; text: React.ReactNode }[] = [];
+                        if (!metricas || !segmentacionRiesgo || !modelo || !tendenciaMensual) return null;
+
                         const pctRiesgo = metricas.totalCuentas > 0 ? (metricas.cuentasEnRiesgo / metricas.totalCuentas) * 100 : 0;
 
                         // 1. Riesgo de cartera — condicional
@@ -880,7 +642,235 @@ export function DashboardPage() {
                     })()}
                 </div>
             </Card>
-            {/* Diálogo de Confirmación de Cambio de Política */}
+
+            {/* Tabla de clientes */}
+            <Card className="bg-white border-0 shadow-sm overflow-hidden">
+                <div className="p-6 border-b border-zinc-100">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-blue-50 rounded-lg">
+                                <Users className="w-5 h-5 text-blue-600" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg text-zinc-900">Listado de Clientes</h3>
+                                <p className="text-xs text-zinc-500 mt-1">Busque y filtre todos los clientes</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="p-4 border-b border-zinc-100 bg-zinc-50 flex flex-wrap items-end gap-4">
+                    <div className="flex-1 min-w-[180px]">
+                        <Label htmlFor="searchName" className="text-xs text-zinc-500 mb-1 block">Buscar por Nombre</Label>
+                        <Input
+                            id="searchName"
+                            placeholder="Ej. Juan Pérez"
+                            value={filterName}
+                            onChange={(e) => setFilterName(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                        />
+                    </div>
+                    <div className="w-full sm:w-[150px]">
+                        <Label htmlFor="filterSbs" className="text-xs text-zinc-500 mb-1 block">Clasificación SBS</Label>
+                        <select
+                            id="filterSbs"
+                            className="flex h-10 w-full items-center justify-between rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            value={filterSbs}
+                            onChange={(e) => setFilterSbs(e.target.value)}
+                        >
+                            <option value="Todas">Todas</option>
+                            <option value="Normal">Normal</option>
+                            <option value="CPP">CPP</option>
+                            <option value="Deficiente">Deficiente</option>
+                            <option value="Dudoso">Dudoso</option>
+                            <option value="Pérdida">Pérdida</option>
+                        </select>
+                    </div>
+                    <div className="w-full sm:w-[150px]">
+                        <Label htmlFor="filterEducacion" className="text-xs text-zinc-500 mb-1 block">Educación</Label>
+                        <select
+                            id="filterEducacion"
+                            className="flex h-10 w-full items-center justify-between rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm ring-offset-background disabled:cursor-not-allowed disabled:opacity-50"
+                            value={filterEducacion}
+                            onChange={(e) => setFilterEducacion(e.target.value)}
+                        >
+                            <option value="Todas">Todas</option>
+                            <option value="Universidad">Universidad</option>
+                            <option value="Posgrado">Posgrado</option>
+                            <option value="Preparatoria">Preparatoria</option>
+                            <option value="Otro">Otro/Secundaria</option>
+                        </select>
+                    </div>
+                    <div className="w-full sm:w-[180px] flex gap-2">
+                        <div className="w-1/2">
+                            <Label htmlFor="filterEdadMin" className="text-xs text-zinc-500 mb-1 block">Edad Mín.</Label>
+                            <Input
+                                id="filterEdadMin"
+                                type="number"
+                                placeholder="18"
+                                value={filterEdadMin}
+                                onChange={(e) => setFilterEdadMin(e.target.value ? Number(e.target.value) : '')}
+                                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                            />
+                        </div>
+                        <div className="w-1/2">
+                            <Label htmlFor="filterEdadMax" className="text-xs text-zinc-500 mb-1 block">Edad Máx.</Label>
+                            <Input
+                                id="filterEdadMax"
+                                type="number"
+                                placeholder="100"
+                                value={filterEdadMax}
+                                onChange={(e) => setFilterEdadMax(e.target.value ? Number(e.target.value) : '')}
+                                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                            />
+                        </div>
+                    </div>
+                    <div>
+                        <Button onClick={handleSearch} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto h-10">
+                            Buscar
+                        </Button>
+                    </div>
+                </div>
+
+                <div className="overflow-x-auto relative min-h-[300px]">
+                    {isLoadingClients && (
+                        <div className="absolute inset-0 z-10 bg-white/50 backdrop-blur-sm flex items-center justify-center">
+                            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                        </div>
+                    )}
+                    {(clientsPage?.content && clientsPage.content.length > 0) ? (
+                        <table className="w-full">
+                            <thead className="bg-zinc-50">
+                                <tr>
+                                    <th className="text-left py-4 px-6 text-xs text-zinc-500 uppercase tracking-wider cursor-pointer hover:bg-zinc-100 transition-colors"
+                                        onClick={() => handleSort('recordId')}>Cuenta <SortIcon columnKey="recordId" /></th>
+                                    <th className="text-right py-4 px-6 text-xs text-zinc-500 uppercase tracking-wider cursor-pointer hover:bg-zinc-100 transition-colors"
+                                        onClick={() => handleSort('probabilidadPago')}>Prob. Impago <SortIcon columnKey="probabilidadPago" /></th>
+                                    <th className="text-left py-4 px-6 text-xs text-zinc-500 uppercase tracking-wider cursor-pointer hover:bg-zinc-100 transition-colors"
+                                        onClick={() => handleSort('clasificacionSBS')}>Clase SBS <SortIcon columnKey="clasificacionSBS" /></th>
+                                    <th className="text-right py-4 px-6 text-xs text-zinc-500 uppercase tracking-wider cursor-pointer hover:bg-zinc-100 transition-colors"
+                                        onClick={() => handleSort('montoCuota')}>Monto <SortIcon columnKey="montoCuota" /></th>
+                                    <th className="text-right py-4 px-6 text-xs text-zinc-500 uppercase tracking-wider cursor-pointer hover:bg-zinc-100 transition-colors"
+                                        onClick={() => handleSort('cuotasAtrasadas')}>Atrasos <SortIcon columnKey="cuotasAtrasadas" /></th>
+                                    <th className="py-4 px-6"></th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-zinc-100">
+                                {clientsPage.content.map((client) => (
+                                    <tr
+                                        key={client.recordId}
+                                        className="hover:bg-blue-50 transition-colors cursor-pointer"
+                                        onClick={() => onNavigateToPrediction?.(client.recordId)}
+                                        title="Ver última predicción"
+                                    >
+                                        <td className="py-4 px-6">
+                                            <div>
+                                                <p className="text-sm text-zinc-900">{client.nombre}</p>
+                                                <p className="text-xs text-zinc-500">Cuenta: {client.recordId}</p>
+                                            </div>
+                                        </td>
+                                        <td className="py-4 px-6 text-right">
+                                            <div className="flex items-center justify-end gap-2">
+                                                <span className="text-sm text-zinc-900">{client.probabilidadPago.toFixed(1)}%</span>
+                                                {client.probabilidadPago < 30 ? (
+                                                    <ArrowDownRight className="w-4 h-4 text-red-500" />
+                                                ) : (
+                                                    <ArrowUpRight className="w-4 h-4 text-orange-500" />
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="py-4 px-6">
+                                            <span
+                                                className="inline-flex items-center px-3 py-1 rounded-full text-xs text-white"
+                                                style={{ backgroundColor: SBS_COLORS[client.clasificacionSBS] || '#a1a1aa' }}
+                                            >
+                                                {client.clasificacionSBS}
+                                            </span>
+                                        </td>
+                                        <td className="py-4 px-6 text-right">
+                                            <span className="text-sm text-zinc-900">${client.montoCuota.toLocaleString()}</span>
+                                        </td>
+                                        <td className="py-4 px-6 text-right">
+                                            <span className={`text-sm ${client.cuotasAtrasadas > 2 ? 'text-red-600' : 'text-orange-600'}`}>
+                                                {client.cuotasAtrasadas}
+                                            </span>
+                                        </td>
+                                        <td className="py-4 px-6 text-right">
+                                            <ArrowUpRight className="w-4 h-4 text-zinc-400" />
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    ) : (
+                        <div className="p-8 text-center text-zinc-400">
+                            No se encontraron clientes con los filtros aplicados
+                        </div>
+                    )}
+                </div>
+                {clientsPage && (clientsPage.page?.totalPages ?? clientsPage.totalPages ?? 0) > 0 && (
+                    <div className="p-4 border-t border-zinc-100 flex items-center justify-between bg-zinc-50 overflow-x-auto">
+                        <span className="text-sm text-zinc-500 hidden sm:inline whitespace-nowrap">
+                            Página {(clientsPage.page?.number ?? clientsPage.number ?? 0) + 1} de {clientsPage.page?.totalPages ?? clientsPage.totalPages ?? 1} ({clientsPage.page?.totalElements ?? clientsPage.totalElements ?? 0} resultados)
+                        </span>
+                        <div className="flex items-center gap-1 sm:gap-2 mx-auto sm:mx-0">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={(clientsPage.page?.number ?? clientsPage.number ?? 0) === 0}
+                                onClick={() => setPage(p => Math.max(0, p - 1))}
+                            >
+                                «
+                            </Button>
+
+                            {/* Lógica de botones de paginación numérica */}
+                            {(() => {
+                                const totalPages = clientsPage.page?.totalPages ?? clientsPage.totalPages ?? 1;
+                                const currentPage = clientsPage.page?.number ?? clientsPage.number ?? 0;
+                                let pages: (number | string)[] = [];
+
+                                if (totalPages <= 7) {
+                                    pages = Array.from({ length: totalPages }, (_, i) => i);
+                                } else {
+                                    if (currentPage <= 3) {
+                                        pages = [0, 1, 2, 3, 4, '...', totalPages - 2, totalPages - 1];
+                                    } else if (currentPage >= totalPages - 4) {
+                                        pages = [0, 1, '...', totalPages - 5, totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1];
+                                    } else {
+                                        pages = [0, 1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages - 2, totalPages - 1];
+                                    }
+                                }
+
+                                return pages.map((p, idx) => (
+                                    p === '...' ? (
+                                        <span key={`dots-${idx}`} className="text-zinc-400 px-2 text-sm">...</span>
+                                    ) : (
+                                        <Button
+                                            key={p}
+                                            variant={p === currentPage ? 'default' : 'outline'}
+                                            size="sm"
+                                            className={p === currentPage ? 'bg-blue-600 hover:bg-blue-700' : ''}
+                                            onClick={() => setPage(p as number)}
+                                        >
+                                            {(p as number) + 1}
+                                        </Button>
+                                    )
+                                ));
+                            })()}
+
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={(clientsPage.page?.number ?? clientsPage.number ?? 0) >= (clientsPage.page?.totalPages ?? clientsPage.totalPages ?? 1) - 1}
+                                onClick={() => setPage(p => p + 1)}
+                            >
+                                »
+                            </Button>
+                        </div>
+                    </div>
+                )}
+            </Card>
+
             <Dialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
                 <DialogContent>
                     <DialogHeader>

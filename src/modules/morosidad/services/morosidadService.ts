@@ -107,6 +107,42 @@ export async function getDashboardData(): Promise<DashboardData> {
     return response.json();
 }
 
+/**
+ * Obtiene los clientes paginados y filtrados para el dashboard.
+ */
+export async function getDashboardClients(
+    page: number = 0,
+    size: number = 10,
+    nombre?: string,
+    clasificacionSBS?: string,
+    sortBy?: string,
+    sortDir?: string,
+    educacion?: string,
+    edadMin?: number,
+    edadMax?: number
+): Promise<import('../types/morosidad.types').PageResponse<import('../types/morosidad.types').ClienteAltoRiesgo>> {
+    const params = new URLSearchParams({
+        page: page.toString(),
+        size: size.toString(),
+    });
+
+    if (nombre) params.append('nombre', nombre);
+    if (clasificacionSBS && clasificacionSBS !== 'Todas') params.append('clasificacionSBS', clasificacionSBS);
+    if (sortBy) params.append('sortBy', sortBy);
+    if (sortDir) params.append('sortDir', sortDir);
+    if (educacion && educacion !== 'Todas') params.append('educacion', educacion);
+    if (edadMin != null && !isNaN(edadMin)) params.append('edadMin', edadMin.toString());
+    if (edadMax != null && !isNaN(edadMax)) params.append('edadMax', edadMax.toString());
+
+    const response = await fetch(`${API_BASE_URL}/morosidad/dashboard/clientes?${params.toString()}`);
+
+    if (!response.ok) {
+        throw new Error('Error al obtener clientes del dashboard');
+    }
+
+    return response.json();
+}
+
 // ============ POLÍTICAS ============
 
 /**
@@ -269,6 +305,16 @@ export async function getPredictionTimeline(recordId: number): Promise<Predictio
 export async function getClientPaymentHistory(recordId: number): Promise<ClientPaymentHistoryEntry[]> {
     const response = await fetch(`${API_BASE_URL}/morosidad/payment-history/${recordId}`);
     if (!response.ok) throw new Error('Error al obtener historial de pagos');
+    return response.json();
+}
+
+/**
+ * Obtiene la última predicción guardada para una cuenta sin recalcular el modelo.
+ * Usado para navegar desde el dashboard al detalle del cliente.
+ */
+export async function getLastPrediction(recordId: number): Promise<ClientePredictionDetail> {
+    const response = await fetch(`${API_BASE_URL}/morosidad/prediccion/${recordId}/ultima`);
+    if (!response.ok) throw new Error('No se encontró predicción guardada para esta cuenta');
     return response.json();
 }
 

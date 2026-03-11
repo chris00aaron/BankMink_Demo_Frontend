@@ -1,13 +1,12 @@
-// [PAGE COMPONENT]: This component acts as a Page.
-// It orchestrates the Client Prediction view, including search state and displaying results.
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@shared/components/ui/card';
 import { UserHeader } from '../components/UserHeader';
 import { Input } from '@shared/components/ui/input';
 import { Button } from '@shared/components/ui/button';
 import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend, ReferenceLine, ComposedChart, Cell
+  Line, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Legend, ReferenceLine, ComposedChart, Cell,
+  Area, AreaChart, ReferenceArea
 } from 'recharts';
 import {
   Search,
@@ -24,11 +23,12 @@ import {
   BarChart3,
   ArrowRight,
   Shield,
-  Loader2
+  Loader2,
+  RefreshCw
 } from 'lucide-react';
 
-import { searchCustomers, predictMorosidad, getPredictionTimeline, getClientPaymentHistory } from '../services/morosidadService';
-import type { CustomerSearchResult, ClientePredictionDetail, AccountSummary, PredictionTimelineEntry, ClientPaymentHistoryEntry } from '../types/morosidad.types';
+import { searchCustomers, predictMorosidad, getPredictionTimeline, getClientPaymentHistory, getLastPrediction } from '../services/morosidadService';
+import type { CustomerSearchResult, AccountSummary, ClientePredictionDetail, PredictionTimelineEntry, ClientPaymentHistoryEntry } from '../types/morosidad.types';
 
 const SBS_COLORS: Record<string, { bg: string; text: string; range: string }> = {
   'Normal': { bg: 'bg-emerald-50', text: 'text-emerald-700', range: '0-5%' },
@@ -38,7 +38,12 @@ const SBS_COLORS: Record<string, { bg: string; text: string; range: string }> = 
   'Pérdida': { bg: 'bg-red-100', text: 'text-red-900', range: '90-100%' },
 };
 
-export function ClientPredictionPage() {
+export interface ClientPredictionPageProps {
+  initialRecordId?: number | null;
+}
+
+export function ClientPredictionPage({ initialRecordId }: ClientPredictionPageProps) {
+  // ── Estado principal ──
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredClients, setFilteredClients] = useState<CustomerSearchResult[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerSearchResult | null>(null);
@@ -48,10 +53,76 @@ export function ClientPredictionPage() {
   const [isPredicting, setIsPredicting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [timelineData, setTimelineData] = useState<PredictionTimelineEntry[]>([]);
-  const [isLoadingTimeline, setIsLoadingTimeline] = useState(false);
   const [paymentHistory, setPaymentHistory] = useState<ClientPaymentHistoryEntry[]>([]);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isLoadingExtras, setIsLoadingExtras] = useState(false);
+  const [isHistoricalView, setIsHistoricalView] = useState(false);
 
+  // ── Función unificada de carga ──
+  // mode: 'history' = cargar última predicción guardada (sin recalcular)
+  // mode: 'predict' = llamar al modelo ML para nueva predicción
+  const fetchAndSetClientData = useCallback(async (
+    recordId: number,
+    mode: 'history' | 'predict'
+  ) => {
+    setError(null);
+    setIsPredicting(true);
+    setIsHistoricalView(mode === 'history');
+
+    try {
+      // 1. Obtener predicción (guardada o nueva)
+      const result = mode === 'history'
+        ? await getLastPrediction(recordId)
+        : await predictMorosidad(recordId);
+      setPredictionResult(result);
+
+      // 2. Cargar timeline + historial de pagos en paralelo
+      setIsLoadingExtras(true);
+      const [timeline, history] = await Promise.all([
+        getPredictionTimeline(recordId).catch(() => [] as PredictionTimelineEntry[]),
+        getClientPaymentHistory(recordId).catch(() => [] as ClientPaymentHistoryEntry[])
+      ]);
+      setTimelineData(timeline);
+      setPaymentHistory(history);
+    } catch (err) {
+      const msg = mode === 'history'
+        ? 'No se encontró una predicción anterior para esta cuenta.'
+        : (err instanceof Error ? err.message : 'Error al realizar la predicción');
+      setError(msg);
+      // Si falla la nueva predicción, restaurar vista histórica
+      if (mode === 'predict') setIsHistoricalView(true);
+      if (mode === 'predict') setPredictionResult(prev => prev); // mantener resultado previo
+    } finally {
+      setIsPredicting(false);
+      setIsLoadingExtras(false);
+    }
+  }, []);
+
+  // ── Purga y carga automática desde Dashboard (initialRecordId) ──
+  useEffect(() => {
+    if (initialRecordId) {
+      // Purgar todo el estado previo para arrancar limpio
+      setSearchTerm('');
+      setFilteredClients([]);
+      setSelectedCustomer(null);
+      setSelectedAccount(null);
+      setPredictionResult(null);
+      setTimelineData([]);
+      setPaymentHistory([]);
+      setError(null);
+      setIsHistoricalView(false);
+
+      fetchAndSetClientData(initialRecordId, 'history');
+    }
+  }, [initialRecordId, fetchAndSetClientData]);
+
+  // ── Actualizar predicción (botón del banner ámbar) ──
+  const handleRefreshPrediction = async () => {
+    if (predictionResult) {
+      await fetchAndSetClientData(predictionResult.recordId, 'predict');
+    }
+  };
+
+  // ── Búsqueda de clientes ──
   const handleSearch = async (value: string) => {
     setSearchTerm(value);
     setError(null);
@@ -61,7 +132,7 @@ export function ClientPredictionPage() {
       try {
         const results = await searchCustomers(value);
         setFilteredClients(results);
-      } catch (err) {
+      } catch {
         setError('Error al buscar clientes');
         setFilteredClients([]);
       } finally {
@@ -72,47 +143,24 @@ export function ClientPredictionPage() {
     }
   };
 
+  // ── Seleccionar cliente del dropdown ──
   const selectCustomer = (customer: CustomerSearchResult) => {
     setSelectedCustomer(customer);
     setSelectedAccount(null);
     setPredictionResult(null);
+    setTimelineData([]);
+    setPaymentHistory([]);
     setSearchTerm('');
     setFilteredClients([]);
     setError(null);
+    setIsHistoricalView(false);
   };
 
+  // ── Seleccionar cuenta y predecir ──
   const selectAccountAndPredict = async (account: AccountSummary) => {
     setSelectedAccount(account);
-    setError(null);
-    setIsPredicting(true);
-
-    try {
-      const result = await predictMorosidad(account.recordId);
-      setPredictionResult(result);
-
-      // Cargar timeline de predicciones e historial de pagos en paralelo
-      setIsLoadingTimeline(true);
-      setIsLoadingHistory(true);
-      try {
-        const [timeline, history] = await Promise.all([
-          getPredictionTimeline(account.recordId).catch(() => [] as PredictionTimelineEntry[]),
-          getClientPaymentHistory(account.recordId).catch(() => [] as ClientPaymentHistoryEntry[])
-        ]);
-        setTimelineData(timeline);
-        setPaymentHistory(history);
-      } catch {
-        setTimelineData([]);
-        setPaymentHistory([]);
-      } finally {
-        setIsLoadingTimeline(false);
-        setIsLoadingHistory(false);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al realizar la predicción');
-      setPredictionResult(null);
-    } finally {
-      setIsPredicting(false);
-    }
+    setIsHistoricalView(false);
+    await fetchAndSetClientData(account.recordId, 'predict');
   };
 
   // Mapa de etiquetas amigables para las variables del modelo
@@ -350,7 +398,7 @@ export function ClientPredictionPage() {
               >
                 <div className="flex items-center justify-between mb-3">
                   <CreditCard className="w-6 h-6 text-blue-600" />
-                  <span className={`px-2 py-1 rounded-full text-xs ${account.isActiveMember ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-600'}`}>
+                  <span className={`px - 2 py - 1 rounded - full text - xs ${account.isActiveMember ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-600'} `}>
                     {account.isActiveMember ? 'Activo' : 'Inactivo'}
                   </span>
                 </div>
@@ -396,9 +444,35 @@ export function ClientPredictionPage() {
                   } ${(SBS_COLORS[predictionResult.clasificacionSBS] || SBS_COLORS['Normal']).text
                   }`}
               >
-                SBS: {predictionResult.clasificacionSBS} ({(SBS_COLORS[predictionResult.clasificacionSBS] || SBS_COLORS['Normal']).range})
+                SBS (Predicción): {predictionResult.clasificacionSBS} ({(SBS_COLORS[predictionResult.clasificacionSBS] || SBS_COLORS['Normal']).range})
               </span>
             </div>
+
+            {/* Banner histórico condicional */}
+            {isHistoricalView && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between shadow-sm mb-6 gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-100 rounded-lg">
+                    <Clock className="w-5 h-5 text-amber-700" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-amber-900">Mostrando última predicción guardada</p>
+                    <p className="text-xs text-amber-700 mt-0.5">
+                      Esta información fue evaluada previamente. Puedes generar una nueva predicción con los datos más recientes.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  onClick={handleRefreshPrediction}
+                  disabled={isPredicting}
+                  size="sm"
+                  className="bg-amber-600 hover:bg-amber-700 text-white shadow-sm flex-shrink-0"
+                >
+                  {isPredicting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                  Actualizar predicción
+                </Button>
+              </div>
+            )}
 
             {/* Badges de comparación */}
             <div className="flex flex-wrap gap-3 mb-6">
@@ -408,6 +482,11 @@ export function ClientPredictionPage() {
               {predictionResult.estimatedLoss > 0 && (
                 <span className="px-3 py-1.5 rounded-lg text-sm bg-red-50 text-red-700">
                   Pérdida estimada: ${predictionResult.estimatedLoss.toLocaleString()}
+                </span>
+              )}
+              {predictionResult.sbsCategoryReal && (
+                <span className={`px-3 py-1.5 rounded-lg text-sm font-medium ${(SBS_COLORS[predictionResult.sbsCategoryReal] || SBS_COLORS['Normal']).bg} ${(SBS_COLORS[predictionResult.sbsCategoryReal] || SBS_COLORS['Normal']).text}`}>
+                  SBS Real: {predictionResult.sbsCategoryReal}
                 </span>
               )}
             </div>
@@ -494,18 +573,18 @@ export function ClientPredictionPage() {
                     <div className="w-full bg-white/20 rounded-full h-3 overflow-hidden backdrop-blur-sm">
                       <div
                         className="h-3 bg-white rounded-full transition-all shadow-lg"
-                        style={{ width: `${predictionResult.probabilidadPago}%` }}
+                        style={{ width: `${predictionResult.probabilidadPago}% ` }}
                       />
                     </div>
                     {/* Línea de umbral */}
                     <div
                       className="absolute top-0 h-3 w-0.5 bg-yellow-400"
-                      style={{ left: `${predictionResult.umbralPolitica}%` }}
-                      title={`Umbral de política: ${predictionResult.umbralPolitica}%`}
+                      style={{ left: `${predictionResult.umbralPolitica}% ` }}
+                      title={`Umbral de política: ${predictionResult.umbralPolitica}% `}
                     />
                     <div
                       className="absolute -top-1 text-xs text-yellow-300"
-                      style={{ left: `${predictionResult.umbralPolitica}%`, transform: 'translateX(-50%)' }}
+                      style={{ left: `${predictionResult.umbralPolitica}% `, transform: 'translateX(-50%)' }}
                     >
                       ▼
                     </div>
@@ -583,7 +662,7 @@ export function ClientPredictionPage() {
                       yAxisId="left"
                       stroke="#6366f1"
                       tick={{ fill: '#6366f1', fontSize: 11 }}
-                      tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+                      tickFormatter={(v) => `$${(v / 1000).toFixed(0)} k`}
                       label={{ value: 'Monto ($)', angle: -90, position: 'insideLeft', fill: '#6366f1', fontSize: 11 }}
                     />
                     <YAxis
@@ -626,7 +705,7 @@ export function ClientPredictionPage() {
                     <Bar yAxisId="left" dataKey="Pagado" radius={[4, 4, 0, 0]} maxBarSize={35}>
                       {paymentHistory.map((entry, index) => (
                         <Cell
-                          key={`cell-${index}`}
+                          key={`cell - ${index} `}
                           fill={entry.payX === -2 ? '#94a3b8' : entry.payX <= 0 ? '#10b981' : entry.payX <= 2 ? '#f59e0b' : '#ef4444'}
                         />
                       ))}
@@ -679,7 +758,7 @@ export function ClientPredictionPage() {
             </Card>
           )}
 
-          {isLoadingHistory && (
+          {isLoadingExtras && (
             <Card className="p-8 bg-white border-0 shadow-sm">
               <div className="flex items-center justify-center gap-3 text-violet-600">
                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -694,50 +773,230 @@ export function ClientPredictionPage() {
               <h3 className="text-lg text-zinc-900">Factores de Influencia</h3>
               <p className="text-sm text-zinc-500 mt-1">Variables que afectan la predicción</p>
             </div>
-            <div className="grid grid-cols-1 gap-3">
-              {getFactoresInfluencia(predictionResult).map((factor, index) => {
-                const Icon = factor.icon;
-                return (
-                  <Card
-                    key={index}
-                    className={`p-4 border-0 shadow-sm ${factor.bgColor}`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-3">
-                        <Icon className={`w-5 h-5 ${factor.color}`} />
-                        <div>
-                          <p className="font-medium text-zinc-900">{factor.factor}</p>
-                          {FACTOR_DESCRIPTIONS[factor.name] && (
-                            <p className="text-xs text-zinc-500 mt-0.5">{FACTOR_DESCRIPTIONS[factor.name]}</p>
-                          )}
+
+            {predictionResult.riskFactors && predictionResult.riskFactors.length > 0 ? (
+              <div className="grid grid-cols-1 gap-3">
+                {getFactoresInfluencia(predictionResult).map((factor, index) => {
+                  const Icon = factor.icon;
+                  return (
+                    <Card
+                      key={index}
+                      className={`p-4 border-0 shadow-sm ${factor.bgColor}`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-3">
+                          <Icon className={`w-5 h-5 ${factor.color}`} />
+                          <div>
+                            <p className="font-medium text-zinc-900">{factor.factor}</p>
+                            {FACTOR_DESCRIPTIONS[factor.name] && (
+                              <p className="text-xs text-zinc-500 mt-0.5">{FACTOR_DESCRIPTIONS[factor.name]}</p>
+                            )}
+                          </div>
                         </div>
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs font-medium ${factor.impacto === 'Reduce Riesgo'
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-red-100 text-red-700'
+                            }`}
+                        >
+                          {factor.impacto}
+                        </span>
                       </div>
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-medium ${factor.impacto === 'Reduce Riesgo'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-red-100 text-red-700'
-                          }`}
-                      >
-                        {factor.impacto}
-                      </span>
-                    </div>
-                    {/* Barra de impacto */}
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${factor.barColor}`}
-                          style={{ width: `${Math.abs(factor.impact)}%` }}
-                        />
+                      {/* Barra de impacto */}
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${factor.barColor}`}
+                            style={{ width: `${Math.abs(factor.impact)}%` }}
+                          />
+                        </div>
+                        <span className={`text-sm font-semibold min-w-[50px] text-right ${factor.color}`}>
+                          {factor.impact > 0 ? '+' : ''}{factor.impact.toFixed(0)}%
+                        </span>
                       </div>
-                      <span className={`text-sm font-semibold min-w-[50px] text-right ${factor.color}`}>
-                        {factor.impact > 0 ? '+' : ''}{factor.impact.toFixed(0)}%
-                      </span>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex items-start gap-4 p-5 bg-zinc-50 rounded-xl border border-zinc-200">
+                <div className="p-2 bg-zinc-200 rounded-lg flex-shrink-0">
+                  <AlertCircle className="w-5 h-5 text-zinc-500" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-zinc-700">Análisis SHAP detallado no disponible</p>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    {predictionResult.mainRiskFactor === 'Batch' ? (
+                      <>Esta predicción se realizó en lote (batch), por lo que no incluye un análisis de explicabilidad individual. Usa "Actualizar predicción" para generar un análisis completo.</>
+                    ) : (
+                      <>
+                        Los factores de influencia detallados solo están disponibles para predicciones realizadas en tiempo real.
+                        {predictionResult.mainRiskFactor && (
+                          <span className="block mt-2">
+                            <span className="font-semibold text-zinc-700">Factor principal registrado:</span>{' '}
+                            {FACTOR_LABELS[predictionResult.mainRiskFactor] || predictionResult.mainRiskFactor}
+                            {FACTOR_DESCRIPTIONS[predictionResult.mainRiskFactor] && (
+                              <span className="block mt-0.5 ml-2 text-zinc-500">- {FACTOR_DESCRIPTIONS[predictionResult.mainRiskFactor]}</span>
+                            )}
+                          </span>
+                        )}
+                        <span className="block mt-2">Usa "Actualizar predicción" para generar un análisis completo con peso exacto.</span>
+                      </>
+                    )}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
+
+
+          {/* Timeline de Predicción — Evolución de Probabilidad de Pago */}
+          {timelineData.length > 0 && (
+            <Card className="p-8 bg-white border-0 shadow-sm">
+              <div className="flex items-start gap-3 mb-6">
+                <div className="p-2 bg-indigo-50 rounded-lg">
+                  <TrendingUp className="w-5 h-5 text-indigo-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg text-zinc-900">Evolución de Probabilidad de Pago</h3>
+                  <p className="text-sm text-zinc-500 mt-1">Tendencia histórica de la predicción del modelo para esta cuenta</p>
+                </div>
+              </div>
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart
+                    data={timelineData.map(d => ({
+                      fecha: new Date(d.date).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }),
+                      probPago: +((1 - d.defaultProbability) * 100).toFixed(1),
+                      category: d.defaultCategory,
+                      mainRiskFactor: d.mainRiskFactor
+                    }))}
+                    margin={{ top: 10, right: 30, left: 10, bottom: 5 }}
+                  >
+                    <defs>
+                      <linearGradient id="gradPago" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="fecha" stroke="#64748b" tick={{ fill: '#64748b', fontSize: 11 }} />
+                    <YAxis
+                      stroke="#3b82f6"
+                      tick={{ fill: '#3b82f6', fontSize: 11 }}
+                      tickFormatter={(v) => `${v}%`}
+                      domain={[0, 100]}
+                      label={{ value: 'Prob. Pago (%)', angle: -90, position: 'insideLeft', fill: '#3b82f6', fontSize: 11 }}
+                    />
+                    <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload || payload.length === 0) return null;
+                        const data = payload[0]?.payload;
+                        const SBS_DOT: Record<string, { color: string; label: string }> = {
+                          'Normal': { color: '#10b981', label: 'Normal' },
+                          'CPP': { color: '#f59e0b', label: 'CPP' },
+                          'Deficiente': { color: '#f97316', label: 'Deficiente' },
+                          'Dudoso': { color: '#ef4444', label: 'Dudoso' },
+                          'Pérdida': { color: '#991b1b', label: 'Pérdida' }
+                        };
+                        const sbsInfo = SBS_DOT[data.category] || { color: '#a1a1aa', label: data.category };
+                        const factorLabel = FACTOR_LABELS[data.mainRiskFactor] || data.mainRiskFactor || '—';
+                        return (
+                          <div className="bg-white border border-zinc-200 shadow-lg rounded-lg p-3 text-sm min-w-[200px]">
+                            <p className="font-bold text-zinc-900 mb-2">{label}</p>
+                            <p className="text-zinc-600">Prob. Pago: <span className="font-semibold text-blue-600">{data.probPago}%</span></p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: sbsInfo.color }} />
+                              <span className="text-zinc-600">SBS Predicha: <span className="font-medium">{sbsInfo.label}</span></span>
+                            </div>
+                            {data.mainRiskFactor && (
+                              <p className="text-zinc-500 mt-1 text-xs">Factor: <span className="font-medium text-zinc-700">{factorLabel}</span></p>
+                            )}
+                          </div>
+                        );
+                      }}
+                    />
+                    {predictionResult && (
+                      <ReferenceArea
+                        y1={0} y2={predictionResult.umbralPolitica}
+                        fill="#fecaca" fillOpacity={0.25}
+                      />
+                    )}
+                    {predictionResult && (
+                      <ReferenceLine
+                        y={predictionResult.umbralPolitica}
+                        stroke="#f59e0b"
+                        strokeDasharray="8 4"
+                        label={{ value: `Umbral ${predictionResult.umbralPolitica.toFixed(0)}%`, position: 'insideTopRight', fill: '#f59e0b', fontSize: 11 }}
+                      />
+                    )}
+                    <Area
+                      type="monotone"
+                      dataKey="probPago"
+                      stroke="#3b82f6"
+                      strokeWidth={3}
+                      fill="url(#gradPago)"
+                      name="Prob. Pago (%)"
+                      dot={(props: { cx?: number; cy?: number; index?: number; payload?: { category: string } }) => {
+                        const SBS_DOT_COLORS: Record<string, string> = {
+                          'Normal': '#10b981', 'CPP': '#f59e0b', 'Deficiente': '#f97316',
+                          'Dudoso': '#ef4444', 'Pérdida': '#991b1b'
+                        };
+                        const cat = props.payload?.category || 'Normal';
+                        const color = SBS_DOT_COLORS[cat] || '#3b82f6';
+                        return <circle key={props.index} cx={props.cx ?? 0} cy={props.cy ?? 0} r={5} fill={color} stroke="#fff" strokeWidth={2} />;
+                      }}
+                      activeDot={{ r: 7, strokeWidth: 2 }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+              {/* Leyenda */}
+              <div className="mt-4 flex flex-wrap gap-4 text-xs text-zinc-500">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-0.5 bg-blue-500 rounded-full" />
+                  <span>Línea = probabilidad de pago según el modelo</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-6 h-0.5 border-t-2 border-dashed border-amber-500" />
+                  <span>Umbral de política</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 bg-red-200 rounded-sm" />
+                  <span>Zona rosa = por debajo del umbral (riesgo)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                  <span>Normal</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                  <span>CPP</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-orange-500" />
+                  <span>Deficiente</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                  <span>Dudoso</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-900" />
+                  <span>Pérdida</span>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {isLoadingExtras && (
+            <Card className="p-8 bg-white border-0 shadow-sm">
+              <div className="flex items-center justify-center gap-3 text-indigo-600">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span className="text-sm">Cargando evolución de predicción...</span>
+              </div>
+            </Card>
+          )}
 
           {/* Recomendaciones */}
           <Card className="p-8 bg-white border-0 shadow-sm">
@@ -770,112 +1029,6 @@ export function ClientPredictionPage() {
               ))}
             </div>
           </Card>
-
-          {/* Timeline de Predicción */}
-          {timelineData.length > 0 && (
-            <Card className="p-8 bg-white border-0 shadow-sm">
-              <div className="flex items-start gap-3 mb-6">
-                <div className="p-2 bg-indigo-50 rounded-lg">
-                  <TrendingUp className="w-5 h-5 text-indigo-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg text-zinc-900">Evolución de Predicción</h3>
-                  <p className="text-sm text-zinc-500 mt-1">Probabilidad de default y estado de pago real a lo largo del tiempo</p>
-                </div>
-              </div>
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart
-                    data={timelineData.map(d => ({
-                      fecha: new Date(d.date).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }),
-                      'Prob. Default (%)': +(d.defaultProbability * 100).toFixed(1),
-                      'Meses Atraso': d.payX,
-                      category: d.defaultCategory
-                    }))}
-                    margin={{ top: 10, right: 30, left: 10, bottom: 5 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey="fecha" stroke="#64748b" tick={{ fill: '#64748b', fontSize: 11 }} />
-                    <YAxis
-                      yAxisId="left"
-                      stroke="#3b82f6"
-                      tick={{ fill: '#3b82f6', fontSize: 11 }}
-                      tickFormatter={(v) => `${v}%`}
-                      domain={[0, 100]}
-                      label={{ value: 'Prob. Default (%)', angle: -90, position: 'insideLeft', fill: '#3b82f6', fontSize: 11 }}
-                    />
-                    <YAxis
-                      yAxisId="right"
-                      orientation="right"
-                      stroke="#ef4444"
-                      tick={{ fill: '#ef4444', fontSize: 11 }}
-                      domain={[0, 'auto']}
-                      allowDecimals={false}
-                      label={{ value: 'Meses Atraso', angle: 90, position: 'insideRight', fill: '#ef4444', fontSize: 11 }}
-                    />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', borderRadius: '8px' }}
-                      labelStyle={{ color: '#1e293b', fontWeight: 'bold' }}
-                      formatter={(value, name) => [
-                        name === 'Prob. Default (%)' ? `${value}%` : `${value} mes(es)`,
-                        String(name)
-                      ]}
-                    />
-                    <Legend />
-                    {predictionResult && (
-                      <ReferenceLine
-                        yAxisId="left"
-                        y={100 - predictionResult.umbralPolitica}
-                        stroke="#f59e0b"
-                        strokeDasharray="8 4"
-                        label={{ value: `Umbral (${(100 - predictionResult.umbralPolitica).toFixed(0)}%)`, position: 'insideTopRight', fill: '#f59e0b', fontSize: 11 }}
-                      />
-                    )}
-                    <Line
-                      yAxisId="left"
-                      type="monotone"
-                      dataKey="Prob. Default (%)"
-                      stroke="#3b82f6"
-                      strokeWidth={3}
-                      dot={{ fill: '#3b82f6', r: 4 }}
-                      activeDot={{ r: 6 }}
-                    />
-                    <Bar
-                      yAxisId="right"
-                      dataKey="Meses Atraso"
-                      fill="#fca5a5"
-                      radius={[4, 4, 0, 0]}
-                      maxBarSize={30}
-                    />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
-              {/* Leyenda de interpretación */}
-              <div className="mt-4 flex flex-wrap gap-4 text-xs text-zinc-500">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-0.5 bg-blue-500 rounded-full" />
-                  <span>Línea azul = % probabilidad de impago según el modelo</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 bg-red-300 rounded-sm" />
-                  <span>Barras rojas = meses de atraso real (pay_x)</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-6 h-0.5 border-t-2 border-dashed border-amber-500" />
-                  <span>Línea amarilla = umbral de política</span>
-                </div>
-              </div>
-            </Card>
-          )}
-
-          {isLoadingTimeline && (
-            <Card className="p-8 bg-white border-0 shadow-sm">
-              <div className="flex items-center justify-center gap-3 text-indigo-600">
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span className="text-sm">Cargando evolución de predicción...</span>
-              </div>
-            </Card>
-          )}
 
           {/* Botón para nueva búsqueda */}
           <div className="flex justify-center">

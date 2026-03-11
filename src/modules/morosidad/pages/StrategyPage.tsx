@@ -460,25 +460,25 @@ function SimulationResults({ result, formatCurrency, formatPct }: {
                     </div>
                     <p className="text-xs text-green-600 font-semibold mt-1">▼ {(result.tasaMorosidadActual - result.tasaMorosidadProyectada).toFixed(1)}pp de reducción</p>
                 </div>
-                {/* Impacto en el segmento */}
+                {/* Prob. Pago Promedio en el segmento */}
                 <div className="bg-white rounded-lg p-4 border border-gray-100 col-span-2">
-                    <p className="text-xs text-gray-500 uppercase font-medium mb-2">Impacto en Segmento "{result.segmento}"</p>
+                    <p className="text-xs text-gray-500 uppercase font-medium mb-2">Prob. Pago Promedio en Segmento "{result.segmento}"</p>
                     <div className="flex items-center gap-4">
                         <div>
-                            <p className="text-sm text-gray-400">Pérdida del segmento</p>
-                            <p className="text-lg font-bold text-gray-800">{formatCurrency(result.perdidaActual)}</p>
+                            <p className="text-sm text-gray-400">Actual</p>
+                            <p className="text-lg font-bold text-gray-800">{formatPct(result.probPromedioActual)}</p>
                         </div>
                         <ArrowRight className="w-4 h-4 text-gray-400" />
                         <div>
                             <p className="text-sm text-green-500">Proyectada</p>
-                            <p className="text-lg font-bold text-green-700">{formatCurrency(result.perdidaProyectada)}</p>
+                            <p className="text-lg font-bold text-green-700">{formatPct(result.probPromedioProyectada)}</p>
                         </div>
                         <div className="ml-auto text-right">
                             <p className="text-sm text-gray-400">Cuentas que mejoran SBS</p>
                             <p className="text-lg font-bold text-blue-700">{result.cuentasMejoradas} de {result.totalCuentasSegmento}</p>
                         </div>
                     </div>
-                    <p className="text-xs text-green-600 font-semibold mt-2">▼ Reducción de pérdida en segmento: {formatPct(result.reduccionPerdida)}</p>
+                    <p className="text-xs text-green-600 font-semibold mt-2">▲ Mejora: +{(result.probPromedioProyectada - result.probPromedioActual).toFixed(1)}pp en probabilidad de pago</p>
                 </div>
                 {/* Cuentas mejoradas */}
                 <div className="bg-white rounded-lg p-4 border border-gray-100">

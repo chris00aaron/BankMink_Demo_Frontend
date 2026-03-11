@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Key } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
 import { apiRequest } from '@shared/services/apiClient';
@@ -10,16 +10,29 @@ interface Role {
     name: string;
 }
 
-interface CreateUserModalProps {
+interface User {
+    id: number;
+    dni: string;
+    fullName: string;
+    email: string;
+    phone?: string;
+    roleCodRole: string;
+    roleName: string;
+    enable: boolean;
+}
+
+interface EditUserModalProps {
     isOpen: boolean;
+    user: User | null;
     onClose: () => void;
     onSuccess: () => void;
 }
 
-export function CreateUserModal({ isOpen, onClose, onSuccess }: CreateUserModalProps) {
+export function EditUserModal({ isOpen, user, onClose, onSuccess }: EditUserModalProps) {
     const [loading, setLoading] = useState(false);
     const [roles, setRoles] = useState<Role[]>([]);
     const [error, setError] = useState('');
+    const [showPasswordChange, setShowPasswordChange] = useState(false);
     const [formData, setFormData] = useState({
         dni: '',
         fullName: '',
@@ -32,8 +45,29 @@ export function CreateUserModal({ isOpen, onClose, onSuccess }: CreateUserModalP
     useEffect(() => {
         if (isOpen) {
             fetchRoles();
+            if (user) {
+                // Determine user's role ID from roles list if loaded, otherwise we'll set it when roles load
+                setFormData({
+                    dni: user.dni,
+                    fullName: user.fullName,
+                    email: user.email,
+                    password: '', // Password is empty by default
+                    phone: user.phone || '',
+                    roleId: '' // Will be updated below or when roles load
+                });
+                setShowPasswordChange(false);
+            }
         }
-    }, [isOpen]);
+    }, [isOpen, user]);
+
+    useEffect(() => {
+        if (user && roles.length > 0) {
+            const userRole = roles.find(r => r.name === user.roleName || r.codRole === user.roleCodRole);
+            if (userRole) {
+                setFormData(prev => ({ ...prev, roleId: userRole.id.toString() }));
+            }
+        }
+    }, [roles, user]);
 
     const fetchRoles = async () => {
         try {
@@ -48,29 +82,43 @@ export function CreateUserModal({ isOpen, onClose, onSuccess }: CreateUserModalP
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (!user) return;
+
+        // Validation if password change is enabled
+        if (showPasswordChange && formData.password && formData.password.length < 6) {
+            setError('La contraseña debe tener al menos 6 caracteres');
+            return;
+        }
+
         setLoading(true);
         setError('');
 
         try {
-            const data = await apiRequest<{ success: boolean; message?: string }>('/admin/users', 'POST', {
-                ...formData,
+            const payload: any = {
+                dni: formData.dni,
+                fullName: formData.fullName,
+                email: formData.email,
+                phone: formData.phone,
                 roleId: parseInt(formData.roleId)
-            });
+            };
+
+            // Only include password if the user enabled the section and typed something
+            if (showPasswordChange && formData.password) {
+                payload.password = formData.password;
+            }
+
+            const data = await apiRequest<{ success: boolean; message?: string }>(
+                `/admin/users/${user.id}`,
+                'PUT',
+                payload
+            );
 
             if (data.success) {
                 onSuccess();
                 onClose();
-                // Reset form
-                setFormData({
-                    dni: '',
-                    fullName: '',
-                    email: '',
-                    password: '',
-                    phone: '',
-                    roleId: ''
-                });
             } else {
-                setError(data.message || 'Error al crear usuario');
+                setError(data.message || 'Error al actualizar usuario');
             }
         } catch (err) {
             setError('Error de conexión');
@@ -79,14 +127,14 @@ export function CreateUserModal({ isOpen, onClose, onSuccess }: CreateUserModalP
         }
     };
 
-    if (!isOpen) return null;
+    if (!isOpen || !user) return null;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
                 {/* Header */}
                 <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                    <h2 className="text-2xl font-bold text-gray-900">Nuevo Usuario</h2>
+                    <h2 className="text-2xl font-bold text-gray-900">Editar Usuario</h2>
                     <button
                         onClick={onClose}
                         className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -148,21 +196,6 @@ export function CreateUserModal({ isOpen, onClose, onSuccess }: CreateUserModalP
                         />
                     </div>
 
-                    {/* Contraseña */}
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Contraseña
-                        </label>
-                        <Input
-                            type="password"
-                            value={formData.password}
-                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                            placeholder="Mínimo 6 caracteres"
-                            required
-                            minLength={6}
-                        />
-                    </div>
-
                     {/* Teléfono */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -198,6 +231,36 @@ export function CreateUserModal({ isOpen, onClose, onSuccess }: CreateUserModalP
                         </select>
                     </div>
 
+                    {/* Expansible: Cambiar Contraseña */}
+                    <div className="pt-2 border-t border-gray-100">
+                        <button
+                            type="button"
+                            onClick={() => setShowPasswordChange(!showPasswordChange)}
+                            className="flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-colors focus:outline-none"
+                        >
+                            <Key className="w-4 h-4" />
+                            {showPasswordChange ? 'Ocultar cambio de contraseña' : 'Cambiar contraseña'}
+                        </button>
+
+                        {showPasswordChange && (
+                            <div className="mt-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Nueva Contraseña
+                                </label>
+                                <Input
+                                    type="password"
+                                    value={formData.password}
+                                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                    placeholder="Dejar vacío para no cambiar"
+                                    minLength={6}
+                                />
+                                <p className="text-xs text-gray-500 mt-2">
+                                    Si deja este campo vacío, la contraseña del usuario no será modificada.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+
                     {/* Buttons */}
                     <div className="flex gap-3 pt-4">
                         <Button
@@ -214,7 +277,7 @@ export function CreateUserModal({ isOpen, onClose, onSuccess }: CreateUserModalP
                             className="flex-1 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800"
                             disabled={loading}
                         >
-                            {loading ? 'Creando...' : 'Crear Usuario'}
+                            {loading ? 'Actualizando...' : 'Guardar Cambios'}
                         </Button>
                     </div>
                 </form>
