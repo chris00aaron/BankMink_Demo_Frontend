@@ -2,6 +2,7 @@ import { SidebarAtm } from "./components/SidebarAtm";
 import Dashboard from "./page/Dashboard";
 import { Simulator } from "./page/Simulator";
 import ModelAudit from "./page/ModelAudit";
+import Monitoring from "./page/Monitoring";
 
 interface IAtmModule {
     currentScreen: string;
@@ -26,6 +27,7 @@ export function AtmModule({currentScreen, onNavigate, onBackToHome, onLogout }: 
             {currentScreen === "dashboard" && <Dashboard />}
             {currentScreen === "simulator" && <Simulator />}
             {currentScreen === "model-audit" && <ModelAudit />}
+            {currentScreen === "monitoring" && <Monitoring />}
           </main>
         </div>
       </div>

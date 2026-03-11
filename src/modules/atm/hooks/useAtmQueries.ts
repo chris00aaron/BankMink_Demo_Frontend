@@ -17,10 +17,11 @@ export const atmKeys = {
   details: () => [...atmKeys.all, "detail"] as const,
   detail: (id: string) => [...atmKeys.details(), id] as const,
   predictions: () => [...atmKeys.all, "predictions"] as const,
-  prediction: (atmId: string, fecha?: string) =>
-    [...atmKeys.predictions(), atmId, fecha] as const,
+  prediction: (atmId: string, fecha?: string) => [...atmKeys.predictions(), atmId, fecha] as const,
   stats: () => [...atmKeys.all, "stats"] as const,
   modelMetrics: () => [...atmKeys.all, "model-metrics"] as const,
+  status: () => [...atmKeys.all, "status"] as const,
+  lastStatus: () => [...atmKeys.status(), "last"] as const,
 };
 
 // ===== QUERIES =====
@@ -72,13 +73,27 @@ export function useAtmDashboard() {
 
 /**
  * Hook para obtener estados de ATMs con predicciones
- * Endpoint: GET /atm/prediccion
+ * Endpoint: GET /atm/status
  */
 export function useEstadosAtms() {
   return useQuery({
     queryKey: [...atmKeys.all, "prediccion", "estados"] as const,
     queryFn: () => atmService.getEstadosAtms(),
     staleTime: 5 * 60 * 1000, // 5 minutos
+  });
+}
+
+/**
+ * Hook para obtener el último estado de los ATMs
+ * Endpoint: GET /atm/status/last
+ */
+export function useAtmNetwork() {
+  return useQuery({
+    queryKey: atmKeys.lastStatus(),
+    queryFn: () => atmService.getLastStatus(),
+    refetchInterval: 60_000, // Refresca cada 60 segundos
+    retry: 3,
+    staleTime: 30_000,
   });
 }
 

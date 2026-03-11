@@ -16,7 +16,6 @@ export const weatherService = {
    */
   async getWeather(): Promise<ApiResponse<Weather[]>> {
     const response = await apiClient.get<ApiResponse<Weather[]>>("/atm/weather");
-    console.log(response.data);
     return response.data;
   },
 };

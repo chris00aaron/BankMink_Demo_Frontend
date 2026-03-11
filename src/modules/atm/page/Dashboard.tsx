@@ -90,8 +90,7 @@ export default function Dashboard() {
     error: dashboardError,
     refetch: refetchDashboard,
   } = useAtmDashboard();
-  const { data: estadosResponse, isLoading: isLoadingEstados } =
-    useEstadosAtms();
+  const { data: estadosResponse, isLoading: isLoadingEstados } = useEstadosAtms();
 
   const isLoading = isLoadingDashboard || isLoadingEstados;
 
@@ -116,7 +115,7 @@ export default function Dashboard() {
   };
 
   // Estados de ATMs para la tabla
-  const estadosAtms = estadosResponse?.estadosAtms || [];
+  const estadosAtms = estadosResponse || [];
 
   // Calcular cambio porcentual
   const calcularCambio = () => {
