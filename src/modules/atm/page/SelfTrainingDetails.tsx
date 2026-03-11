@@ -199,7 +199,7 @@ const ModelDetailView = ({ modelId, onBack }: ModelDetailViewProps) => {
           className={`${styles.statusBadge} ${modelData.isProduction ? styles.production : styles.development}`}
         >
           <span className={styles.statusDot}></span>
-          {modelData.isProduction ? "En Producción" : "Desarrollo"}
+          {modelData.isProduction ? "En Producción" : "Archivado"}
         </div>
       </header>
 

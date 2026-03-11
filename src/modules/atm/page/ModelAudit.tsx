@@ -94,7 +94,7 @@ export default function ModelAudit() {
   // Chart Data (Derived from current page items, reversed for chronological order if backend sends desc)
   // Assuming backend sends most recent first (desc).
   const chartData = [...currentItems].reverse().map((m) => ({
-    name: m.nombreModelo.split("_")[1] || m.nombreModelo,
+    name: m.nombreModelo || 'No definido',
     mape: m.mape,
     mae: m.mae,
     date: m.startTraining ? m.startTraining.split("T")[0] : "",
@@ -177,7 +177,7 @@ export default function ModelAudit() {
             iconBg="bg-emerald-50"
             iconColor="text-emerald-600"
             label="Precisión Actual (MAPE)"
-            value={`${productionModel?.mape || 0}%`}
+            value={`${(productionModel?.mape?? 0) * 100}%`}
             sublabel="Porcentaje de error promedio"
             delay={0}
           />
@@ -227,45 +227,46 @@ export default function ModelAudit() {
                   margin={{ top: 10, right: 30, bottom: 10, left: 0 }}
                 >
                   <defs>
-                    <linearGradient
-                      id="mapeGradient"
-                      x1="0"
-                      y1="0"
-                      x2="0"
-                      y2="1"
-                    >
-                      <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} />
-                      <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
+                    <linearGradient id="mapeGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    vertical={false}
-                    stroke="#e2e8f0"
-                  />
-                  <XAxis
-                    dataKey="name"
+                  
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  
+                  <XAxis 
+                    dataKey="name" 
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: "#94a3b8", fontSize: 12 }}
+                    tick={{ fill: "#94a3b8", fontSize: 11 }}
                     dy={10}
                   />
-                  <YAxis
+                  
+                  <YAxis 
+                    hide={false} // Asegúrate de que se vea para dar contexto de escala
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: "#94a3b8", fontSize: 12 }}
-                    tickFormatter={(value) => `${value}%`}
+                    tick={{ fill: "#94a3b8", fontSize: 11 }}
+                    tickFormatter={(val) => `${val}%`}
                   />
-                  <Tooltip content={<CustomTooltip />} />
+
+                  {/* Mejoramos el Tooltip con cursor y activamos interacción por eje */}
+                  <Tooltip 
+                    content={<CustomTooltip />} 
+                    shared={true}
+                    cursor={{ stroke: '#94a3b8', strokeWidth: 1, strokeDasharray: '4 4' }}
+                  />
+
                   <Area
                     type="monotone"
                     dataKey="mape"
-                    name="MAPE"
                     stroke="#3b82f6"
                     strokeWidth={3}
                     fill="url(#mapeGradient)"
-                    animationDuration={1500}
-                    animationEasing="ease-out"
+                    // Agregamos puntos activos para mejorar la puntería del mouse
+                    activeDot={{ r: 6, strokeWidth: 0, fill: '#1d4ed8' }} 
+                    animationDuration={1000}
                   />
                 </AreaChart>
               </ResponsiveContainer>

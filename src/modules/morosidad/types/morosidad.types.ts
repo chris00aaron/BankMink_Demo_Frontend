@@ -51,6 +51,7 @@ export interface ClientePredictionDetail {
 
     // Clasificación y comparación
     clasificacionSBS: 'Normal' | 'CPP' | 'Deficiente' | 'Dudoso' | 'Pérdida';
+    sbsCategoryReal?: string;
     percentilRiesgo: number;    // 0-100: más riesgoso que el X% de la cartera
     umbralPolitica: number;     // Umbral de política activa (ej: 50.0)
 }
@@ -150,6 +151,33 @@ export interface DistribucionSBS {
     cantidad: number;
 }
 
+export interface PageResponse<T> {
+    content: T[];
+    page?: {
+        size: number;
+        number: number;
+        totalElements: number;
+        totalPages: number;
+    };
+    pageable?: {
+        pageNumber: number;
+        pageSize: number;
+        sort: { empty: boolean; sorted: boolean; unsorted: boolean };
+        offset: number;
+        paged: boolean;
+        unpaged: boolean;
+    };
+    last?: boolean;
+    totalElements?: number;
+    totalPages?: number;
+    size?: number;
+    number?: number;
+    sort?: { empty: boolean; sorted: boolean; unsorted: boolean };
+    first?: boolean;
+    numberOfElements?: number;
+    empty?: boolean;
+}
+
 // Tipos para Políticas
 export interface DefaultPolicy {
     idPolicy: number;
@@ -227,6 +255,8 @@ export interface SimulationResult {
     perdidaActual: number;
     perdidaProyectada: number;
     reduccionPerdida: number;
+    probPromedioActual: number;
+    probPromedioProyectada: number;
     tasaMorosidadActual: number;
     tasaMorosidadProyectada: number;
     cuentasMejoradas: number;
@@ -279,6 +309,7 @@ export interface PredictionTimelineEntry {
     defaultProbability: number;
     defaultCategory: string;
     payX: number;
+    mainRiskFactor: string;
 }
 
 // Historial de pagos mensual por cuenta (máx. 10 meses)

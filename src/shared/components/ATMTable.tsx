@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { MapPin, Filter, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
 import { useState, useMemo } from "react";
+import type { EstadoAtmDTO } from "@/modules/atm/services/atmService";
 import { 
   Select, 
   SelectContent, 
@@ -12,17 +13,9 @@ import {
 import { Button } from "./ui/button";
 import clsx from "clsx";
 
-interface ATM {
-  idAtm: string;
-  direccion: string;
-  tipoLugar: string;
-  balanceActual: number;
-  porcentaje: number;
-  estado: string;
-}
 
 interface ATMTableProps {
-  atms: ATM[];
+  atms: EstadoAtmDTO[];
 }
 
 export function ATMTable({ atms }: ATMTableProps) {
@@ -43,14 +36,14 @@ export function ATMTable({ atms }: ATMTableProps) {
   const getEstadoBadge = (estado: string, porcentaje: number) => {
     const estadoUpper = estado.toUpperCase();
     
-    if (estadoUpper === "CRITICO" || porcentaje < 20) {
+    if (estadoUpper === "CRITICO" || porcentaje < 0.2) {
       return (
         <Badge className="bg-red-500 hover:bg-red-600 text-white flex items-center gap-1">
           <XCircle className="h-3 w-3" />
           Crítico
         </Badge>
       );
-    } else if (estadoUpper === "ALERTA" || (porcentaje >= 20 && porcentaje < 40)) {
+    } else if (estadoUpper === "ALERTA" || (porcentaje >= 0.2 && porcentaje < 0.4)) {
       return (
         <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white flex items-center gap-1">
           <AlertTriangle className="h-3 w-3" />
@@ -68,17 +61,17 @@ export function ATMTable({ atms }: ATMTableProps) {
   };
 
   const getNivelColor = (nivel: number) => {
-    if (nivel < 20) return "bg-red-500";
-    if (nivel < 40) return "bg-yellow-500";
+    if (nivel < 0.2) return "bg-red-500";
+    if (nivel < 0.4) return "bg-yellow-500";
     return "bg-green-500";
   };
 
   const getRowBackground = (estado: string, porcentaje: number) => {
     const estadoUpper = estado.toUpperCase();
     
-    if (estadoUpper === "CRITICO" || porcentaje < 20) {
+    if (estadoUpper === "CRITICO" || porcentaje < 0.2) {
       return "bg-red-50/50 hover:bg-red-50";
-    } else if (estadoUpper === "ALERTA" || (porcentaje >= 20 && porcentaje < 40)) {
+    } else if (estadoUpper === "ALERTA" || (porcentaje >= 0.2 && porcentaje < 0.4)) {
       return "bg-yellow-50/50 hover:bg-yellow-50";
     } else {
       return "hover:bg-slate-50";
@@ -92,9 +85,9 @@ export function ATMTable({ atms }: ATMTableProps) {
       
       // Filtro por estado
       if (estadoFiltro !== "todos") {
-        if (estadoFiltro === "critico" && estadoUpper !== "CRITICO" && atm.porcentaje >= 20) return false;
-        if (estadoFiltro === "alerta" && estadoUpper !== "ALERTA" && (atm.porcentaje < 20 || atm.porcentaje >= 40)) return false;
-        if (estadoFiltro === "normal" && estadoUpper !== "NORMAL" && atm.porcentaje < 40) return false;
+        if (estadoFiltro === "critico" && estadoUpper !== "CRITICO" && atm.porcentaje >= 0.2) return false;
+        if (estadoFiltro === "alerta" && estadoUpper !== "ALERTA" && (atm.porcentaje < 0.2 || atm.porcentaje >= 0.4)) return false;
+        if (estadoFiltro === "normal" && estadoUpper !== "NORMAL" && atm.porcentaje < 0.4) return false;
       }
       
       // Filtro por tipo
@@ -104,9 +97,9 @@ export function ATMTable({ atms }: ATMTableProps) {
       
       // Filtro por nivel de efectivo
       if (nivelFiltro !== "todos") {
-        if (nivelFiltro === "bajo" && atm.porcentaje >= 40) return false;
-        if (nivelFiltro === "medio" && (atm.porcentaje < 40 || atm.porcentaje >= 70)) return false;
-        if (nivelFiltro === "alto" && atm.porcentaje < 70) return false;
+        if (nivelFiltro === "bajo" && atm.porcentaje >= 0.4) return false;
+        if (nivelFiltro === "medio" && (atm.porcentaje < 0.4 || atm.porcentaje >= 0.7)) return false;
+        if (nivelFiltro === "alto" && atm.porcentaje < 0.7) return false;
       }
       
       return true;
@@ -127,14 +120,14 @@ export function ATMTable({ atms }: ATMTableProps) {
 
   // Estadísticas rápidas
   const stats = useMemo(() => {
-    const criticos = atms.filter(a => a.estado.toUpperCase() === "CRITICO" || a.porcentaje < 20).length;
+    const criticos = atms.filter(a => a.estado.toUpperCase() === "CRITICO" || a.porcentaje < 0.2).length;
     const alertas = atms.filter(a => {
       const estadoUpper = a.estado.toUpperCase();
-      return (estadoUpper === "ALERTA" || (a.porcentaje >= 20 && a.porcentaje < 40)) && estadoUpper !== "CRITICO";
+      return (estadoUpper === "ALERTA" || (a.porcentaje >= 0.2 && a.porcentaje < 0.4)) && estadoUpper !== "CRITICO";
     }).length;
     const normales = atms.filter(a => {
       const estadoUpper = a.estado.toUpperCase();
-      return (estadoUpper === "NORMAL" || a.porcentaje >= 40) && estadoUpper !== "ALERTA" && estadoUpper !== "CRITICO";
+      return (estadoUpper === "NORMAL" || a.porcentaje >= 0.4) && estadoUpper !== "ALERTA" && estadoUpper !== "CRITICO";
     }).length;
 
     return { criticos, alertas, normales };
@@ -236,7 +229,7 @@ export function ATMTable({ atms }: ATMTableProps) {
                     )}
                   >
                     <td className="p-4">
-                      <span className="font-mono font-semibold text-slate-900">{atm.idAtm}</span>
+                      <span className="font-mono font-semibold text-slate-900">{'ATM-' + atm.idAtm.toString().padStart(4, '0')}</span>
                     </td>
                     <td className="p-4">
                       <div className="flex items-center gap-2">
@@ -262,11 +255,11 @@ export function ATMTable({ atms }: ATMTableProps) {
                               "h-full transition-all duration-500",
                               getNivelColor(atm.porcentaje)
                             )}
-                            style={{ width: `${atm.porcentaje}%` }}
+                            style={{ width: `${(atm.porcentaje*100).toFixed(2)}%` }}
                           />
                         </div>
                         <span className="text-sm font-semibold text-slate-700 min-w-[45px]">
-                          {atm.porcentaje}%
+                          {(atm.porcentaje*100).toFixed(2)}%
                         </span>
                       </div>
                     </td>

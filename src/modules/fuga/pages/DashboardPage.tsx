@@ -1,130 +1,261 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
     Users,
     TrendingDown,
     AlertOctagon,
     DollarSign,
-    ArrowRight,
     ArrowUpRight,
-    Search
+    Search,
+    ChevronLeft,
+    ChevronRight,
+    ChevronsLeft,
+    ChevronsRight,
+    Download,
+    X,
+    Filter
 } from 'lucide-react';
-import {
-    AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
-    ScatterChart, Scatter, Cell
-} from 'recharts';
 import { ChurnService } from '../churn.service';
-import { CustomerDashboard, CustomerRiskDetail, PriorityMatrixPoint, RiskTrendPoint } from '../types';
+import { CustomerDashboard, CustomerRiskDetail, PriorityMatrixPoint, DashboardKpis } from '../types';
 
-// --- DATOS MOCK PARA TENDENCIA (El backend no tiene histórico mensual) ---
-const TREND_DATA: RiskTrendPoint[] = [
-    { month: 'Ene', riskCapital: 120000 },
-    { month: 'Feb', riskCapital: 135000 },
-    { month: 'Mar', riskCapital: 110000 },
-    { month: 'Abr', riskCapital: 180000 },
-    { month: 'May', riskCapital: 194000 },
+// ── Constants ──────────────────────────────────────────────────────────
+const PAGE_SIZE = 50;
+
+const RISK_THRESHOLD = 50;
+const BALANCE_THRESHOLD = 100000;
+
+// Los 3 países reales del dataset
+const COUNTRY_OPTIONS = [
+    { value: 'France', label: '🇫🇷 Francia' },
+    { value: 'Germany', label: '🇩🇪 Alemania' },
+    { value: 'Spain', label: '🇪🇸 España' },
 ];
 
+const RISK_OPTIONS = [
+    { value: 'alto', label: '🔴 Alto', bg: '#FEE2E2', color: '#DC2626' },
+    { value: 'medio', label: '🟡 Medio', bg: '#FEF3C7', color: '#D97706' },
+    { value: 'bajo', label: '🟢 Bajo', bg: '#D1FAE5', color: '#059669' },
+] as const;
+
+// Niveles de cliente con terminología bancaria de patrimonio
+const SEGMENT_OPTIONS = [
+    {
+        value: 'Corporate' as const,
+        label: '⭐ Alto Patrimonio',
+        description: 'Balance > €100,000',
+        bg: '#FFFBEB',
+        color: '#B45309',
+    },
+    {
+        value: 'SME' as const,
+        label: '💼 Patrimonio Medio',
+        description: 'Balance €50,000 – €100,000',
+        bg: '#EFF6FF',
+        color: '#1D4ED8',
+    },
+    {
+        value: 'Personal' as const,
+        label: '👤 Patrimonio Básico',
+        description: 'Balance < €50,000',
+        bg: '#F8FAFC',
+        color: '#475569',
+    },
+];
+
+// ── Types ──────────────────────────────────────────────────────────────
 interface DashboardPageProps {
     onNavigateToCustomer?: (customerId: number) => void;
 }
 
+type SegmentValue = 'Corporate' | 'SME' | 'Personal';
+
+// ── Helper: classify a scatter point into a quadrant ───────────────────
+const getQuadrant = (risk: number, balance: number) => {
+    if (risk > RISK_THRESHOLD && balance > BALANCE_THRESHOLD) return 'danger';
+    if (risk > RISK_THRESHOLD && balance <= BALANCE_THRESHOLD) return 'watch';
+    if (risk <= RISK_THRESHOLD && balance > BALANCE_THRESHOLD) return 'vip';
+    return 'safe';
+};
+
+// ── Helper: segment from balance ────────────────────────────────────────
+const segmentFromBalance = (balance: number): 'Corporate' | 'SME' | 'Personal' =>
+    balance > 100000 ? 'Corporate' : balance > 50000 ? 'SME' : 'Personal';
+
+// ── CSV Export Helper ────────────────────────────────────────────────────
+const exportTableToCSV = (customers: CustomerRiskDetail[], filename = 'clientes_riesgo.csv') => {
+    const headers = ['ID', 'Nombre', 'Nivel de Cliente', 'País', 'Balance (€)', 'Riesgo (%)', 'Impacto Potencial (€)'];
+    const rows = customers.map(c => [
+        c.id,
+        c.name,
+        c.segment,
+        c.country,
+        c.balance,
+        c.risk,
+        Math.round(c.balance * (c.risk / 100)),
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════════════════
 const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateToCustomer }) => {
+    // ── Data state ───────────────────────────────────────────────────────
     const [customers, setCustomers] = useState<CustomerDashboard[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    // Search
     const [searchTerm, setSearchTerm] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Cargar clientes al montar el componente
+    // Pagination
+    const [currentPage, setCurrentPage] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
+    const [totalElements, setTotalElements] = useState(0);
+
+    // KPIs
+    const [kpis, setKpis] = useState<DashboardKpis | null>(null);
+
+    // ── Filter state (multi-select via Set) ─────────────────────────────
+    const [filterCountries, setFilterCountries] = useState<Set<string>>(new Set());
+    const [filterRisks, setFilterRisks] = useState<Set<string>>(new Set());
+    const [filterSegments, setFilterSegments] = useState<Set<SegmentValue>>(new Set());
+
+    const toggleCountry = (v: string) =>
+        setFilterCountries(prev => { const s = new Set(prev); s.has(v) ? s.delete(v) : s.add(v); return s; });
+    const toggleRisk = (v: string) =>
+        setFilterRisks(prev => { const s = new Set(prev); s.has(v) ? s.delete(v) : s.add(v); return s; });
+    const toggleSegment = (v: SegmentValue) =>
+        setFilterSegments(prev => { const s = new Set(prev); s.has(v) ? s.delete(v) : s.add(v); return s; });
+
+    // ── Debounce ─────────────────────────────────────────────────────────
     useEffect(() => {
-        const fetchCustomers = async () => {
-            try {
-                setLoading(true);
-                setError(null);
-                const data = await ChurnService.getAllCustomers();
-                setCustomers(data);
-            } catch (e) {
-                console.error('Error cargando clientes:', e);
-                setError('Error al cargar los clientes. Verifica que el backend esté activo.');
-            } finally {
-                setLoading(false);
-            }
-        };
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => {
+            setDebouncedSearch(searchTerm);
+            setCurrentPage(0);
+        }, 400);
+        return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    }, [searchTerm]);
 
-        fetchCustomers();
-    }, []);
+    // Reset pagination on filter change
+    useEffect(() => { setCurrentPage(0); }, [filterCountries, filterRisks, filterSegments]);
 
-    // Filter customers based on search
-    const filteredCustomers = customers.filter(c =>
-        (c.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.id.toString().includes(searchTerm)
-    );
+    // ── Fetch ────────────────────────────────────────────────────────────
+    const fetchCustomers = useCallback(async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            const countryParam = filterCountries.size === 1 ? [...filterCountries][0] : undefined;
+            const riskParam = filterRisks.size === 1 ? [...filterRisks][0] : undefined;
+            const data = await ChurnService.getCustomersPaginated(
+                currentPage, PAGE_SIZE, debouncedSearch,
+                countryParam,
+                riskParam
+            );
+            setCustomers(data.content);
+            setTotalPages(data.totalPages);
+            setTotalElements(data.totalElements);
+            setKpis(data.kpis ? {
+                ...data.kpis,
+                capitalAtRisk: parseFloat(String(data.kpis.capitalAtRisk ?? 0)),
+                totalCustomers: Number(data.kpis.totalCustomers ?? 0),
+                customersAtRisk: Number(data.kpis.customersAtRisk ?? 0),
+                retentionRate: parseFloat(String(data.kpis.retentionRate ?? 0)),
+            } : null);
+        } catch (e) {
+            console.error('Error cargando clientes:', e);
+            setError('Error al cargar los clientes. Verifica que el backend esté activo.');
+        } finally {
+            setLoading(false);
+        }
+    }, [currentPage, debouncedSearch, filterCountries, filterRisks]);
 
-    // Función para formatear dinero
+    useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
+
+    // ── Derived data ─────────────────────────────────────────────────────
     const formatMoney = (amount: number) =>
         new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(amount);
 
-    // Transformar clientes a datos para matriz de prioridad
-    const getScatterData = (): PriorityMatrixPoint[] => {
-        return filteredCustomers.map(c => ({
-            x: c.risk,
-            y: c.balance,
-            z: 100,
-            name: c.name,
-            id: c.id
-        }));
-    };
-
-    // Calcular KPIs
-    const getCapitalEnRiesgo = () => {
-        return filteredCustomers
-            .filter(c => c.risk >= 50)
-            .reduce((sum, c) => sum + (c.balance * c.risk / 100), 0);
-    };
-
-    const getClientesEnAlerta = () => {
-        return filteredCustomers.filter(c => c.risk >= 50).length;
-    };
-
-    const getTasaRetencion = () => {
-        if (filteredCustomers.length === 0) return 0;
-        const retained = filteredCustomers.filter(c => c.risk < 50).length;
-        return ((retained / filteredCustomers.length) * 100).toFixed(1);
-    };
-
-    // Transformar clientes a formato extendido para la tabla
-    const getEnhancedCustomers = (): CustomerRiskDetail[] => {
-        return filteredCustomers.map(c => ({
+    // Enhanced customers for table (filtros client-side para multi-select)
+    const enhancedCustomers = useMemo((): CustomerRiskDetail[] => {
+        if (loading || error) return [];
+        let list = customers.map(c => ({
             id: c.id,
             name: c.name || `Cliente ${c.id}`,
             balance: c.balance,
             risk: c.risk,
-            segment: c.balance > 100000 ? 'Corporate' as const : c.balance > 50000 ? 'SME' as const : 'Personal' as const,
+            segment: segmentFromBalance(c.balance),
             country: c.country,
-            // Use REAL data from backend instead of Math.random()
             products: c.products ?? 1,
             tenure: c.tenure ?? 0,
-            since: c.since ?? 'N/A'
+            since: c.since ?? 'N/A',
         }));
-    };
-
-    const handleAnalyze = (customerId: number) => {
-        if (onNavigateToCustomer) {
-            onNavigateToCustomer(customerId);
+        if (filterCountries.size > 1) {
+            list = list.filter(c => filterCountries.has(c.country));
         }
+        if (filterRisks.size > 1) {
+            list = list.filter(c => {
+                const r = c.risk;
+                return filterRisks.has('alto') && r > 70 ? true
+                    : filterRisks.has('medio') && r > 45 && r <= 70 ? true
+                        : filterRisks.has('bajo') && r <= 45 ? true
+                            : false;
+            });
+        }
+        if (filterSegments.size > 0) {
+            list = list.filter(c => filterSegments.has(c.segment as SegmentValue));
+        }
+        return list.sort((a, b) => (b.balance * b.risk) - (a.balance * a.risk));
+    }, [customers, loading, error, filterCountries, filterRisks, filterSegments]);
+
+    // ── Pagination ───────────────────────────────────────────────────────
+    const goToPage = (page: number) => { if (page >= 0 && page < totalPages) setCurrentPage(page); };
+
+    const getPageNumbers = (): number[] => {
+        const pages: number[] = [];
+        const maxVisible = 5;
+        let start = Math.max(0, currentPage - Math.floor(maxVisible / 2));
+        let end = Math.min(totalPages - 1, start + maxVisible - 1);
+        if (end - start < maxVisible - 1) start = Math.max(0, end - maxVisible + 1);
+        for (let i = start; i <= end; i++) pages.push(i);
+        return pages;
     };
 
-    // Early returns removed to allow persistent header
-    const scatterData = !loading && !error ? getScatterData() : [];
-    const enhancedCustomers = !loading && !error ? getEnhancedCustomers() : [];
+    // ── Handlers ─────────────────────────────────────────────────────────
+    const handleAnalyze = (customerId: number) => {
+        if (onNavigateToCustomer) onNavigateToCustomer(customerId);
+    };
 
+    const clearAllFilters = () => {
+        setFilterCountries(new Set());
+        setFilterRisks(new Set());
+        setFilterSegments(new Set());
+        setSearchTerm('');
+    };
+
+    const hasActiveFilters = filterCountries.size > 0 || filterRisks.size > 0 || filterSegments.size > 0;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // RENDER
+    // ═══════════════════════════════════════════════════════════════════
     return (
-        <div className="p-8 bg-[#F8FAFC] min-h-screen font-sans text-slate-800">
+        <div className="p-6 lg:p-8 bg-[#F8FAFC] min-h-screen font-sans text-slate-800">
 
-            {/* 1. HEADER EJECUTIVO */}
-            <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
+            {/* ─── 1. HEADER ─────────────────────────────────────────── */}
+            <div className="flex flex-col md:flex-row justify-between items-end mb-6 gap-4">
                 <div>
                     <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-1">Módulo de Retención</h2>
-                    <h1 className="text-3xl font-bold text-[#0F172A]">Panorama de Fuga de Capital</h1>
+                    <h1 className="text-3xl font-bold text-[#0F172A]">Centro de Mando</h1>
+                    <p className="text-sm text-slate-500 mt-1">Gestión operativa de clientes · Riesgo de fuga en tiempo real</p>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
                     <div className="relative flex-grow md:flex-grow-0">
@@ -137,16 +268,126 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateToCustomer }) =
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
-                    <button
-                        onClick={() => window.location.reload()}
-                        className="px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm transition-all"
-                    >
+                    <button onClick={() => fetchCustomers()} className="px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm transition-all">
                         🔄 Refrescar
                     </button>
-                    <button className="px-4 py-2.5 bg-[#0F172A] text-white rounded-lg text-sm font-medium shadow-lg hover:bg-slate-800 transition-all">
-                        Generar Reporte
-                    </button>
                 </div>
+            </div>
+
+            {/* ─── 2. FILTER PANEL (compact horizontal) ────────────────── */}
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-3 mb-6">
+                <div className="flex flex-wrap items-end gap-3">
+
+                    {/* Label */}
+                    <div className="flex items-center gap-1.5 mr-1">
+                        <Filter className="w-3.5 h-3.5 text-slate-400" />
+                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Filtros</span>
+                        {hasActiveFilters && (
+                            <span className="text-[10px] bg-indigo-600 text-white font-bold px-1.5 py-0.5 rounded-full">
+                                {filterCountries.size + filterRisks.size + filterSegments.size}
+                            </span>
+                        )}
+                    </div>
+
+                    {/* País */}
+                    <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">🌍 País</label>
+                        <select
+                            value={filterCountries.size === 1 ? [...filterCountries][0] : ''}
+                            onChange={e => {
+                                const v = e.target.value;
+                                setFilterCountries(v ? new Set([v]) : new Set());
+                            }}
+                            className="text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-300 min-w-[140px] shadow-sm"
+                        >
+                            <option value="">Todos los países</option>
+                            {COUNTRY_OPTIONS.map(o => (
+                                <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Nivel de Riesgo */}
+                    <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">⚡ Riesgo</label>
+                        <select
+                            value={filterRisks.size === 1 ? [...filterRisks][0] : ''}
+                            onChange={e => {
+                                const v = e.target.value;
+                                setFilterRisks(v ? new Set([v]) : new Set());
+                            }}
+                            className="text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-300 min-w-[140px] shadow-sm"
+                        >
+                            <option value="">Todos los niveles</option>
+                            {RISK_OPTIONS.map(o => (
+                                <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Nivel de Cliente */}
+                    <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">👥 Patrimonio</label>
+                        <select
+                            value={filterSegments.size === 1 ? [...filterSegments][0] : ''}
+                            onChange={e => {
+                                const v = e.target.value as SegmentValue | '';
+                                setFilterSegments(v ? new Set([v]) : new Set());
+                            }}
+                            className="text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-300 min-w-[170px] shadow-sm"
+                        >
+                            <option value="">Todos los niveles</option>
+                            {SEGMENT_OPTIONS.map(o => (
+                                <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Reset */}
+                    {hasActiveFilters && (
+                        <button
+                            onClick={clearAllFilters}
+                            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-red-500 border border-slate-200 hover:border-red-300 rounded-lg px-3 py-2 transition-all shadow-sm bg-white"
+                        >
+                            <X className="w-3 h-3" /> Reset
+                        </button>
+                    )}
+                </div>
+
+                {/* Chips activos */}
+                {hasActiveFilters && (
+                    <div className="flex flex-wrap gap-2 pt-3 mt-2 border-t border-slate-100">
+                        {[...filterCountries].map(c => {
+                            const opt = COUNTRY_OPTIONS.find(o => o.value === c);
+                            return (
+                                <span key={c} className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full font-medium">
+                                    {opt?.label ?? c}
+                                    <button onClick={() => toggleCountry(c)} className="hover:text-red-500 ml-0.5"><X className="w-3 h-3" /></button>
+                                </span>
+                            );
+                        })}
+                        {[...filterRisks].map(r => {
+                            const opt = RISK_OPTIONS.find(o => o.value === r);
+                            return (
+                                <span key={r} className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium"
+                                    style={{ backgroundColor: opt?.bg, color: opt?.color }}>
+                                    {opt?.label ?? r}
+                                    <button onClick={() => toggleRisk(r)} className="hover:opacity-70 ml-0.5"><X className="w-3 h-3" /></button>
+                                </span>
+                            );
+                        })}
+                        {[...filterSegments].map(s => {
+                            const opt = SEGMENT_OPTIONS.find(o => o.value === s);
+                            return (
+                                <span key={s} className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium"
+                                    style={{ backgroundColor: opt?.bg, color: opt?.color }}>
+                                    {opt?.label ?? s}
+                                    <button onClick={() => toggleSegment(s)} className="hover:opacity-70 ml-0.5"><X className="w-3 h-3" /></button>
+                                </span>
+                            );
+                        })}
+                    </div>
+                )}
             </div>
 
             {/* Loading State */}
@@ -163,176 +404,90 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateToCustomer }) =
             {error && (
                 <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-8">
                     <p className="text-red-700 font-medium">⚠️ {error}</p>
-                    <button
-                        onClick={() => window.location.reload()}
-                        className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                    >
+                    <button onClick={() => fetchCustomers()} className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
                         Reintentar
                     </button>
                 </div>
             )}
 
-            {/* Main Content (Only if no error and not loading) */}
+            {/* ─── MAIN CONTENT ──────────────────────────────────────── */}
             {!loading && !error && (
                 <>
-                    {/* 2. GRID DE KPIs FINANCIEROS */}
+                    {/* ─── 3. KPI CARDS ───────────────────────────────── */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
 
-                        {/* KPI 1: Capital en Riesgo */}
+                        {/* Capital en Riesgo */}
                         <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
                             <div className="flex justify-between items-start mb-4">
-                                <div className="p-2 bg-red-50 rounded-lg">
-                                    <DollarSign className="w-6 h-6 text-red-600" />
-                                </div>
-                                <span className="flex items-center text-red-600 text-xs font-bold bg-red-50 px-2 py-1 rounded-full">
-                                    <ArrowUpRight className="w-3 h-3 mr-1" /> +12.5%
-                                </span>
+                                <div className="p-2 bg-red-50 rounded-lg"><DollarSign className="w-6 h-6 text-red-600" /></div>
+                                <span className="flex items-center text-red-600 text-xs font-bold bg-red-50 px-2 py-1 rounded-full"><ArrowUpRight className="w-3 h-3 mr-1" /> Crítico</span>
                             </div>
-                            <p className="text-slate-500 text-sm font-medium">Capital en Riesgo (Crítico)</p>
-                            <h3 className="text-2xl font-bold text-slate-800 mt-1">{formatMoney(getCapitalEnRiesgo())}</h3>
+                            <p className="text-slate-500 text-sm font-medium">Capital en Riesgo</p>
+                            <h3 className="text-2xl font-bold text-slate-800 mt-1">{formatMoney(kpis?.capitalAtRisk || 0)}</h3>
                         </div>
 
-                        {/* KPI 2: Clientes en Alerta */}
+                        {/* Clientes en Alerta */}
                         <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
                             <div className="flex justify-between items-start mb-4">
-                                <div className="p-2 bg-orange-50 rounded-lg">
-                                    <Users className="w-6 h-6 text-orange-600" />
-                                </div>
-                                <span className="flex items-center text-slate-500 text-xs font-medium bg-slate-50 px-2 py-1 rounded-full">
-                                    vs. mes anterior
-                                </span>
+                                <div className="p-2 bg-orange-50 rounded-lg"><Users className="w-6 h-6 text-orange-600" /></div>
+                                <span className="flex items-center text-slate-500 text-xs font-medium bg-slate-50 px-2 py-1 rounded-full">de {(kpis?.totalCustomers || 0).toLocaleString('es-ES')} total</span>
                             </div>
                             <p className="text-slate-500 text-sm font-medium">Clientes en Zona de Fuga</p>
-                            <h3 className="text-2xl font-bold text-slate-800 mt-1">{getClientesEnAlerta()}</h3>
+                            <h3 className="text-2xl font-bold text-slate-800 mt-1">{kpis?.customersAtRisk || 0}</h3>
                         </div>
 
-                        {/* KPI 3: Salud del Modelo */}
+                        {/* Total Clientes */}
                         <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
                             <div className="flex justify-between items-start mb-4">
-                                <div className="p-2 bg-indigo-50 rounded-lg">
-                                    <AlertOctagon className="w-6 h-6 text-indigo-600" />
-                                </div>
-                                <span className="flex items-center text-emerald-600 text-xs font-bold bg-emerald-50 px-2 py-1 rounded-full">
-                                    Activo v2.1
-                                </span>
+                                <div className="p-2 bg-indigo-50 rounded-lg"><AlertOctagon className="w-6 h-6 text-indigo-600" /></div>
+                                <span className="flex items-center text-emerald-600 text-xs font-bold bg-emerald-50 px-2 py-1 rounded-full">Base Activa</span>
                             </div>
-                            <p className="text-slate-500 text-sm font-medium">Precisión del Modelo</p>
-                            <h3 className="text-2xl font-bold text-slate-800 mt-1">94.2%</h3>
+                            <p className="text-slate-500 text-sm font-medium">Total Clientes en BD</p>
+                            <h3 className="text-2xl font-bold text-slate-800 mt-1">{(kpis?.totalCustomers || 0).toLocaleString('es-ES')}</h3>
                         </div>
 
-                        {/* KPI 4: Tasa de Retención */}
+                        {/* Tasa de Retención */}
                         <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
                             <div className="flex justify-between items-start mb-4">
-                                <div className="p-2 bg-emerald-50 rounded-lg">
-                                    <TrendingDown className="w-6 h-6 text-emerald-600" />
-                                </div>
-                                <span className="flex items-center text-emerald-600 text-xs font-bold bg-emerald-50 px-2 py-1 rounded-full">
-                                    <ArrowUpRight className="w-3 h-3 mr-1" /> +4.3%
-                                </span>
+                                <div className="p-2 bg-emerald-50 rounded-lg"><TrendingDown className="w-6 h-6 text-emerald-600" /></div>
+                                <span className="flex items-center text-emerald-600 text-xs font-bold bg-emerald-50 px-2 py-1 rounded-full"><ArrowUpRight className="w-3 h-3 mr-1" /> OK</span>
                             </div>
                             <p className="text-slate-500 text-sm font-medium">Tasa de Retención</p>
-                            <h3 className="text-2xl font-bold text-slate-800 mt-1">{getTasaRetencion()}%</h3>
+                            <h3 className="text-2xl font-bold text-slate-800 mt-1">{kpis?.retentionRate || 0}%</h3>
                         </div>
                     </div>
 
-                    {/* 3. SECCIÓN VISUAL AVANZADA */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-
-                        {/* MATRIZ DE PRIORIDAD (Scatter Plot) */}
-                        <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
-                            <div className="mb-6">
-                                <h3 className="text-lg font-bold text-slate-800">Matriz de Prioridad de Retención</h3>
-                                <p className="text-sm text-slate-500">
-                                    Identifica a las "Ballenas" (Alto Balance) con alto riesgo de fuga.
-                                    <span className="text-red-500 font-bold ml-1">Atención Prioritaria: Cuadrante Superior Derecho.</span>
-                                </p>
-                            </div>
-
-                            <div className="h-80 w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                                        <CartesianGrid strokeDasharray="3 3" />
-                                        <XAxis
-                                            type="number"
-                                            dataKey="x"
-                                            name="Probabilidad Fuga"
-                                            unit="%"
-                                            domain={[0, 100]}
-                                            label={{ value: 'Probabilidad de Fuga', position: 'insideBottom', offset: -10 }}
-                                        />
-                                        <YAxis
-                                            type="number"
-                                            dataKey="y"
-                                            name="Balance"
-                                            unit="€"
-                                            label={{ value: 'Balance (€)', angle: -90, position: 'insideLeft' }}
-                                        />
-                                        <RechartsTooltip cursor={{ strokeDasharray: '3 3' }} />
-                                        <Scatter name="Clientes" data={scatterData} fill="#8884d8">
-                                            {scatterData.map((entry, index) => (
-                                                <Cell
-                                                    key={`cell-${index}`}
-                                                    fill={entry.x > 70 && entry.y > 100000 ? '#EF4444' : (entry.x > 50 ? '#F59E0B' : '#10B981')}
-                                                />
-                                            ))}
-                                        </Scatter>
-                                    </ScatterChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </div>
-
-                        {/* TENDENCIA DE RIESGO */}
-                        <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
-                            <h3 className="text-lg font-bold text-slate-800 mb-2">Tendencia de Riesgo</h3>
-                            <p className="text-sm text-slate-500 mb-6">Evolución del capital en riesgo mensual.</p>
-
-                            <div className="h-64 w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <AreaChart data={TREND_DATA}>
-                                        <defs>
-                                            <linearGradient id="colorRisk" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="5%" stopColor="#EF4444" stopOpacity={0.1} />
-                                                <stop offset="95%" stopColor="#EF4444" stopOpacity={0} />
-                                            </linearGradient>
-                                        </defs>
-                                        <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
-                                        <CartesianGrid vertical={false} stroke="#f1f5f9" />
-                                        <RechartsTooltip />
-                                        <Area type="monotone" dataKey="riskCapital" stroke="#EF4444" strokeWidth={2} fillOpacity={1} fill="url(#colorRisk)" />
-                                    </AreaChart>
-                                </ResponsiveContainer>
-                            </div>
-                            <div className="mt-4 p-4 bg-red-50 rounded-lg border border-red-100">
-                                <div className="flex items-start gap-3">
-                                    <AlertOctagon className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                                    <div>
-                                        <h4 className="text-sm font-bold text-red-800">Alerta de Tendencia</h4>
-                                        <p className="text-xs text-red-600 mt-1">El riesgo ha aumentado un 15% en Abril debido a la volatilidad del mercado en el sector Pymes.</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* 4. LISTA DE ACCIÓN RÁPIDA (Smart Table) */}
+                    {/* ─── 4. PRIORITY TABLE ──────────────────────────── */}
                     <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
-                        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white z-10">
+                        <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white z-10">
                             <div>
-                                <h3 className="text-lg font-bold text-slate-800">Acciones Recomendadas (Top Priority)</h3>
-                                <p className="text-sm text-slate-500">Clientes ordenados por Valor en Riesgo (Weighted Risk)</p>
+                                <h3 className="text-lg font-bold text-slate-800">Clientes Priorizados por Riesgo de Fuga e Impacto Financiero</h3>
+                                <p className="text-sm text-slate-500">Ordenados por impacto financiero ponderado</p>
                             </div>
-                            <div className="text-sm text-slate-400 font-medium">
-                                Mostrando {enhancedCustomers.length} de {customers.length} clientes
+                            <div className="flex items-center gap-3">
+                                <span className="text-sm text-slate-400 font-medium">
+                                    Mostrando {enhancedCustomers.length} de {totalElements.toLocaleString('es-ES')}
+                                    {debouncedSearch && <span className="ml-1 text-indigo-500">(búsqueda: "{debouncedSearch}")</span>}
+                                </span>
+                                {enhancedCustomers.length > 0 && (
+                                    <button
+                                        onClick={() => exportTableToCSV(enhancedCustomers)}
+                                        className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors"
+                                    >
+                                        <Download className="w-3.5 h-3.5" /> Exportar CSV
+                                    </button>
+                                )}
                             </div>
                         </div>
 
-                        {/* Contenedor con Scroll y Header Pegajoso */}
-                        <div className="overflow-y-auto max-h-[500px] relative scrollbar-thin scrollbar-thumb-slate-200">
+                        {/* Table */}
+                        <div className="overflow-y-auto relative scrollbar-thin scrollbar-thumb-slate-200">
                             <table className="w-full text-left border-collapse">
                                 <thead className="bg-slate-50 text-xs uppercase text-slate-500 font-semibold sticky top-0 z-20 shadow-sm">
                                     <tr>
                                         <th className="px-6 py-4 bg-slate-50">Cliente / ID</th>
-                                        <th className="px-6 py-4 bg-slate-50">Segmento</th>
+                                        <th className="px-6 py-4 bg-slate-50">Nivel de Cliente</th>
+                                        <th className="px-6 py-4 bg-slate-50">País</th>
                                         <th className="px-6 py-4 bg-slate-50">Balance</th>
                                         <th className="px-6 py-4 bg-slate-50">Probabilidad Fuga</th>
                                         <th className="px-6 py-4 bg-slate-50 text-right">Impacto Potencial</th>
@@ -340,56 +495,58 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateToCustomer }) =
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
-                                    {enhancedCustomers
-                                        .sort((a, b) => (b.balance * b.risk) - (a.balance * a.risk))
-                                        .map((client) => (
-                                            <tr key={client.id} className="hover:bg-slate-50 transition-colors group">
-                                                <td className="px-6 py-4">
-                                                    <p className="font-bold text-slate-700">{client.name}</p>
-                                                    <p className="text-xs text-slate-400">ID: {client.id}</p>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${client.segment === 'Corporate' ? 'bg-indigo-50 text-indigo-600' :
-                                                        client.segment === 'SME' ? 'bg-blue-50 text-blue-600' :
-                                                            'bg-slate-100 text-slate-600'
-                                                        }`}>
-                                                        {client.segment}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 text-slate-600 font-medium">
-                                                    {formatMoney(client.balance)}
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                                            <div
-                                                                className={`h-full rounded-full ${client.risk > 75 ? 'bg-red-500' : client.risk > 50 ? 'bg-orange-400' : 'bg-green-500'}`}
-                                                                style={{ width: `${client.risk}%` }}
-                                                            ></div>
-                                                        </div>
-                                                        <span className={`text-sm font-bold ${client.risk > 75 ? 'text-red-600' : client.risk > 50 ? 'text-orange-500' : 'text-green-600'}`}>
-                                                            {client.risk}%
+                                    {enhancedCustomers.map(client => (
+                                        <tr key={client.id} className="hover:bg-slate-50 transition-colors group">
+                                            <td className="px-6 py-4">
+                                                <p className="font-bold text-slate-700">{client.name}</p>
+                                                <p className="text-xs text-slate-400">ID: {client.id}</p>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                {(() => {
+                                                    const opt = SEGMENT_OPTIONS.find(o => o.value === client.segment);
+                                                    return (
+                                                        <span className="text-xs px-2.5 py-1 rounded-full font-medium"
+                                                            style={{ backgroundColor: opt?.bg ?? '#F1F5F9', color: opt?.color ?? '#475569' }}
+                                                            title={opt?.description}>
+                                                            {opt?.label ?? client.segment}
                                                         </span>
+                                                    );
+                                                })()}
+                                            </td>
+                                            <td className="px-6 py-4 text-sm text-slate-600">{client.country}</td>
+                                            <td className="px-6 py-4 text-slate-600 font-medium">{formatMoney(client.balance)}</td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                                        <div
+                                                            className={`h-full rounded-full ${client.risk > 75 ? 'bg-red-500' : client.risk > 50 ? 'bg-orange-400' : 'bg-green-500'}`}
+                                                            style={{ width: `${client.risk}%` }}
+                                                        ></div>
                                                     </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-right font-bold text-slate-800">
-                                                    {formatMoney(client.balance * (client.risk / 100))}
-                                                </td>
-                                                <td className="px-6 py-4 text-center">
-                                                    <button
-                                                        onClick={() => handleAnalyze(client.id)}
-                                                        className="text-xs bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg hover:bg-[#0F172A] hover:text-white transition-all shadow-sm font-medium"
-                                                    >
-                                                        Analizar
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
+                                                    <span className={`text-sm font-bold ${client.risk > 75 ? 'text-red-600' : client.risk > 50 ? 'text-orange-500' : 'text-green-600'}`}>
+                                                        {client.risk}%
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-right font-bold text-slate-800">
+                                                {formatMoney(client.balance * (client.risk / 100))}
+                                            </td>
+                                            <td className="px-6 py-4 text-center">
+                                                <button
+                                                    onClick={() => handleAnalyze(client.id)}
+                                                    className="text-xs bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg hover:bg-[#0F172A] hover:text-white transition-all shadow-sm font-medium"
+                                                >
+                                                    Analizar
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
                                 </tbody>
                             </table>
                         </div>
 
-                        {customers.length === 0 ? (
+                        {/* Empty States */}
+                        {totalElements === 0 && !debouncedSearch ? (
                             <div className="text-center py-16">
                                 <div className="bg-slate-50 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
                                     <Users className="w-8 h-8 text-slate-400" />
@@ -399,21 +556,57 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateToCustomer }) =
                                     No hay datos provenientes del backend. Verifica que la base de datos esté poblada y el servicio Java esté corriendo en el puerto 8080.
                                 </p>
                             </div>
-                        ) : enhancedCustomers.length === 0 ? (
+                        ) : totalElements === 0 && debouncedSearch ? (
                             <div className="text-center py-12">
-                                <p className="text-slate-500">No hay resultados para "{searchTerm}"</p>
+                                <p className="text-slate-500">No hay resultados para "{debouncedSearch}"</p>
                             </div>
                         ) : null}
+
+                        {/* PAGINATION */}
+                        {totalPages > 1 && (
+                            <div className="p-4 border-t border-slate-100 flex items-center justify-between bg-slate-50">
+                                <div className="text-sm text-slate-500">
+                                    Página {currentPage + 1} de {totalPages} • {totalElements.toLocaleString('es-ES')} clientes totales
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <button onClick={() => goToPage(0)} disabled={currentPage === 0}
+                                        className="p-2 rounded-lg text-slate-500 hover:bg-white hover:shadow-sm disabled:opacity-30 disabled:cursor-not-allowed transition-all" title="Primera página">
+                                        <ChevronsLeft className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 0}
+                                        className="p-2 rounded-lg text-slate-500 hover:bg-white hover:shadow-sm disabled:opacity-30 disabled:cursor-not-allowed transition-all" title="Página anterior">
+                                        <ChevronLeft className="w-4 h-4" />
+                                    </button>
+                                    {getPageNumbers().map(page => (
+                                        <button key={page} onClick={() => goToPage(page)}
+                                            className={`w-9 h-9 rounded-lg text-sm font-medium transition-all ${page === currentPage ? 'bg-[#0F172A] text-white shadow-md' : 'text-slate-600 hover:bg-white hover:shadow-sm'}`}>
+                                            {page + 1}
+                                        </button>
+                                    ))}
+                                    <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= totalPages - 1}
+                                        className="p-2 rounded-lg text-slate-500 hover:bg-white hover:shadow-sm disabled:opacity-30 disabled:cursor-not-allowed transition-all" title="Página siguiente">
+                                        <ChevronRight className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={() => goToPage(totalPages - 1)} disabled={currentPage >= totalPages - 1}
+                                        className="p-2 rounded-lg text-slate-500 hover:bg-white hover:shadow-sm disabled:opacity-30 disabled:cursor-not-allowed transition-all" title="Última página">
+                                        <ChevronsRight className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </>
             )}
 
-            {/* Footer info */}
+            {/* Footer */}
             <div className="mt-6 text-center text-sm text-slate-400">
-                <p>📊 Datos cargados desde el backend en tiempo real • KPIs calculados automáticamente</p>
+                <p>📊 Datos en tiempo real · KPIs server-side · Paginación: {PAGE_SIZE}/página</p>
             </div>
         </div>
     );
 };
 
+// Export scatterData derivation helpers for use in RiskIntelligencePage
+export { SEGMENT_OPTIONS, RISK_THRESHOLD, BALANCE_THRESHOLD, getQuadrant, segmentFromBalance };
+export type { DashboardPageProps };
 export default DashboardPage;

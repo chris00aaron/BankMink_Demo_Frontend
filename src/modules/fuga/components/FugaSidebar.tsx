@@ -1,16 +1,17 @@
 import React from 'react';
 import {
     LayoutDashboard,
-    Map,
+    BarChart2,
     FlaskConical,
     BrainCircuit,
     ArrowLeft,
-    Shield,
     Megaphone,
-    LogOut
+    LogOut,
+    Zap
 } from 'lucide-react';
+import bankMindLogo from '@shared/assets/logo_BankMind.png';
 
-type FugaScreen = 'dashboard' | 'geografia' | 'simulador' | 'mlops' | 'cliente' | 'campañas';
+type FugaScreen = 'dashboard' | 'geografia' | 'simulador' | 'mlops' | 'cliente' | 'campañas' | 'executive';
 
 interface FugaSidebarProps {
     currentScreen: FugaScreen;
@@ -27,25 +28,24 @@ const FugaSidebar: React.FC<FugaSidebarProps> = ({
 }) => {
     const menuItems = [
         { id: 'dashboard' as FugaScreen, label: 'Centro de Mando', icon: LayoutDashboard },
-        { id: 'geografia' as FugaScreen, label: 'Geografía', icon: Map },
+        { id: 'geografia' as FugaScreen, label: 'Inteligencia de Riesgo', icon: BarChart2 },
+        { id: 'executive' as FugaScreen, label: 'Visión Ejecutiva', icon: Zap },
         { id: 'simulador' as FugaScreen, label: 'Simulador', icon: FlaskConical },
         { id: 'campañas' as FugaScreen, label: 'Campañas', icon: Megaphone },
         { id: 'mlops' as FugaScreen, label: 'MLOps', icon: BrainCircuit },
     ];
 
     return (
-        <aside className="fixed left-0 top-0 h-screen w-64 bg-[#0F172A] text-white flex flex-col z-50">
+        <aside className="fixed left-0 top-0 h-screen w-64 bg-white border-r border-gray-200 text-gray-900 flex flex-col z-50 shadow-lg">
             {/* Logo Header */}
-            <div className="p-6 border-b border-slate-700/50">
+            <div className="p-6 border-b border-gray-200">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center">
-                        <Shield className="w-6 h-6 text-white" />
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center">
+                        <img src={bankMindLogo} alt="BankMind" className="w-full h-full object-contain" />
                     </div>
                     <div>
-                        <h1 className="text-lg font-bold tracking-tight">
-                            <span className="text-emerald-400">Bank</span>Mind
-                        </h1>
-                        <p className="text-[10px] text-slate-400 uppercase tracking-widest">Predicción de Fuga</p>
+                        <h1 className="text-xl font-bold text-gray-900">BankMind</h1>
+                        <p className="text-xs text-gray-500">Predicción de Fuga</p>
                     </div>
                 </div>
             </div>
@@ -62,15 +62,15 @@ const FugaSidebar: React.FC<FugaSidebarProps> = ({
                                 <button
                                     onClick={() => onNavigate(item.id)}
                                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group ${isActive
-                                        ? 'bg-emerald-500/20 text-emerald-400 border-l-2 border-emerald-400'
-                                        : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                                        ? 'bg-blue-50 text-blue-600 border border-blue-200 shadow-sm'
+                                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border border-transparent'
                                         }`}
                                 >
                                     <Icon className={`w-5 h-5 transition-transform ${isActive ? 'scale-110' : 'group-hover:scale-105'
                                         }`} />
                                     <span className="font-medium text-sm">{item.label}</span>
                                     {isActive && (
-                                        <span className="ml-auto w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                                        <span className="ml-auto w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
                                     )}
                                 </button>
                             </li>
@@ -81,10 +81,10 @@ const FugaSidebar: React.FC<FugaSidebarProps> = ({
 
             {/* Footer - Back Button */}
             {onBackToHome && (
-                <div className="p-4 border-t border-slate-700/50 space-y-2">
+                <div className="p-4 border-t border-gray-200 space-y-2">
                     <button
                         onClick={onBackToHome}
-                        className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-all duration-200"
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition-all duration-200 border border-gray-200 hover:border-blue-200"
                     >
                         <ArrowLeft className="w-5 h-5" />
                         <span className="font-medium text-sm">Volver al Inicio</span>
@@ -92,7 +92,7 @@ const FugaSidebar: React.FC<FugaSidebarProps> = ({
                     {onLogout && (
                         <button
                             onClick={onLogout}
-                            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-red-400 hover:bg-red-900/20 hover:text-red-300 transition-all duration-200"
+                            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 transition-all duration-200 border border-transparent hover:border-red-200"
                         >
                             <LogOut className="w-5 h-5" />
                             <span className="font-medium text-sm">Cerrar Sesión</span>
@@ -103,11 +103,11 @@ const FugaSidebar: React.FC<FugaSidebarProps> = ({
 
             {/* Status Badge */}
             <div className="p-4">
-                <div className="bg-slate-800/50 rounded-lg p-3 flex items-center gap-3">
-                    <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+                <div className="bg-gray-50 rounded-lg p-3 flex items-center gap-3 border border-gray-200">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
                     <div className="text-xs">
-                        <p className="text-slate-300 font-medium">Sistema Activo</p>
-                        <p className="text-slate-500">Modelo v2.3.1</p>
+                        <p className="text-gray-700 font-medium">Sistema Activo</p>
+                        <p className="text-gray-400">Modelo v2.3.1</p>
                     </div>
                 </div>
             </div>

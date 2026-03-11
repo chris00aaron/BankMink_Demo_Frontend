@@ -30,9 +30,10 @@ import {
   DashboardPage as FugaDashboard,
   SimulatorPage as FugaSimulator,
   MLOpsPage as FugaMLOps,
-  GeographyPage as FugaGeography,
+  RiskIntelligencePage as FugaRiskIntelligence,
   CustomerDetailPage as FugaCustomerDetail,
   CampaignsPage as FugaCampaigns,
+  ExecutiveInsightsPage as FugaExecutive,
 } from "@modules/fuga";
 import type { FugaScreen } from "@modules/fuga";
 import { HomePage } from "./pages/HomePage";
@@ -66,10 +67,9 @@ function AppContent() {
   const [currentView, setCurrentView] = useState<"home" | ServiceType>("home");
   const [currentScreen, setCurrentScreen] = useState("dashboard");
   const [morosidadScreen, setMorosidadScreen] = useState("dashboard");
+  const [selectedMorosidadRecordId, setSelectedMorosidadRecordId] = useState<number | null>(null);
   const [fugaScreen, setFugaScreen] = useState<FugaScreen>("dashboard");
-  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(
-    null,
-  );
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
   const [loginError, setLoginError] = useState("");
   const [otpError, setOtpError] = useState("");
   const [authScreen, setAuthScreen] = useState<AuthScreen>("login");
@@ -181,6 +181,15 @@ function AppContent() {
 
   const handleMorosidadNavigate = (screen: string) => {
     setMorosidadScreen(screen);
+    // Reiniciar recordId si no estamos en individual
+    if (screen !== "individual") {
+      setSelectedMorosidadRecordId(null);
+    }
+  };
+
+  const handleNavigateToMorosidadPrediction = (recordId: number) => {
+    setSelectedMorosidadRecordId(recordId);
+    setMorosidadScreen("individual");
   };
 
   const handleNavigateToCustomer = (id: number) => {
@@ -277,8 +286,8 @@ function AppContent() {
           <div className="flex-1 ml-64">
             {/* Page Content */}
             <main className="p-8">
-              {morosidadScreen === "dashboard" && <MorosidadDashboard />}
-              {morosidadScreen === "individual" && <ClientPrediction />}
+              {morosidadScreen === "dashboard" && <MorosidadDashboard onNavigateToPrediction={handleNavigateToMorosidadPrediction} />}
+              {morosidadScreen === "individual" && <ClientPrediction initialRecordId={selectedMorosidadRecordId} />}
               {morosidadScreen === "batch" && <MorosidadBatchPrediction />}
               {morosidadScreen === "strategy" && <Strategy />}
               {morosidadScreen === "simulation" && <Simulation />}
@@ -317,11 +326,12 @@ function AppContent() {
             {fugaScreen === "dashboard" && (
               <FugaDashboard onNavigateToCustomer={handleNavigateToCustomer} />
             )}
-            {fugaScreen === "simulador" && <FugaSimulator />}
-            {fugaScreen === "mlops" && <FugaMLOps />}
-            {fugaScreen === "geografia" && <FugaGeography />}
-            {fugaScreen === "campañas" && <FugaCampaigns />}
-            {fugaScreen === "cliente" && selectedCustomerId && (
+            {fugaScreen === 'simulador' && <FugaSimulator />}
+            {fugaScreen === 'mlops' && <FugaMLOps />}
+            {fugaScreen === 'geografia' && <FugaRiskIntelligence />}
+            {fugaScreen === 'campañas' && <FugaCampaigns />}
+            {fugaScreen === 'executive' && <FugaExecutive />}
+            {fugaScreen === 'cliente' && selectedCustomerId && (
               <FugaCustomerDetail
                 customerId={selectedCustomerId}
                 onBack={() => setFugaScreen("dashboard")}

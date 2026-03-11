@@ -5,9 +5,6 @@ import {
     Calendar,
     Target,
     Users,
-    DollarSign,
-    CheckCircle,
-    Clock,
     X,
     TrendingUp
 } from 'lucide-react';
@@ -18,15 +15,15 @@ import { Toaster, toast } from 'sonner';
 const CampaignsPage: React.FC = () => {
     const [campaigns, setCampaigns] = useState<CampaignLog[]>([]);
     const [loading, setLoading] = useState(true);
-    
+
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    
+
     // Form Data (Listas dinámicas)
     const [segments, setSegments] = useState<ScenarioSegment[]>([]);
     const [strategies, setStrategies] = useState<ScenarioIntervention[]>([]);
-    
+
     // Form Selection
     const [selectedSegId, setSelectedSegId] = useState<string | number>('');
     const [selectedStratId, setSelectedStratId] = useState<string | number>('');
@@ -61,9 +58,9 @@ const CampaignsPage: React.FC = () => {
         if (selectedSegId && selectedStratId) {
             const strat = strategies.find(s => s.id == selectedStratId);
             const seg = segments.find(s => s.id == selectedSegId);
-            
+
             // Simular conteo rápido (en realidad vendría del backend)
-            const count = Math.floor(Math.random() * 200) + 50; 
+            const count = Math.floor(Math.random() * 200) + 50;
             setTargetCount(count);
 
             if (strat) {
@@ -93,9 +90,9 @@ const CampaignsPage: React.FC = () => {
 
         setIsSubmitting(true);
         try {
-            // Simulamos lógica de ROI esperado (simplificado)
+            // ROI estimado basado en el impacto de la estrategia seleccionada
             const strat = strategies.find(s => s.id == selectedStratId);
-            const roi = strat ? (strat.impactFactor * 400) : 100; // Mock ROI calculation
+            const roi = strat ? Math.round(strat.impactFactor * 400) : 100;
 
             await ChurnService.createCampaign({
                 name: campaignName,
@@ -161,7 +158,12 @@ const CampaignsPage: React.FC = () => {
                 </div>
                 <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
                     <p className="text-xs text-slate-500 font-bold uppercase">Conversión Promedio</p>
-                    <p className="text-3xl font-bold text-emerald-600 mt-2">28.5%</p>
+                    <p className="text-3xl font-bold text-emerald-600 mt-2">
+                        {campaigns.length > 0
+                            ? `${(campaigns.reduce((acc, c) => acc + (c.convertedCount || 0), 0) / Math.max(campaigns.reduce((acc, c) => acc + c.targetedCount, 0), 1) * 100).toFixed(1)}%`
+                            : '—'
+                        }
+                    </p>
                 </div>
             </div>
 
@@ -248,14 +250,14 @@ const CampaignsPage: React.FC = () => {
                                 <X className="w-6 h-6" />
                             </button>
                         </div>
-                        
+
                         <form onSubmit={handleCreate} className="p-6 space-y-6">
-                            
+
                             {/* Nombre */}
                             <div>
                                 <label className="block text-sm font-bold text-slate-700 mb-2">Nombre de la Campaña</label>
-                                <input 
-                                    type="text" 
+                                <input
+                                    type="text"
                                     placeholder="Ej: Retención Verano 2026 - VIPs"
                                     className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
                                     value={campaignName}
@@ -267,7 +269,7 @@ const CampaignsPage: React.FC = () => {
                                 {/* Segmento */}
                                 <div>
                                     <label className="block text-sm font-bold text-slate-700 mb-2">Segmento Objetivo</label>
-                                    <select 
+                                    <select
                                         className="w-full p-3 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
                                         value={selectedSegId}
                                         onChange={(e) => setSelectedSegId(e.target.value)}
@@ -288,7 +290,7 @@ const CampaignsPage: React.FC = () => {
                                 {/* Estrategia */}
                                 <div>
                                     <label className="block text-sm font-bold text-slate-700 mb-2">Estrategia</label>
-                                    <select 
+                                    <select
                                         className="w-full p-3 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
                                         value={selectedStratId}
                                         onChange={(e) => setSelectedStratId(e.target.value)}
@@ -317,14 +319,14 @@ const CampaignsPage: React.FC = () => {
 
                             {/* Footer Actions */}
                             <div className="pt-4 flex justify-end gap-3">
-                                <button 
+                                <button
                                     type="button"
                                     onClick={() => setIsModalOpen(false)}
                                     className="px-6 py-3 text-slate-600 font-bold hover:bg-slate-100 rounded-xl transition-colors"
                                 >
                                     Cancelar
                                 </button>
-                                <button 
+                                <button
                                     type="submit"
                                     disabled={isSubmitting}
                                     className="px-8 py-3 bg-[#0F172A] text-white font-bold rounded-xl hover:bg-slate-800 transition-all flex items-center gap-2"
