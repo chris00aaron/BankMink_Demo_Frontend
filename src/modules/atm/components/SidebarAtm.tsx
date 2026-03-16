@@ -1,4 +1,4 @@
-import { LayoutDashboard, Calculator, Scale } from 'lucide-react';
+import { LayoutDashboard, Calculator, Scale, Monitor } from 'lucide-react';
 import { SidebarMenu } from '@shared/components/SidebarMenu';
 
 interface ISidebarAtmProps {
@@ -13,6 +13,7 @@ export function SidebarAtm({currentScreen, onNavigate, onBackToHome, onLogout }:
     { id: 'dashboard', label: 'Dashboard Retiros', icon: LayoutDashboard },
     { id: 'simulator', label: 'Simulador', icon: Calculator },
     { id: 'model-audit', label: 'Auditoría de Modelos', icon: Scale },
+    { id: 'monitoring', label: 'Monitoreo', icon: Monitor }
   ];
 
   return (

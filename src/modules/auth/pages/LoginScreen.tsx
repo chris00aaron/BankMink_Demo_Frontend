@@ -4,13 +4,12 @@ import bankMindLogo from '@shared/assets/logo_BankMind.png';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
 import { Label } from '@shared/components/ui/label';
-import { Checkbox } from '@shared/components/ui/checkbox';
 // 🔧 DEV ONLY - Eliminar en producción
 import { DevCredentials } from '@shared/components/DevCredentials';
 
 //Interfaz para las props del componente LoginScreen -> Se define que tipo de datos va a recibir el componente
 interface XRAILoginScreenProps {
-  onLogin: (username: string, password: string, rememberPassword: boolean) => void;
+  onLogin: (username: string, password: string) => void;
   onForgotPassword?: () => void;
   loginError?: string;
   isLoading?: boolean;
@@ -22,14 +21,12 @@ export function LoginScreen({ onLogin, onForgotPassword, loginError, isLoading =
   const [password, setPassword] = useState('');
   //Estado para mostrar u ocultar la contraseña
   const [showPassword, setShowPassword] = useState(false);
-  //Estado para recordar la contraseña
-  const [rememberPassword, setRememberPassword] = useState(false);
-
+  
   //Función que se ejecuta cuando se hace clic en el botón de iniciar sesión
   //React.FormEvent es el tipo de evento que se produce cuando se envía un formulario
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onLogin(username, password, rememberPassword);
+    onLogin(username, password);
   };
 
   return (
@@ -96,21 +93,6 @@ export function LoginScreen({ onLogin, onForgotPassword, loginError, isLoading =
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
-            </div>
-
-            {/* Remember Password Checkbox */}
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="remember"
-                checked={rememberPassword}
-                onCheckedChange={(checked) => setRememberPassword(checked as boolean)}
-              />
-              <label
-                htmlFor="remember"
-                className="text-sm text-gray-700 cursor-pointer select-none"
-              >
-                Recordar contraseña
-              </label>
             </div>
 
             {/* Error Message */}

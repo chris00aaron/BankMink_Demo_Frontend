@@ -33,7 +33,7 @@ export interface User {
 export interface MfaState {
   required: boolean;
   email: string;
-  phoneHint: string;
+  emailHint: string;
   mfaToken: string;
   expiresAt?: string;
 }
@@ -138,7 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setMfaState({
             required: true,
             email: email,
-            phoneHint: loginData.phoneHint || '****',
+            emailHint: loginData.emailHint || '****',
             mfaToken: loginData.mfaToken,
           });
           return { success: true };
@@ -212,15 +212,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * Reenviar código OTP
    */
   const resendOtp = async (): Promise<{ success: boolean; error?: string }> => {
-    if (!mfaState?.email) {
+    if (!mfaState?.mfaToken) {
       return { success: false, error: 'No hay sesión MFA activa' };
     }
 
     setIsLoading(true);
     try {
-      // Reenviar haciendo un nuevo login
-      // En el backend actual no hay endpoint específico de resend
-      return { success: true };
+      const response = await axios.post(`${API_BASE_URL}/auth/resend-otp`, {
+        mfaToken: mfaState.mfaToken
+      });
+
+      const data = response.data;
+
+      if (data.success && data.data) {
+        const resendData = data.data;
+        // Actualizar mfaState con el nuevo mfaToken
+        setMfaState(prev => prev ? {
+          ...prev,
+          mfaToken: resendData.mfaToken,
+          emailHint: resendData.emailHint || prev.emailHint,
+        } : null);
+        return { success: true };
+      }
+
+      return { success: false, error: data.message || 'Error al reenviar código' };
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error) && error.response) {
+        const errorMessage = error.response.data?.message || 'Error al reenviar código';
+        return { success: false, error: errorMessage };
+      }
+      return { success: false, error: 'Error de conexión con el servidor' };
     } finally {
       setIsLoading(false);
     }

@@ -34,7 +34,7 @@ export interface User {
 export interface MfaState {
   required: boolean;
   email: string;
-  phoneHint: string;
+  emailHint: string;
   mfaToken: string;
   expiresAt?: string;
 }

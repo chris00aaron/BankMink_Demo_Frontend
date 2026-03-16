@@ -39,6 +39,7 @@ import {
   type DemographicStats,
   type TemporalStats,
 } from "../services/fraudStatsService";
+import { FraudClusterProfiles } from "./FraudClusterProfiles";
 
 // ─── Paleta de colores ───────────────────────────────────────────────────────
 const COLORS = {
@@ -601,10 +602,15 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Fila 3: Demografía + Temporal  ← NUEVA */}
+      {/* Fila 3: Demografía + Temporal */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <DemographicsPanel data={demoData} />
         <TemporalPanel data={temporalData} />
+      </div>
+
+      {/* Fila 4: Perfiles de Clustering (K-Means) */}
+      <div className="backdrop-blur-xl bg-white/90 rounded-xl border border-gray-200 p-6 shadow-sm">
+        <FraudClusterProfiles />
       </div>
     </div>
   );

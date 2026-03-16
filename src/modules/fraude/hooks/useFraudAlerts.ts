@@ -6,6 +6,7 @@ interface UseFraudAlertsOptions {
     refreshInterval?: number;        // Intervalo en ms (default: 10000)
     initialSize?: number;            // Cantidad inicial por página
     initialSortBy?: 'score' | 'date'; // Ordenamiento inicial
+    initialDateFilter?: 'today' | 'week' | 'all'; // Filtro de fecha inicial
 }
 
 interface UseFraudAlertsReturn {
@@ -33,6 +34,7 @@ interface UseFraudAlertsReturn {
     setVeredicto: (veredicto: string) => void;
     setSearch: (search: string) => void;
     setSortBy: (sortBy: 'score' | 'date') => void;
+    setDateFilter: (dateFilter: 'today' | 'week' | 'all') => void;
     refresh: () => Promise<void>;
 }
 
@@ -46,6 +48,7 @@ export function useFraudAlerts(options: UseFraudAlertsOptions = {}): UseFraudAle
         refreshInterval = 10000,
         initialSize = 20,
         initialSortBy = 'score',
+        initialDateFilter = 'all',
     } = options;
 
     // Estado de datos
@@ -65,6 +68,7 @@ export function useFraudAlerts(options: UseFraudAlertsOptions = {}): UseFraudAle
         order: 'desc',
         veredicto: undefined,
         search: undefined,
+        dateFilter: initialDateFilter,
     });
 
     // Ref para el intervalo de polling
@@ -147,6 +151,10 @@ export function useFraudAlerts(options: UseFraudAlertsOptions = {}): UseFraudAle
         setFilters(prev => ({ ...prev, sortBy, page: 0 }));
     }, []);
 
+    const setDateFilter = useCallback((dateFilter: 'today' | 'week' | 'all') => {
+        setFilters(prev => ({ ...prev, dateFilter, page: 0 }));
+    }, []);
+
     const refresh = useCallback(async () => {
         await loadAlerts(false);
     }, [loadAlerts]);
@@ -176,6 +184,7 @@ export function useFraudAlerts(options: UseFraudAlertsOptions = {}): UseFraudAle
         setVeredicto,
         setSearch,
         setSortBy,
+        setDateFilter,
         refresh,
     };
 }

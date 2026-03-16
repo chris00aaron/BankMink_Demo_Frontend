@@ -18,11 +18,11 @@ interface TestCredential {
 }
 
 const TEST_CREDENTIALS: TestCredential[] = [
-    { email: 'admin@bankmind.com', password: 'admin123', role: 'ADMIN', name: 'Administrador' },
-    { email: 'morosidad@bankmind.com', password: '123456', role: 'Operario Morosidad', name: 'Ana García' },
-    { email: 'anomalias@bankmind.com', password: '123456', role: 'Operario Anomalías', name: 'Carlos Pérez' },
-    { email: 'demanda@bankmind.com', password: '123456', role: 'Operario Demanda', name: 'María Rodríguez' },
-    { email: 'fuga@bankmind.com', password: '123456', role: 'Operario Fuga', name: 'Juan Martínez' },
+    { email: 'investigacioncognitech@gmail.com', password: 'admin123', role: 'ADMIN', name: 'Administrador' },
+    { email: 'aaron17650@gmail.com', password: '123456', role: 'Operario Morosidad', name: 'Ana García' },
+    { email: 'angelomejia970@gmail.com', password: '123456', role: 'Operario Anomalías', name: 'Carlos Pérez' },
+    { email: 'escorpioyvirgo18@gmail.com', password: '123456', role: 'Operario Demanda', name: 'María Rodríguez' },
+    { email: 'polociprianouns@gmail.com', password: '123456', role: 'Operario Fuga', name: 'Juan Martínez' },
 ];
 
 interface DevCredentialsProps {
