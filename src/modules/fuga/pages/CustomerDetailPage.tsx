@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Toaster, toast } from 'sonner';
 import {
     ArrowLeft,
     ShieldAlert,
@@ -101,19 +102,20 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ customerId, onB
     if (!customer) return null;
 
     const segment = getSegment(customer.balance);
-    const yearsSince = 2026 - (2020 - Math.floor(customer.id % 5));
 
     const handleInteraction = async (type: string) => {
         try {
             await ChurnService.logInteraction(customer.id, type);
-            alert(`Acción registrada exitosamente: ${type}`);
+            toast.success('Acción registrada exitosamente');
         } catch (error) {
             console.error("Error registrando interacción", error);
+            toast.error('Error al registrar la acción');
         }
     };
 
     return (
         <div className="p-8 bg-[#F8FAFC] min-h-screen font-sans text-slate-800">
+            <Toaster position="top-right" />
 
             {/* 1. HEADER */}
             <div className="mb-8">
@@ -131,7 +133,7 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ customerId, onB
                                 <h1 className="text-2xl font-bold text-[#0F172A]">Cliente {customer.id}</h1>
                                 <span className="bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded-full font-medium border border-slate-200">ID: {customer.id}</span>
                             </div>
-                            <p className="text-slate-500 text-sm mt-1">{segment} • Cliente desde {yearsSince} • {customer.country}</p>
+                            <p className="text-slate-500 text-sm mt-1">{segment} • {customer.tenure ?? 0} año{(customer.tenure ?? 0) !== 1 ? 's' : ''} como cliente • {customer.country}</p>
                         </div>
                     </div>
                     <div className="mt-4 md:mt-0 flex items-center gap-6">

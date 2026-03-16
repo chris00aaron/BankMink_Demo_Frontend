@@ -199,6 +199,7 @@ export interface CreateCampaignRequest {
     strategyId: number | string;
     budget: number;
     expectedRoi: number;
+    targetedCount: number;
     targets: number[]; // IDs de clientes
 }
 
@@ -221,6 +222,25 @@ export interface TrainResult {
     testSamples?: number;
     error?: string;
     uploadWarnings?: string[];
+}
+
+// -- TIPOS PARA GRÁFICOS MLOPS (Charts reales) --
+
+export interface TrainingHistoryPoint {
+    date: string;
+    triggerReason: string;
+    recall: number | null;
+    precision: number | null;
+    f1Score: number | null;
+    accuracy: number | null;
+    aucRoc: number | null;
+    inProduction: boolean;
+    evaluatedSamples: number | null;
+}
+
+export interface PredictionBucket {
+    bucket: string; // "0-10%", "10-20%", ...
+    count: number;
 }
 
 // -- TIPOS PARA PERFORMANCE MONITOR (Auto-Retraining by Decay) --

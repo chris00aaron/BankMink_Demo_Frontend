@@ -310,7 +310,7 @@ function AppContent() {
         <FugaSidebar
           currentScreen={fugaScreen}
           onNavigate={(screen) => setFugaScreen(screen)}
-          onBackToHome={isAdmin() ? handleBackToHome : undefined}
+          onBackToHome={handleBackToHome}
           onLogout={handleLogout}
         />
         <div className="flex-1 ml-64">

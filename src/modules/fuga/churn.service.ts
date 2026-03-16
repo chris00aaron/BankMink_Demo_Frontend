@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { ChurnSimulationRequest, ChurnPredictionResponse, CustomerPageResponse, ScenarioResult, ScenarioSegment, ScenarioIntervention, SegmentRule, CampaignLog, CreateCampaignRequest, TrainResult, PerformanceStatus } from './types';
+import { ChurnSimulationRequest, ChurnPredictionResponse, CustomerPageResponse, ScenarioResult, ScenarioSegment, ScenarioIntervention, SegmentRule, CampaignLog, CreateCampaignRequest, TrainResult, PerformanceStatus, TrainingHistoryPoint, PredictionBucket } from './types';
 
 // Configura la URL base (usando Proxy de Vite)
 const API_URL = '/api/v1/churn';
@@ -260,6 +260,28 @@ export const ChurnService = {
                 status: 'error',
                 error: message
             };
+        }
+    },
+
+    // ============================================================
+    // MLOPS CHART DATA
+    // ============================================================
+
+    getTrainingEvolution: async (): Promise<TrainingHistoryPoint[]> => {
+        try {
+            const response = await axios.get<TrainingHistoryPoint[]>(`${API_URL}/mlops/training-evolution`);
+            return response.data;
+        } catch {
+            return [];
+        }
+    },
+
+    getPredictionDistribution: async (): Promise<PredictionBucket[]> => {
+        try {
+            const response = await axios.get<PredictionBucket[]>(`${API_URL}/mlops/prediction-distribution`);
+            return response.data;
+        } catch {
+            return [];
         }
     },
 

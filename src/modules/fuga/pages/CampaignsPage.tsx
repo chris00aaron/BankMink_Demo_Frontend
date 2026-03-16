@@ -100,6 +100,7 @@ const CampaignsPage: React.FC = () => {
                 strategyId: selectedStratId,
                 budget: estimatedCost,
                 expectedRoi: roi,
+                targetedCount: targetCount,
                 targets: [] // Backend lo llenaría
             });
 
@@ -212,10 +213,12 @@ const CampaignsPage: React.FC = () => {
                                     </td>
                                     <td className="px-6 py-4 text-center">
                                         <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide
-                                            ${camp.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}
+                                            ${camp.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700'
+                                            : camp.status === 'CANCELLED' ? 'bg-red-100 text-red-600'
+                                            : 'bg-slate-100 text-slate-500'}
                                         `}>
-                                            <span className={`w-2 h-2 rounded-full ${camp.status === 'ACTIVE' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
-                                            {camp.status === 'ACTIVE' ? 'En Curso' : 'Finalizada'}
+                                            <span className={`w-2 h-2 rounded-full ${camp.status === 'ACTIVE' ? 'bg-emerald-500 animate-pulse' : camp.status === 'CANCELLED' ? 'bg-red-400' : 'bg-slate-400'}`}></span>
+                                            {camp.status === 'ACTIVE' ? 'En Curso' : camp.status === 'CANCELLED' ? 'Cancelada' : 'Finalizada'}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-right font-medium text-slate-700">

@@ -115,17 +115,17 @@ const ExecutiveInsightsPage: React.FC = () => {
                         <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">{retentionPct}% retenido</span>
                     </div>
                     <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Erosión de Capital (30d)</p>
-                    <h2 className="text-2xl font-black text-[#0F172A] mt-1">{formatMoney(metrics?.capitalErosionProyectada || 2450000)}</h2>
+                    <h2 className="text-2xl font-black text-[#0F172A] mt-1">{formatMoney(metrics?.capitalErosionProyectada ?? 0)}</h2>
                     <p className="text-[10px] text-slate-400 mt-2 italic">*Capital proyectado a salir por riesgo de fuga.</p>
                 </div>
 
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                     <div className="flex justify-between items-start mb-4">
                         <div className="p-2 bg-emerald-50 rounded-lg"><Zap className="w-6 h-6 text-emerald-600" /></div>
-                        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">ROI: {metrics?.retentionROI || 8.4}x</span>
+                        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">ROI: {metrics?.retentionROI ?? 0}x</span>
                     </div>
                     <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Capital Salvado (Est.)</p>
-                    <h2 className="text-2xl font-black text-[#0F172A] mt-1">{formatMoney(metrics?.estimatedSavings || 1280000)}</h2>
+                    <h2 className="text-2xl font-black text-[#0F172A] mt-1">{formatMoney(metrics?.estimatedSavings ?? 0)}</h2>
                     <p className="text-[10px] text-slate-400 mt-2 italic">Impacto directo de campañas de retención.</p>
                 </div>
 
@@ -134,7 +134,7 @@ const ExecutiveInsightsPage: React.FC = () => {
                         <div className="p-2 bg-indigo-50 rounded-lg"><DollarSign className="w-6 h-6 text-indigo-600" /></div>
                     </div>
                     <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Inversión en Retención</p>
-                    <h2 className="text-2xl font-black text-[#0F172A] mt-1">{formatMoney(metrics?.totalInvestment || 152000)}</h2>
+                    <h2 className="text-2xl font-black text-[#0F172A] mt-1">{formatMoney(metrics?.totalInvestment ?? 0)}</h2>
                     <p className="text-[10px] text-slate-400 mt-2 italic">Costo operativo de beneficios y upgrades.</p>
                 </div>
 

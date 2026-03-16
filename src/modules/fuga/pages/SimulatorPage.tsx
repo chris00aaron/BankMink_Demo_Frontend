@@ -242,8 +242,8 @@ const SimulatorPage = () => {
                                             </div>
                                             <p className="text-xs text-slate-500 leading-snug">{seg.description}</p>
                                         </button>
-                                        {/* Delete button — visible on hover for custom segments (id > 3) */}
-                                        {Number(seg.id) > 3 && (
+                                        {/* Delete button — visible on hover for custom segments (id > 4; IDs 1-4 are system seeds) */}
+                                        {Number(seg.id) > 4 && (
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); handleDeleteSegment(seg); }}
                                                 className="absolute top-2 right-2 p-1 bg-red-50 hover:bg-red-100 text-red-500 rounded opacity-0 group-hover:opacity-100 transition-opacity"

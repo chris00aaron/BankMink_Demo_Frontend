@@ -2,14 +2,16 @@ import React, { useState, useEffect } from 'react';
 import {
     LineChart,
     Line,
+    BarChart,
+    Bar,
+    Cell,
     XAxis,
     YAxis,
     CartesianGrid,
     Tooltip,
     ResponsiveContainer,
-    AreaChart,
-    Area,
-    Legend
+    Legend,
+    ReferenceLine,
 } from 'recharts';
 import {
     Activity,
@@ -24,40 +26,21 @@ import {
     X as XIcon
 } from 'lucide-react';
 import { ChurnService } from '../churn.service';
-import type { TrainResult, MLOpsMetrics, PerformanceStatus } from '../types';
+import type { TrainResult, MLOpsMetrics, PerformanceStatus, TrainingHistoryPoint, PredictionBucket } from '../types';
 
-// Curva ROC sintética para referencia visual — la forma no representa el modelo real.
-// El valor AUC real viene del backend y se muestra en los anillos de métricas.
-const rocCurveData = [
-    { fpr: 0, tpr: 0 },
-    { fpr: 0.05, tpr: 0.52 },
-    { fpr: 0.10, tpr: 0.68 },
-    { fpr: 0.15, tpr: 0.76 },
-    { fpr: 0.20, tpr: 0.82 },
-    { fpr: 0.30, tpr: 0.88 },
-    { fpr: 0.40, tpr: 0.91 },
-    { fpr: 0.50, tpr: 0.94 },
-    { fpr: 0.60, tpr: 0.95 },
-    { fpr: 0.70, tpr: 0.97 },
-    { fpr: 0.80, tpr: 0.98 },
-    { fpr: 0.90, tpr: 0.99 },
-    { fpr: 1.0, tpr: 1.0 },
-];
+// Colores por nivel de probabilidad para el histograma de distribución
+const bucketColor = (bucket: string): string => {
+    const start = parseInt(bucket.split('-')[0]);
+    if (start >= 70) return '#EF4444'; // Alto riesgo — rojo
+    if (start >= 40) return '#F59E0B'; // Riesgo medio — ámbar
+    return '#10B981';                  // Bajo riesgo — verde
+};
 
-// Convergencia de XGBoost por número de árboles (referencia visual).
-// XGBoost no entrena por epochs — cada paso añade un árbol al ensemble.
-const trainingLossData = [
-    { epoch: 10,  training: 0.85, validation: 0.88 },
-    { epoch: 20,  training: 0.62, validation: 0.68 },
-    { epoch: 30,  training: 0.45, validation: 0.52 },
-    { epoch: 40,  training: 0.32, validation: 0.40 },
-    { epoch: 50,  training: 0.24, validation: 0.33 },
-    { epoch: 60,  training: 0.18, validation: 0.28 },
-    { epoch: 70,  training: 0.14, validation: 0.24 },
-    { epoch: 80,  training: 0.11, validation: 0.21 },
-    { epoch: 90,  training: 0.09, validation: 0.19 },
-    { epoch: 100, training: 0.07, validation: 0.17 },
-];
+const triggerLabel: Record<string, { label: string; color: string }> = {
+    manual_training:  { label: 'Manual',        color: 'bg-slate-100 text-slate-700'   },
+    performance_decay:{ label: 'Auto (Decay)',   color: 'bg-red-100 text-red-700'       },
+    scheduled_check:  { label: 'Check Prog.',    color: 'bg-emerald-100 text-emerald-700'},
+};
 
 // Circular progress ring component
 const MetricRing: React.FC<{
@@ -117,6 +100,11 @@ const MLOpsPage: React.FC = () => {
     const [trainResult, setTrainResult] = useState<TrainResult | null>(null);
     const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
+    // Chart data states
+    const [trainingEvolution, setTrainingEvolution] = useState<TrainingHistoryPoint[]>([]);
+    const [predictionDistribution, setPredictionDistribution] = useState<PredictionBucket[]>([]);
+    const [chartsLoading, setChartsLoading] = useState(true);
+
     const fetchMetrics = async () => {
         try {
             setLoading(true);
@@ -131,8 +119,25 @@ const MLOpsPage: React.FC = () => {
         }
     };
 
+    const fetchChartData = async () => {
+        setChartsLoading(true);
+        try {
+            const [evolution, distribution] = await Promise.all([
+                ChurnService.getTrainingEvolution(),
+                ChurnService.getPredictionDistribution(),
+            ]);
+            setTrainingEvolution(evolution);
+            setPredictionDistribution(distribution);
+        } catch (err) {
+            console.error('Error fetching chart data:', err);
+        } finally {
+            setChartsLoading(false);
+        }
+    };
+
     useEffect(() => {
         fetchMetrics();
+        fetchChartData();
     }, []);
 
     // ============================================================
@@ -158,11 +163,12 @@ const MLOpsPage: React.FC = () => {
         setIsEvaluating(true);
         try {
             const result = await ChurnService.triggerEvaluation();
-            setMonitorStatus(result);
             // If auto-training was triggered, refresh main metrics too
             if (result.autoTrainingTriggered) {
                 await fetchMetrics();
             }
+            // Re-fetch complete status (consistent with GET /monitor/status)
+            await fetchMonitorStatus();
         } catch (err) {
             console.error('Error evaluating performance:', err);
         } finally {
@@ -216,9 +222,9 @@ const MLOpsPage: React.FC = () => {
             const result = await ChurnService.trainModel();
             setTrainResult(result);
 
-            // If training succeeded, refresh metrics
+            // If training succeeded, refresh metrics and charts
             if (result.status === 'success') {
-                await fetchMetrics();
+                await Promise.all([fetchMetrics(), fetchChartData()]);
             }
         } catch (err: any) {
             setTrainResult({
@@ -569,6 +575,33 @@ const MLOpsPage: React.FC = () => {
                         <AlertTriangle className="w-8 h-8 mx-auto mb-2 opacity-70" />
                         <p className="text-sm">{monitorStatus.message}</p>
                     </div>
+                ) : monitorStatus?.status === 'insufficient_data' ? (
+                    <div className="py-6 px-4">
+                        <div className="flex items-start gap-3 mb-5">
+                            <Database className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
+                            <div>
+                                <p className="text-sm font-medium text-slate-700">Acumulando datos de producción</p>
+                                <p className="text-xs text-slate-500 mt-0.5">{monitorStatus.message}</p>
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-xs text-slate-500 font-medium">
+                                <span>Muestras maduras (&gt;{monitorStatus.maturationDays ?? 30} días)</span>
+                                <span>{monitorStatus.evaluatedSamples ?? 0} / {monitorStatus.minSamplesRequired ?? 50}</span>
+                            </div>
+                            <div className="w-full bg-slate-100 rounded-full h-2.5">
+                                <div
+                                    className="bg-amber-400 h-2.5 rounded-full transition-all duration-700"
+                                    style={{
+                                        width: `${Math.min(100, ((monitorStatus.evaluatedSamples ?? 0) / (monitorStatus.minSamplesRequired ?? 50)) * 100)}%`
+                                    }}
+                                />
+                            </div>
+                            <p className="text-xs text-slate-400">
+                                Umbral de activación: {((monitorStatus.recallThreshold ?? 0.75) * 100).toFixed(0)}% Recall · Intervalo de evaluación: {monitorStatus.monitorIntervalHours ?? 6}h
+                            </p>
+                        </div>
+                    </div>
                 ) : monitorStatus ? (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         {/* Metrics Summary */}
@@ -643,100 +676,175 @@ const MLOpsPage: React.FC = () => {
                 ) : null}
             </div>
 
-            {/* Charts Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* ROC Curve */}
-                <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
-                    <h3 className="text-lg font-semibold text-slate-800 mb-4">Curva ROC</h3>
-                    <p className="text-sm text-slate-500 mb-6">Referencia visual • Umbral óptimo = 0.45 • AUC real en anillos superiores</p>
-                    <div className="h-72">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={rocCurveData}>
-                                <defs>
-                                    <linearGradient id="rocGradient" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
-                                        <stop offset="95%" stopColor="#10B981" stopOpacity={0.05} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-                                <XAxis
-                                    dataKey="fpr"
-                                    label={{ value: 'False Positive Rate', position: 'bottom', offset: -5 }}
-                                    stroke="#94A3B8"
-                                    tickFormatter={(val) => val.toFixed(1)}
-                                />
-                                <YAxis
-                                    label={{ value: 'True Positive Rate', angle: -90, position: 'insideLeft' }}
-                                    stroke="#94A3B8"
-                                    tickFormatter={(val) => val.toFixed(1)}
-                                />
-                                <Tooltip
-                                    formatter={(value: number) => [value.toFixed(3), '']}
-                                    contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0' }}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey="tpr"
-                                    stroke="#10B981"
-                                    strokeWidth={3}
-                                    fill="url(#rocGradient)"
-                                    name="TPR"
-                                />
-                                {/* Diagonal reference line */}
-                                <Line
-                                    type="monotone"
-                                    data={[{ fpr: 0, tpr: 0 }, { fpr: 1, tpr: 1 }]}
-                                    dataKey="tpr"
-                                    stroke="#CBD5E1"
-                                    strokeDasharray="5 5"
-                                    dot={false}
-                                />
-                            </AreaChart>
-                        </ResponsiveContainer>
-                    </div>
+            {/* ============================================================ */}
+            {/* CHART 1 — Evolución de Métricas (full width)               */}
+            {/* ============================================================ */}
+            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm mb-6">
+                <div className="flex items-center justify-between mb-1">
+                    <h3 className="text-lg font-semibold text-slate-800">Evolución de Métricas</h3>
+                    <span className="text-xs text-slate-400">Últimos 30 registros de entrenamiento/evaluación</span>
                 </div>
+                <p className="text-sm text-slate-500 mb-6">
+                    Tendencia real de Recall, Precision y F1-Score a lo largo del tiempo ·
+                    Línea roja = umbral mínimo de Recall (75%)
+                </p>
 
-                {/* Training Loss */}
-                <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
-                    <h3 className="text-lg font-semibold text-slate-800 mb-4">Convergencia del Modelo</h3>
-                    <p className="text-sm text-slate-500 mb-6">Training vs Validation • 100 árboles (referencia visual)</p>
+                {chartsLoading ? (
+                    <div className="h-72 flex items-center justify-center">
+                        <Loader2 className="w-6 h-6 animate-spin text-slate-300" />
+                    </div>
+                ) : trainingEvolution.length === 0 ? (
+                    <div className="h-72 flex flex-col items-center justify-center text-slate-400">
+                        <Activity className="w-8 h-8 mb-2 opacity-40" />
+                        <p className="text-sm">Sin historial de entrenamientos aún.</p>
+                        <p className="text-xs mt-1">Entrena el modelo para ver la evolución de métricas.</p>
+                    </div>
+                ) : (
                     <div className="h-72">
                         <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={trainingLossData}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                            <LineChart data={trainingEvolution} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
                                 <XAxis
-                                    dataKey="epoch"
-                                    label={{ value: 'Árboles', position: 'bottom', offset: -5 }}
+                                    dataKey="date"
                                     stroke="#94A3B8"
+                                    tick={{ fontSize: 11 }}
+                                    tickFormatter={(val: string) => val.slice(5)} // Show MM-DD
                                 />
                                 <YAxis
-                                    label={{ value: 'Loss', angle: -90, position: 'insideLeft' }}
                                     stroke="#94A3B8"
+                                    tick={{ fontSize: 11 }}
+                                    domain={[0, 100]}
+                                    tickFormatter={(v: number) => `${v}%`}
                                 />
                                 <Tooltip
-                                    formatter={(value: number) => [value.toFixed(3), '']}
-                                    contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0' }}
+                                    contentStyle={{ borderRadius: '10px', border: '1px solid #E2E8F0', fontSize: 12 }}
+                                    formatter={(value: number, name: string) => [`${value?.toFixed(1)}%`, name]}
+                                    labelStyle={{ fontWeight: 600, color: '#0F172A', marginBottom: 4 }}
                                 />
-                                <Legend />
-                                <Line
-                                    type="monotone"
-                                    dataKey="training"
-                                    stroke="#3B82F6"
-                                    strokeWidth={3}
-                                    dot={{ fill: '#3B82F6', strokeWidth: 2 }}
-                                    name="Training"
+                                <Legend wrapperStyle={{ fontSize: 12, paddingTop: 12 }} />
+                                {/* Umbral mínimo de Recall */}
+                                <ReferenceLine
+                                    y={75}
+                                    stroke="#EF4444"
+                                    strokeDasharray="6 3"
+                                    strokeWidth={1.5}
+                                    label={{ value: 'Umbral 75%', position: 'insideTopRight', fontSize: 10, fill: '#EF4444' }}
                                 />
-                                <Line
-                                    type="monotone"
-                                    dataKey="validation"
-                                    stroke="#F59E0B"
-                                    strokeWidth={3}
-                                    dot={{ fill: '#F59E0B', strokeWidth: 2 }}
-                                    name="Validation"
-                                />
+                                <Line type="monotone" dataKey="recall"    stroke="#3B82F6" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} name="Recall"    connectNulls />
+                                <Line type="monotone" dataKey="precision" stroke="#10B981" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} name="Precision" connectNulls />
+                                <Line type="monotone" dataKey="f1Score"   stroke="#8B5CF6" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} name="F1-Score"  connectNulls />
+                                <Line type="monotone" dataKey="aucRoc"    stroke="#F59E0B" strokeWidth={2}   dot={{ r: 3 }} activeDot={{ r: 5 }} name="AUC-ROC"   strokeDasharray="5 3" connectNulls />
                             </LineChart>
                         </ResponsiveContainer>
                     </div>
+                )}
+            </div>
+
+            {/* ============================================================ */}
+            {/* CHARTS 2 & 3 — Distribución + Historial (2 cols)            */}
+            {/* ============================================================ */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                {/* Distribución de Probabilidades */}
+                <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+                    <h3 className="text-lg font-semibold text-slate-800 mb-1">Distribución de Probabilidades</h3>
+                    <p className="text-sm text-slate-500 mb-6">
+                        Histograma de scores de fuga · Un modelo confiado muestra picos en los extremos
+                    </p>
+
+                    {chartsLoading ? (
+                        <div className="h-64 flex items-center justify-center">
+                            <Loader2 className="w-6 h-6 animate-spin text-slate-300" />
+                        </div>
+                    ) : predictionDistribution.every(b => b.count === 0) ? (
+                        <div className="h-64 flex flex-col items-center justify-center text-slate-400">
+                            <Database className="w-8 h-8 mb-2 opacity-40" />
+                            <p className="text-sm">Sin predicciones registradas aún.</p>
+                        </div>
+                    ) : (
+                        <div className="h-64">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={predictionDistribution} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                                    <XAxis dataKey="bucket" stroke="#94A3B8" tick={{ fontSize: 10 }} />
+                                    <YAxis stroke="#94A3B8" tick={{ fontSize: 11 }} allowDecimals={false} />
+                                    <Tooltip
+                                        contentStyle={{ borderRadius: '10px', border: '1px solid #E2E8F0', fontSize: 12 }}
+                                        formatter={(value: number) => [value, 'Predicciones']}
+                                        labelFormatter={(label) => `Rango: ${label}`}
+                                    />
+                                    <Bar dataKey="count" name="Predicciones" radius={[4, 4, 0, 0]}>
+                                        {predictionDistribution.map((entry, index) => (
+                                            <Cell key={index} fill={bucketColor(entry.bucket)} fillOpacity={0.85} />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    )}
+
+                    {/* Legend */}
+                    <div className="flex gap-4 mt-3 justify-center text-xs text-slate-500">
+                        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-emerald-500 inline-block" />Bajo riesgo</span>
+                        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-amber-500 inline-block" />Riesgo medio</span>
+                        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-red-500 inline-block" />Alto riesgo</span>
+                    </div>
+                </div>
+
+                {/* Historial de Entrenamientos */}
+                <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm flex flex-col">
+                    <div className="flex items-center justify-between mb-1">
+                        <h3 className="text-lg font-semibold text-slate-800">Historial de Entrenamientos</h3>
+                        <span className="text-xs text-slate-400">{trainingEvolution.length} registros</span>
+                    </div>
+                    <p className="text-sm text-slate-500 mb-4">Eventos de entrenamiento y evaluación ordenados por fecha</p>
+
+                    {chartsLoading ? (
+                        <div className="flex-1 flex items-center justify-center">
+                            <Loader2 className="w-6 h-6 animate-spin text-slate-300" />
+                        </div>
+                    ) : trainingEvolution.length === 0 ? (
+                        <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
+                            <GitBranch className="w-8 h-8 mb-2 opacity-40" />
+                            <p className="text-sm">Sin historial de entrenamientos.</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-y-auto flex-1 max-h-64 space-y-2 pr-1">
+                            {[...trainingEvolution].reverse().map((entry, idx) => {
+                                const trigger = triggerLabel[entry.triggerReason] ?? { label: entry.triggerReason, color: 'bg-slate-100 text-slate-600' };
+                                return (
+                                    <div key={idx} className="flex items-start gap-3 p-3 rounded-lg border border-slate-100 hover:bg-slate-50 transition-colors">
+                                        {/* Date */}
+                                        <div className="text-xs text-slate-400 font-mono w-20 flex-shrink-0 pt-0.5">
+                                            {entry.date}
+                                        </div>
+                                        {/* Trigger badge */}
+                                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${trigger.color}`}>
+                                            {trigger.label}
+                                        </span>
+                                        {/* Metrics */}
+                                        <div className="flex gap-3 flex-wrap text-xs text-slate-600 flex-1">
+                                            {entry.recall != null && (
+                                                <span>R <strong className="text-slate-800">{entry.recall.toFixed(1)}%</strong></span>
+                                            )}
+                                            {entry.f1Score != null && (
+                                                <span>F1 <strong className="text-slate-800">{entry.f1Score.toFixed(1)}%</strong></span>
+                                            )}
+                                            {entry.precision != null && (
+                                                <span>P <strong className="text-slate-800">{entry.precision.toFixed(1)}%</strong></span>
+                                            )}
+                                        </div>
+                                        {/* Production badge */}
+                                        {entry.inProduction && (
+                                            <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full flex-shrink-0 font-medium">
+                                                Prod
+                                            </span>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -764,7 +872,7 @@ const MLOpsPage: React.FC = () => {
 
             {/* Info Notice */}
             <div className="mt-6 text-center text-sm text-slate-400">
-                <p>📊 Métricas de rendimiento obtenidas del servidor en tiempo real. Curva ROC y gráfico de convergencia mostrados como referencia visual — no representan la curva real del modelo.</p>
+                <p>Todas las métricas y gráficos son datos reales obtenidos de la base de datos en tiempo real.</p>
             </div>
         </div>
     );
