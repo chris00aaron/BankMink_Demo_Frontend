@@ -209,8 +209,15 @@ function PsiLineChart({ data }: { data: FeatureDrift[] }) {
 
 // ==================== HELPERS ====================
 
-const pctFmt = (v: number | null | undefined) =>
-    v != null ? `${(v * 100).toFixed(2)}%` : '—';
+const pctFmt = (v: number | null | undefined) => {
+    if (v == null) return '—';
+    const percent = v * 100;
+    // Si es un número sumamente pequeño (pero no 0), mostramos hasta 4 decimales
+    if (percent > 0 && percent < 1) {
+        return `${percent.toFixed(4).replace(/0+$/, '').replace(/\.$/, '')}%`;
+    }
+    return `${percent.toFixed(2)}%`;
+};
 
 const durFmt = (s: number | null | undefined) => {
     if (!s) return '—';
@@ -452,7 +459,14 @@ export function ModelMonitoring() {
                                     {[
                                         { label: 'Versión', val: champion.model_version },
                                         { label: 'ID Modelo', val: `#${champion.id_model}` },
-                                        { label: 'Umbral Decisión', val: champion.threshold != null ? `${(champion.threshold * 100).toFixed(0)}%` : '—' },
+                                        {
+                                            label: 'Umbral Decisión',
+                                            val: champion.threshold != null
+                                                ? champion.threshold < 0.01
+                                                    ? `${(champion.threshold * 100).toFixed(2)}%`
+                                                    : `${(champion.threshold * 100).toFixed(1)}%`
+                                                : '—'
+                                        },
                                         { label: 'Desplegado', val: dateFmt(champion.created_at) },
                                         { label: 'Último Promovido', val: timeFmt(champion.promoted_at) },
                                         { label: 'Estado', val: champion.promotion_status },
