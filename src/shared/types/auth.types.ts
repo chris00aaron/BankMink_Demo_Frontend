@@ -1,17 +1,11 @@
 // Tipos de Roles de usuario
 export type UserRole =
   | 'admin'
-  | 'operario-morosidad'
-  | 'operario-anomalias'
-  | 'operario-demanda-efectivo'
-  | 'operario-fuga-demanda';
+  | 'operario-anomalias';
 
 // Tipos de Servicios disponibles
 export type ServiceType =
-  | 'morosidad-detalle'
   | 'anomalias-transaccionales'
-  | 'demanda-efectivo'
-  | 'fuga-demanda'
   | 'auditoria'
   | 'gestion-usuarios';
 

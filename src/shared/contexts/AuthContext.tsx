@@ -7,16 +7,10 @@ const API_BASE_URL = 'http://localhost:8080/api';
 
 export type UserRole =
   | 'admin'
-  | 'operario-morosidad'
-  | 'operario-anomalias'
-  | 'operario-demanda-efectivo'
-  | 'operario-fuga-demanda';
+  | 'operario-anomalias';
 
 export type ServiceType =
-  | 'morosidad-detalle'
   | 'anomalias-transaccionales'
-  | 'demanda-efectivo'
-  | 'fuga-demanda'
   | 'auditoria'
   | 'gestion-usuarios';
 
@@ -64,12 +58,9 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const mapRole = (backendRole: string): UserRole => {
   const roleMap: Record<string, UserRole> = {
     'ADMIN': 'admin',
-    'OPERARIO_MOROSIDAD': 'operario-morosidad',
     'OPERARIO_ANOMALIAS': 'operario-anomalias',
-    'OPERARIO_DEMANDA_EFECTIVO': 'operario-demanda-efectivo',
-    'OPERARIO_FUGA_DEMANDA': 'operario-fuga-demanda',
   };
-  return roleMap[backendRole] || 'operario-morosidad';
+  return roleMap[backendRole] || 'operario-anomalias';
 };
 
 /**
@@ -80,11 +71,8 @@ const mapRole = (backendRole: string): UserRole => {
  * - Contraseña: admin123
  * - Acceso: Todos los servicios + Auditoría + Gestión de Usuarios
  * 
- * OPERARIOS:
- * - Email: morosidad@bankmind.com | Contraseña: 123456 | Servicio: Morosidad Detalle
+ * OPERARIO ANOMALÍAS:
  * - Email: anomalias@bankmind.com | Contraseña: 123456 | Servicio: Anomalías Transaccionales
- * - Email: demanda@bankmind.com | Contraseña: 123456 | Servicio: Demanda Efectivo
- * - Email: fuga@bankmind.com | Contraseña: 123456 | Servicio: Fuga Demanda
  */
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -322,10 +310,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Operarios solo tienen acceso a su servicio
     const serviceRoleMap: Record<ServiceType, UserRole[]> = {
-      'morosidad-detalle': ['operario-morosidad'],
       'anomalias-transaccionales': ['operario-anomalias'],
-      'demanda-efectivo': ['operario-demanda-efectivo'],
-      'fuga-demanda': ['operario-fuga-demanda'],
       'auditoria': [], // Solo admin
       'gestion-usuarios': [], // Solo admin
     };
