@@ -15,29 +15,7 @@ import {
   RiskAnalysis,
   ModelMonitoring,
 } from "@modules/fraude";
-import {
-  ClientPrediction,
-  Dashboard as MorosidadDashboard,
-  MorosidadSidebar,
-  BatchPrediction as MorosidadBatchPrediction,
-  Strategy,
-  Simulation,
-  ModelHealth,
-  DashboardProvider,
-} from "@modules/morosidad";
-import {
-  FugaSidebar,
-  DashboardPage as FugaDashboard,
-  SimulatorPage as FugaSimulator,
-  MLOpsPage as FugaMLOps,
-  RiskIntelligencePage as FugaRiskIntelligence,
-  CustomerDetailPage as FugaCustomerDetail,
-  CampaignsPage as FugaCampaigns,
-  ExecutiveInsightsPage as FugaExecutive,
-} from "@modules/fuga";
-import type { FugaScreen } from "@modules/fuga";
 import { HomePage } from "./pages/HomePage";
-import { AtmModule } from "@modules/atm/AtmModule";
 import { AuditoriaModule } from "@admin/auditoria/AuditoriaModule";
 import { GestionUsuariosModule } from "@admin/usuarios/GestionUsuariosModule";
 import { OtpVerificationScreen } from "@shared/components/OtpVerificationScreen";
@@ -66,10 +44,6 @@ function AppContent() {
 
   const [currentView, setCurrentView] = useState<"home" | ServiceType>("home");
   const [currentScreen, setCurrentScreen] = useState("dashboard");
-  const [morosidadScreen, setMorosidadScreen] = useState("dashboard");
-  const [selectedMorosidadRecordId, setSelectedMorosidadRecordId] = useState<number | null>(null);
-  const [fugaScreen, setFugaScreen] = useState<FugaScreen>("dashboard");
-  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
   const [loginError, setLoginError] = useState("");
   const [otpError, setOtpError] = useState("");
   const [authScreen, setAuthScreen] = useState<AuthScreen>("login");
@@ -125,29 +99,19 @@ function AppContent() {
     cancelMfa();
   };
 
-  // Redirect operarios to their service after login
+  // Redirect operarios al módulo de fraude tras el login
   useEffect(() => {
     if (isAuthenticated && user) {
       if (!isAdmin()) {
-        const serviceMap: Record<string, ServiceType> = {
-          "operario-morosidad": "morosidad-detalle",
-          "operario-anomalias": "anomalias-transaccionales",
-          "operario-demanda-efectivo": "demanda-efectivo",
-          "operario-fuga-demanda": "fuga-demanda",
-        };
-        const targetService = serviceMap[user.role];
-        if (targetService) {
-          setCurrentView(targetService);
+        if (user.role === "operario-anomalias") {
+          setCurrentView("anomalias-transaccionales");
         }
       } else {
         if (
           currentView !== "home" &&
           currentView !== "auditoria" &&
           currentView !== "gestion-usuarios" &&
-          currentView !== "morosidad-detalle" &&
-          currentView !== "anomalias-transaccionales" &&
-          currentView !== "demanda-efectivo" &&
-          currentView !== "fuga-demanda"
+          currentView !== "anomalias-transaccionales"
         ) {
           setCurrentView("home");
         }
@@ -179,32 +143,11 @@ function AppContent() {
     setCurrentScreen(screen);
   };
 
-  const handleMorosidadNavigate = (screen: string) => {
-    setMorosidadScreen(screen);
-    // Reiniciar recordId si no estamos en individual
-    if (screen !== "individual") {
-      setSelectedMorosidadRecordId(null);
-    }
-  };
-
-  const handleNavigateToMorosidadPrediction = (recordId: number) => {
-    setSelectedMorosidadRecordId(recordId);
-    setMorosidadScreen("individual");
-  };
-
-  const handleNavigateToCustomer = (id: number) => {
-    setSelectedCustomerId(id);
-    setFugaScreen("cliente");
-  };
-
   const handleNavigateToService = (service: ServiceType) => {
     if (hasAccessToService(service)) {
       setCurrentView(service);
       if (service === "anomalias-transaccionales") {
         setCurrentScreen("dashboard");
-      }
-      if (service === "morosidad-detalle") {
-        setMorosidadScreen("dashboard");
       }
     }
   };
@@ -270,77 +213,6 @@ function AppContent() {
   // Módulo de Gestión de Usuarios - Solo admin
   if (currentView === "gestion-usuarios") {
     return <GestionUsuariosModule onBack={handleBackToHome} />;
-  }
-
-  // Servicio: Morosidad Detalle
-  if (currentView === "morosidad-detalle") {
-    return (
-      <DashboardProvider>
-        <div className="min-h-screen bg-gray-50 flex">
-          <MorosidadSidebar
-            currentScreen={morosidadScreen}
-            onNavigate={handleMorosidadNavigate}
-            onBackToHome={isAdmin() ? handleBackToHome : undefined}
-            onLogout={handleLogout}
-          />
-          <div className="flex-1 ml-64">
-            {/* Page Content */}
-            <main className="p-8">
-              {morosidadScreen === "dashboard" && <MorosidadDashboard onNavigateToPrediction={handleNavigateToMorosidadPrediction} />}
-              {morosidadScreen === "individual" && <ClientPrediction initialRecordId={selectedMorosidadRecordId} />}
-              {morosidadScreen === "batch" && <MorosidadBatchPrediction />}
-              {morosidadScreen === "strategy" && <Strategy />}
-              {morosidadScreen === "simulation" && <Simulation />}
-              {morosidadScreen === "model-health" && <ModelHealth />}
-            </main>
-          </div>
-        </div>
-      </DashboardProvider>
-    );
-  }
-
-  // Servicio: Demanda Efectivo
-  if (currentView === "demanda-efectivo") {
-    return (
-      <AtmModule
-        currentScreen={currentScreen}
-        onNavigate={handleNavigate}
-        onBackToHome={isAdmin() ? handleBackToHome : undefined}
-        onLogout={handleLogout}
-      />
-    );
-  }
-
-  // Servicio: Fuga Demanda
-  if (currentView === "fuga-demanda") {
-    return (
-      <div className="min-h-screen bg-gray-50 flex">
-        <FugaSidebar
-          currentScreen={fugaScreen}
-          onNavigate={(screen) => setFugaScreen(screen)}
-          onBackToHome={handleBackToHome}
-          onLogout={handleLogout}
-        />
-        <div className="flex-1 ml-64">
-          <main className="p-8">
-            {fugaScreen === "dashboard" && (
-              <FugaDashboard onNavigateToCustomer={handleNavigateToCustomer} />
-            )}
-            {fugaScreen === 'simulador' && <FugaSimulator />}
-            {fugaScreen === 'mlops' && <FugaMLOps />}
-            {fugaScreen === 'geografia' && <FugaRiskIntelligence />}
-            {fugaScreen === 'campañas' && <FugaCampaigns />}
-            {fugaScreen === 'executive' && <FugaExecutive />}
-            {fugaScreen === 'cliente' && selectedCustomerId && (
-              <FugaCustomerDetail
-                customerId={selectedCustomerId}
-                onBack={() => setFugaScreen("dashboard")}
-              />
-            )}
-          </main>
-        </div>
-      </div>
-    );
   }
 
   // Servicio: Anomalías Transaccionales (Detección de Fraude)

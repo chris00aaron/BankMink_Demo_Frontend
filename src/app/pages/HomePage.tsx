@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Shield, Activity, Brain, ArrowRight, Sparkles, ChevronDown, TrendingDown, AlertTriangle, DollarSign, LogOut } from 'lucide-react';
+import { Shield, Activity, Brain, ArrowRight, Sparkles, ChevronDown, LogOut } from 'lucide-react';
 import { useAuth } from '@shared/contexts/AuthContext';
 import { ServiceType } from '@shared/types/index';
 import bankMindLogo from '@shared/assets/logo_BankMind.png';
@@ -21,33 +21,12 @@ export function HomePage({ onNavigateToService, onLogout }: HomePageProps) {
     color: string;
   }> = [
       {
-        id: 'morosidad-detalle',
-        title: 'Morosidad Detalle',
-        description: 'Análisis detallado de patrones de morosidad y predicción de incumplimiento de pagos',
-        icon: TrendingDown,
-        color: 'red'
-      },
-      {
         id: 'anomalias-transaccionales',
         title: 'Anomalías Transaccionales',
         description: 'Sistema avanzado de ML con XGBoost e Isolation Forest para identificar transacciones fraudulentas en tiempo real',
         icon: Shield,
         color: 'blue'
       },
-      {
-        id: 'demanda-efectivo',
-        title: 'Demanda Efectivo',
-        description: 'Predicción de demanda de efectivo en cajeros automáticos y sucursales bancarias',
-        icon: DollarSign,
-        color: 'green'
-      },
-      {
-        id: 'fuga-demanda',
-        title: 'Fuga Demanda',
-        description: 'Detección temprana de clientes con riesgo de abandonar productos o servicios bancarios',
-        icon: AlertTriangle,
-        color: 'orange'
-      }
     ];
 
   return (
@@ -65,7 +44,7 @@ export function HomePage({ onNavigateToService, onLogout }: HomePageProps) {
                 <h1 className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
                   BankMind
                 </h1>
-                <p className="text-xs text-gray-500">INTELIGENCIA FINANCIERA EN TIEMPO REAL</p>
+                <p className="text-xs text-gray-500">DETECCIÓN DE FRAUDE EN TIEMPO REAL</p>
               </div>
             </div>
 
@@ -164,16 +143,16 @@ export function HomePage({ onNavigateToService, onLogout }: HomePageProps) {
           <div className="text-center mb-16">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-100/80 border border-blue-200/50 mb-6">
               <Sparkles className="w-4 h-4 text-blue-600" />
-              <span className="text-sm font-medium text-blue-700">Plataforma de IA Empresarial</span>
+              <span className="text-sm font-medium text-blue-700">Detección de Fraude con IA</span>
             </div>
 
             <h2 className="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 bg-clip-text text-transparent leading-tight">
-              Inteligencia Artificial para<br />Decisiones Empresariales
+              Protección Inteligente<br />contra el Fraude Bancario
             </h2>
 
             <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-10 leading-relaxed">
-              Potencia tu negocio con nuestra suite completa de herramientas de análisis predictivo,
-              detección de fraude y business intelligence impulsadas por IA de última generación.
+              Detecta transacciones fraudulentas en tiempo real con nuestro sistema de IA avanzado,
+              combinando XGBoost e Isolation Forest para una protección bancaria de última generación.
             </p>
 
             <div className="flex items-center justify-center gap-4">
@@ -181,7 +160,7 @@ export function HomePage({ onNavigateToService, onLogout }: HomePageProps) {
                 onClick={() => onNavigateToService('anomalias-transaccionales')}
                 className="px-8 py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 transition-all flex items-center gap-2 group"
               >
-                Explorar Servicios
+                Acceder al Módulo de Fraude
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </button>
               <button className="px-8 py-4 bg-white border-2 border-gray-200 text-gray-700 rounded-xl font-semibold hover:border-gray-300 hover:bg-gray-50 transition-all">
@@ -212,46 +191,37 @@ export function HomePage({ onNavigateToService, onLogout }: HomePageProps) {
             </div>
             <div className="text-center">
               <div className="text-4xl font-bold bg-gradient-to-r from-orange-600 to-orange-800 bg-clip-text text-transparent mb-2">
-                6+
+                2
               </div>
-              <div className="text-sm text-gray-600">Módulos IA</div>
+              <div className="text-sm text-gray-600">Modelos IA</div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Services Grid */}
+      {/* Service Card */}
       <section className="py-20 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <h3 className="text-3xl font-bold text-gray-900 mb-4">
-              Suite Completa de Servicios
+              Módulo de Detección de Fraude
             </h3>
             <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Accede a nuestras herramientas empresariales de inteligencia artificial
-              diseñadas para transformar tus operaciones
+              Accede a las herramientas de inteligencia artificial diseñadas para proteger
+              las operaciones bancarias contra transacciones fraudulentas
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {services.map((service) => {
               const Icon = service.icon;
-              const colorClasses = {
-                blue: 'from-blue-500 to-blue-700',
-                purple: 'from-purple-500 to-purple-700',
-                green: 'from-green-500 to-green-700',
-                orange: 'from-orange-500 to-orange-700',
-                red: 'from-red-500 to-red-700',
-                indigo: 'from-indigo-500 to-indigo-700'
-              }[service.color];
-
               return (
                 <div
                   key={service.id}
                   className="group relative rounded-2xl p-8 backdrop-blur-xl bg-white/80 border border-gray-200/50 shadow-lg hover:shadow-2xl transition-all duration-300 cursor-pointer"
                   onClick={() => onNavigateToService(service.id)}
                 >
-                  <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${colorClasses} flex items-center justify-center mb-6 shadow-lg group-hover:scale-110 transition-transform`}>
+                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center mb-6 shadow-lg group-hover:scale-110 transition-transform">
                     <Icon className="w-7 h-7 text-white" />
                   </div>
 
@@ -296,7 +266,7 @@ export function HomePage({ onNavigateToService, onLogout }: HomePageProps) {
               </div>
               <h4 className="text-xl font-bold text-gray-900 mb-3">IA de Última Generación</h4>
               <p className="text-gray-600">
-                Modelos de machine learning avanzados entrenados con millones de puntos de datos para máxima precisión
+                Modelos XGBoost e Isolation Forest entrenados con millones de transacciones para máxima precisión
               </p>
             </div>
 
@@ -306,7 +276,7 @@ export function HomePage({ onNavigateToService, onLogout }: HomePageProps) {
               </div>
               <h4 className="text-xl font-bold text-gray-900 mb-3">Tiempo Real 24/7</h4>
               <p className="text-gray-600">
-                Procesamiento y análisis instantáneo con monitoreo continuo y alertas automáticas
+                Procesamiento y análisis instantáneo con monitoreo continuo y alertas automáticas de fraude
               </p>
             </div>
           </div>
@@ -317,7 +287,7 @@ export function HomePage({ onNavigateToService, onLogout }: HomePageProps) {
       <footer className="bg-white border-t border-gray-200 py-12 px-6">
         <div className="max-w-7xl mx-auto text-center text-gray-500 text-sm">
           <p className="mb-2">© 2026 BankMind. Todos los derechos reservados.</p>
-          <p>Plataforma de Inteligencia Artificial Empresarial de Nueva Generación</p>
+          <p>Módulo de Detección de Anomalías Transaccionales</p>
         </div>
       </footer>
     </div>
