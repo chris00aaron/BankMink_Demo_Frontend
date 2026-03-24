@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Shield, Activity, Brain, ArrowRight, Sparkles, ChevronDown, TrendingDown, AlertTriangle, DollarSign, LogOut } from 'lucide-react';
+import { Shield, Activity, Brain, ArrowRight, Sparkles, ChevronDown, TrendingDown, LogOut } from 'lucide-react';
 import { useAuth } from '@shared/contexts/AuthContext';
 import { ServiceType } from '@shared/types/index';
 import bankMindLogo from '@shared/assets/logo_BankMind.png';
@@ -26,27 +26,6 @@ export function HomePage({ onNavigateToService, onLogout }: HomePageProps) {
         description: 'Análisis detallado de patrones de morosidad y predicción de incumplimiento de pagos',
         icon: TrendingDown,
         color: 'red'
-      },
-      {
-        id: 'anomalias-transaccionales',
-        title: 'Anomalías Transaccionales',
-        description: 'Sistema avanzado de ML con XGBoost e Isolation Forest para identificar transacciones fraudulentas en tiempo real',
-        icon: Shield,
-        color: 'blue'
-      },
-      {
-        id: 'demanda-efectivo',
-        title: 'Demanda Efectivo',
-        description: 'Predicción de demanda de efectivo en cajeros automáticos y sucursales bancarias',
-        icon: DollarSign,
-        color: 'green'
-      },
-      {
-        id: 'fuga-demanda',
-        title: 'Fuga Demanda',
-        description: 'Detección temprana de clientes con riesgo de abandonar productos o servicios bancarios',
-        icon: AlertTriangle,
-        color: 'orange'
       }
     ];
 
@@ -178,7 +157,7 @@ export function HomePage({ onNavigateToService, onLogout }: HomePageProps) {
 
             <div className="flex items-center justify-center gap-4">
               <button
-                onClick={() => onNavigateToService('anomalias-transaccionales')}
+                onClick={() => onNavigateToService('morosidad-detalle')}
                 className="px-8 py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 transition-all flex items-center gap-2 group"
               >
                 Explorar Servicios
@@ -214,7 +193,7 @@ export function HomePage({ onNavigateToService, onLogout }: HomePageProps) {
               <div className="text-4xl font-bold bg-gradient-to-r from-orange-600 to-orange-800 bg-clip-text text-transparent mb-2">
                 6+
               </div>
-              <div className="text-sm text-gray-600">Módulos IA</div>
+              <div className="text-sm text-gray-600">Vistas Analíticas</div>
             </div>
           </div>
         </div>
