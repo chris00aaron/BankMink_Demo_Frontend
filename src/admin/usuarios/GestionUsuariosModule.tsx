@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Users, Search, Plus, Trash2, Shield, ArrowLeft, Key } from 'lucide-react';
+import { Users, Search, Plus, UserX, Shield, ArrowLeft, Key } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
 import { Badge } from '@shared/components/ui/badge';
@@ -52,18 +52,18 @@ export function GestionUsuariosModule({ onBack }: GestionUsuariosModuleProps) {
     }
   };
 
-  const handleDeleteUser = async (userId: number) => {
-    if (!confirm('¿Está seguro de eliminar este usuario?')) return;
+  const handleDeactivateUser = async (userId: number) => {
+    if (!confirm('¿Está seguro de desactivar este usuario? El usuario no podrá acceder al sistema.')) return;
 
     try {
       const data = await apiRequest<{ success: boolean; message?: string }>(
-        `/admin/users/${userId}`,
-        'DELETE'
+        `/admin/users/${userId}/deactivate`,
+        'POST'
       );
       if (data.success) {
         fetchUsers();
       } else {
-        alert(data.message || 'Error al eliminar usuario');
+        alert(data.message || 'Error al desactivar usuario');
       }
     } catch (err) {
       alert('Error de conexión');
@@ -293,16 +293,17 @@ export function GestionUsuariosModule({ onBack }: GestionUsuariosModuleProps) {
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
                               </Button>
 
-                              {/* Delete Button */}
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                disabled={user.roleCodRole === 'ADMIN'}
-                                onClick={() => handleDeleteUser(user.id)}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
+                              {/* Deactivate Button - only for active non-admin users */}
+                              {user.enable && user.roleCodRole !== 'ADMIN' && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  onClick={() => handleDeactivateUser(user.id)}
+                                >
+                                  <UserX className="w-4 h-4" />
+                                </Button>
+                              )}
                             </div>
                           </td>
                         </tr>
