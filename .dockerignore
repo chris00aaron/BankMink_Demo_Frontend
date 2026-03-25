@@ -1,0 +1,17 @@
+# Excluir módulos de Node (se reinstalan con npm ci en el Dockerfile)
+node_modules/
+
+# Excluir build previo local
+dist/
+
+# Excluir control de versiones
+.git
+.gitignore
+
+# Excluir archivos de IDE
+.idea
+.vscode
+*.swp
+
+# Excluir archivos de entorno local
+.env
