@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Key } from 'lucide-react';
-import { Button } from '@shared/components/ui/button';
-import { Input } from '@shared/components/ui/input';
+import { Button } from '@shared/components/ui-atm/button';
+import { Input } from '@shared/components/ui-atm/input';
 import { apiRequest } from '@shared/services/apiClient';
 
 interface Role {

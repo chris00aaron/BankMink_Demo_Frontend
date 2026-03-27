@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Clock, CheckCircle, XCircle } from 'lucide-react';
-import { Button } from '@shared/components/ui/button';
-import { Badge } from '@shared/components/ui/badge';
+import { Button } from '@shared/components/ui-atm/button';
+import { Badge } from '@shared/components/ui-atm/badge';
 import { apiRequest } from '@shared/services/apiClient';
 
 interface PasswordRequest {

@@ -1,8 +1,8 @@
-import { useState } from 'react';
-import { Shield, Activity, Brain, ArrowRight, Sparkles, ChevronDown, TrendingDown, AlertTriangle, DollarSign, LogOut } from 'lucide-react';
+import { Shield, Activity, Brain, ArrowRight, LogOut, Lock } from 'lucide-react';
 import { useAuth } from '@shared/contexts/AuthContext';
 import { ServiceType } from '@shared/types/index';
 import bankMindLogo from '@shared/assets/logo_BankMind.png';
+import '@shared/styles/HomePage.css';
 
 interface HomePageProps {
   onNavigateToService: (service: ServiceType) => void;
@@ -11,315 +11,166 @@ interface HomePageProps {
 
 export function HomePage({ onNavigateToService, onLogout }: HomePageProps) {
   const { user, isAdmin } = useAuth();
-  const [showServicesDropdown, setShowServicesDropdown] = useState(false);
-
-  const services: Array<{
-    id: ServiceType;
-    title: string;
-    description: string;
-    icon: typeof Shield;
-    color: string;
-  }> = [
-      {
-        id: 'morosidad-detalle',
-        title: 'Morosidad Detalle',
-        description: 'Análisis detallado de patrones de morosidad y predicción de incumplimiento de pagos',
-        icon: TrendingDown,
-        color: 'red'
-      },
-      {
-        id: 'anomalias-transaccionales',
-        title: 'Anomalías Transaccionales',
-        description: 'Sistema avanzado de ML con XGBoost e Isolation Forest para identificar transacciones fraudulentas en tiempo real',
-        icon: Shield,
-        color: 'blue'
-      },
-      {
-        id: 'demanda-efectivo',
-        title: 'Demanda Efectivo',
-        description: 'Predicción de demanda de efectivo en cajeros automáticos y sucursales bancarias',
-        icon: DollarSign,
-        color: 'green'
-      },
-      {
-        id: 'fuga-demanda',
-        title: 'Fuga Demanda',
-        description: 'Detección temprana de clientes con riesgo de abandonar productos o servicios bancarios',
-        icon: AlertTriangle,
-        color: 'orange'
-      }
-    ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50">
-      {/* Top Navigation Bar */}
-      <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-white/70 border-b border-gray-200/50 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            {/* Logo */}
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center">
-                <img src={bankMindLogo} alt="BankMind" className="w-full h-full object-contain" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-                  BankMind
-                </h1>
-                <p className="text-xs text-gray-500">INTELIGENCIA FINANCIERA EN TIEMPO REAL</p>
-              </div>
+    <div className="hp-root">
+
+      {/* ── Navbar ── */}
+      <nav className="hp-nav">
+        <div className="hp-nav__inner">
+
+          {/* Logo */}
+          <div className="hp-nav__logo">
+            <div className="hp-nav__logo-img-wrap">
+              <img src={bankMindLogo} alt="BankMind" />
             </div>
-
-            {/* Navigation Items */}
-            <div className="hidden md:flex items-center gap-8">
-              {/* Servicios Dropdown */}
-              <div className="relative">
-                <button
-                  onClick={() => setShowServicesDropdown(!showServicesDropdown)}
-                  className="flex items-center gap-1 text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors"
-                >
-                  Servicios
-                  <ChevronDown className={`w-4 h-4 transition-transform ${showServicesDropdown ? 'rotate-180' : ''}`} />
-                </button>
-
-                {showServicesDropdown && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-10"
-                      onClick={() => setShowServicesDropdown(false)}
-                    ></div>
-                    <div className="absolute top-full mt-2 left-0 w-72 bg-white rounded-xl shadow-xl border border-gray-200 py-2 z-20">
-                      {services.map((service) => {
-                        const Icon = service.icon;
-                        return (
-                          <button
-                            key={service.id}
-                            onClick={() => {
-                              setShowServicesDropdown(false);
-                              onNavigateToService(service.id);
-                            }}
-                            className="w-full px-4 py-3 flex items-center gap-3 hover:bg-blue-50 transition-colors text-left"
-                          >
-                            <div className={`w-8 h-8 rounded-lg bg-gradient-to-br from-${service.color}-500 to-${service.color}-700 flex items-center justify-center flex-shrink-0`}>
-                              <Icon className="w-4 h-4 text-white" />
-                            </div>
-                            <span className="text-sm font-medium text-gray-900">{service.title}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Admin-only menu items */}
-              {isAdmin() && (
-                <>
-                  <button
-                    onClick={() => onNavigateToService('auditoria')}
-                    className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors"
-                  >
-                    Auditoría
-                  </button>
-                  <button
-                    onClick={() => onNavigateToService('gestion-usuarios')}
-                    className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors"
-                  >
-                    Gestión de Usuarios
-                  </button>
-                </>
-              )}
-
-              <button className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors">
-                Soporte
-              </button>
-            </div>
-
-            {/* User Section */}
-            <div className="flex items-center gap-4">
-              <div className="hidden md:block text-right">
-                <p className="text-sm font-medium text-gray-900">{user?.name}</p>
-                <p className="text-xs text-gray-500">
-                  {isAdmin() ? 'Administrador' : 'Operario'}
-                </p>
-              </div>
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white text-sm font-semibold">
-                {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-              </div>
-              <button
-                onClick={onLogout}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-gray-200 hover:border-red-200"
-                title="Cerrar sesión"
-              >
-                <LogOut className="w-4 h-4" />
-                <span className="hidden lg:inline">Cerrar sesión</span>
-              </button>
+            <div className="hp-nav__logo-text">
+              <span className="hp-nav__logo-name">BankMind</span>
+              <span className="hp-nav__logo-tag">Inteligencia Financiera</span>
             </div>
           </div>
+
+          {/* Admin links */}
+          <div className="hp-nav__links">
+            {isAdmin() && (
+              <>
+                <button
+                  onClick={() => onNavigateToService('auditoria')}
+                  className="hp-nav__link"
+                >
+                  Auditoría
+                </button>
+                <button
+                  onClick={() => onNavigateToService('gestion-usuarios')}
+                  className="hp-nav__link"
+                >
+                  Gestión de Usuarios
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* User section */}
+          <div className="hp-nav__user">
+            <div className="hp-nav__user-info">
+              <span className="hp-nav__user-name">{user?.name}</span>
+              <span className="hp-nav__user-role">
+                {isAdmin() ? 'Administrador' : 'Operario'}
+              </span>
+            </div>
+            <div className="hp-nav__avatar">
+              {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+            </div>
+            <button
+              onClick={onLogout}
+              className="hp-nav__logout"
+              title="Cerrar sesión"
+            >
+              <LogOut size={15} />
+              <span className="hp-nav__logout-label">Cerrar sesión</span>
+            </button>
+          </div>
+
         </div>
       </nav>
 
-      {/* Hero Section */}
-      <section className="pt-32 pb-20 px-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-100/80 border border-blue-200/50 mb-6">
-              <Sparkles className="w-4 h-4 text-blue-600" />
-              <span className="text-sm font-medium text-blue-700">Plataforma de IA Empresarial</span>
-            </div>
+      {/* ── Hero ── */}
+      <section className="hp-hero">
+        <div className="hp-hero__bg-glow" />
+        <div className="hp-hero__bg-grid" />
 
-            <h2 className="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 bg-clip-text text-transparent leading-tight">
-              Inteligencia Artificial para<br />Decisiones Empresariales
-            </h2>
-
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-10 leading-relaxed">
-              Potencia tu negocio con nuestra suite completa de herramientas de análisis predictivo,
-              detección de fraude y business intelligence impulsadas por IA de última generación.
-            </p>
-
-            <div className="flex items-center justify-center gap-4">
-              <button
-                onClick={() => onNavigateToService('anomalias-transaccionales')}
-                className="px-8 py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 transition-all flex items-center gap-2 group"
-              >
-                Explorar Servicios
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </button>
-              <button className="px-8 py-4 bg-white border-2 border-gray-200 text-gray-700 rounded-xl font-semibold hover:border-gray-300 hover:bg-gray-50 transition-all">
-                Ver Demo
-              </button>
-            </div>
+        <div className="hp-hero__inner">
+          <div className="hp-hero__badge">
+            <span className="hp-hero__badge-dot" />
+            Plataforma Analítica Impulsada por IA
           </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto">
-            <div className="text-center">
-              <div className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent mb-2">
-                99.8%
+          <h1 className="hp-hero__title">
+            Predicción de Demanda<br />
+            de Efectivo en{' '}
+            <span className="hp-hero__title-accent">ATMs</span>
+          </h1>
+
+          <p className="hp-hero__subtitle">
+            Optimiza la liquidez de tu red de cajeros automáticos con modelos de
+            machine learning entrenados sobre datos transaccionales reales.
+            Reduce el desabastecimiento y mejora la eficiencia operativa.
+          </p>
+
+          <div className="hp-hero__cta-wrap">
+            <button
+              onClick={() => onNavigateToService('demanda-efectivo')}
+              className="hp-btn-primary"
+            >
+              Acceder al Módulo
+              <ArrowRight size={15} />
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Features / Pillars ── */}
+      <section className="hp-features">
+        <div className="hp-features__inner">
+          <div className="hp-section-header">
+            <span className="hp-section-header__eyebrow">Fundamentos de la Plataforma</span>
+            <h2 className="hp-section-header__title">Construido para entornos bancarios exigentes</h2>
+          </div>
+
+          <div className="hp-features__grid">
+            <div className="hp-feature-card">
+              <div className="hp-feature-card__icon hp-feature-card__icon--blue">
+                <Shield size={22} />
               </div>
-              <div className="text-sm text-gray-600">Precisión de Detección</div>
+              <div className="hp-feature-card__title">Seguridad Bancaria</div>
+              <div className="hp-feature-card__desc">
+                Acceso con autenticación multifactor, control de roles y trazabilidad
+                de auditoría en cada operación.
+              </div>
             </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-purple-800 bg-clip-text text-transparent mb-2">
-                &lt;100ms
+
+            <div className="hp-feature-card">
+              <div className="hp-feature-card__icon hp-feature-card__icon--gold">
+                <Brain size={22} />
               </div>
-              <div className="text-sm text-gray-600">Tiempo de Respuesta</div>
+              <div className="hp-feature-card__title">Modelos Adaptativos</div>
+              <div className="hp-feature-card__desc">
+                Entrenamiento continuo sobre datos transaccionales reales. El modelo
+                se actualiza y valida automáticamente en producción.
+              </div>
             </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold bg-gradient-to-r from-green-600 to-green-800 bg-clip-text text-transparent mb-2">
-                24/7
+
+            <div className="hp-feature-card">
+              <div className="hp-feature-card__icon hp-feature-card__icon--green">
+                <Activity size={22} />
               </div>
-              <div className="text-sm text-gray-600">Monitoreo Activo</div>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold bg-gradient-to-r from-orange-600 to-orange-800 bg-clip-text text-transparent mb-2">
-                6+
+              <div className="hp-feature-card__title">Monitoreo en Tiempo Real</div>
+              <div className="hp-feature-card__desc">
+                Supervisión continua del rendimiento predictivo con alertas automáticas
+                ante desviaciones estadísticas relevantes.
               </div>
-              <div className="text-sm text-gray-600">Módulos IA</div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Services Grid */}
-      <section className="py-20 px-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h3 className="text-3xl font-bold text-gray-900 mb-4">
-              Suite Completa de Servicios
-            </h3>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Accede a nuestras herramientas empresariales de inteligencia artificial
-              diseñadas para transformar tus operaciones
-            </p>
+      {/* ── Footer ── */}
+      <footer className="hp-footer">
+        <div className="hp-footer__inner">
+          <div className="hp-footer__brand">
+            <img src={bankMindLogo} alt="BankMind" className="hp-footer__brand-img" />
+            <span className="hp-footer__brand-name">BankMind</span>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {services.map((service) => {
-              const Icon = service.icon;
-              const colorClasses = {
-                blue: 'from-blue-500 to-blue-700',
-                purple: 'from-purple-500 to-purple-700',
-                green: 'from-green-500 to-green-700',
-                orange: 'from-orange-500 to-orange-700',
-                red: 'from-red-500 to-red-700',
-                indigo: 'from-indigo-500 to-indigo-700'
-              }[service.color];
-
-              return (
-                <div
-                  key={service.id}
-                  className="group relative rounded-2xl p-8 backdrop-blur-xl bg-white/80 border border-gray-200/50 shadow-lg hover:shadow-2xl transition-all duration-300 cursor-pointer"
-                  onClick={() => onNavigateToService(service.id)}
-                >
-                  <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${colorClasses} flex items-center justify-center mb-6 shadow-lg group-hover:scale-110 transition-transform`}>
-                    <Icon className="w-7 h-7 text-white" />
-                  </div>
-
-                  <h4 className="text-xl font-bold text-gray-900 mb-3">
-                    {service.title}
-                  </h4>
-
-                  <p className="text-gray-600 mb-6 leading-relaxed">
-                    {service.description}
-                  </p>
-
-                  <button
-                    className="flex items-center gap-2 font-semibold text-sm text-blue-600 group-hover:gap-3 transition-all"
-                  >
-                    Acceder Ahora
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                  </button>
-                </div>
-              );
-            })}
+          <div className="hp-footer__right">
+            <span className="hp-footer__copy">© 2026 BankMind. Todos los derechos reservados.</span>
+            <span className="hp-footer__classification">
+              <Lock size={9} />
+              Uso Interno — Restringido
+            </span>
           </div>
-        </div>
-      </section>
-
-      {/* Features Section */}
-      <section className="py-20 px-6 bg-gradient-to-br from-blue-50 to-white">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="text-center p-8">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-500/30">
-                <Shield className="w-8 h-8 text-white" />
-              </div>
-              <h4 className="text-xl font-bold text-gray-900 mb-3">Seguridad de Nivel Bancario</h4>
-              <p className="text-gray-600">
-                Protección de datos con encriptación de grado militar y cumplimiento total de normativas internacionales
-              </p>
-            </div>
-
-            <div className="text-center p-8">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center mx-auto mb-6 shadow-lg shadow-purple-500/30">
-                <Brain className="w-8 h-8 text-white" />
-              </div>
-              <h4 className="text-xl font-bold text-gray-900 mb-3">IA de Última Generación</h4>
-              <p className="text-gray-600">
-                Modelos de machine learning avanzados entrenados con millones de puntos de datos para máxima precisión
-              </p>
-            </div>
-
-            <div className="text-center p-8">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-green-500 to-green-700 flex items-center justify-center mx-auto mb-6 shadow-lg shadow-green-500/30">
-                <Activity className="w-8 h-8 text-white" />
-              </div>
-              <h4 className="text-xl font-bold text-gray-900 mb-3">Tiempo Real 24/7</h4>
-              <p className="text-gray-600">
-                Procesamiento y análisis instantáneo con monitoreo continuo y alertas automáticas
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 py-12 px-6">
-        <div className="max-w-7xl mx-auto text-center text-gray-500 text-sm">
-          <p className="mb-2">© 2026 BankMind. Todos los derechos reservados.</p>
-          <p>Plataforma de Inteligencia Artificial Empresarial de Nueva Generación</p>
         </div>
       </footer>
+
     </div>
   );
 }

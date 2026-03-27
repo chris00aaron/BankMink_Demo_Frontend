@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Shield, ArrowLeft, RefreshCw, Clock } from 'lucide-react';
 import bankMindLogo from '@shared/assets/logo_BankMind.png';
-import { Button } from '@shared/components/ui/button';
-import { Input } from '@shared/components/ui/input';
+import { Button } from '@shared/components/ui-atm/button';
+import { Input } from '@shared/components/ui-atm/input';
 
 interface OtpVerificationScreenProps {
     emailHint: string;

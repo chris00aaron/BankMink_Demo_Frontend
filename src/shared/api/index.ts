@@ -26,7 +26,6 @@ export {
 // Tipos
 export type {
   ApiResponse,
-  PaginatedResponse,
   ErrorResponse,
   PaginationParams,
   FilterParams,

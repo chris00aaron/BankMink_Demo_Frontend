@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
-import { Lock, Eye, EyeOff, CheckCircle, XCircle, Check, X, ShieldCheck, ShieldAlert, Shield } from 'lucide-react';
-import { Button } from '@shared/components/ui/button';
-import { Input } from '@shared/components/ui/input';
+import { Eye, EyeOff, CheckCircle, XCircle, Check, X, ShieldCheck, ShieldAlert, Shield } from 'lucide-react';
+import { Button } from '@shared/components/ui-atm/button';
+import { Input } from '@shared/components/ui-atm/input';
 import bankMindLogo from '@shared/assets/logo_BankMind.png';
 import { useAuth } from '@shared/contexts/AuthContext';
 

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FileText, ArrowLeft, LogIn, UserPlus, Edit3 } from 'lucide-react';
-import { Button } from '@shared/components/ui/button';
+import { Button } from '@shared/components/ui-atm/button';
 import { AuditoriaLoginTab } from './components/AuditoriaLoginTab';
 import { AuditoriaCreationTab } from './components/AuditoriaCreationTab';
 import { AuditoriaUpdateTab } from './components/AuditoriaUpdateTab';

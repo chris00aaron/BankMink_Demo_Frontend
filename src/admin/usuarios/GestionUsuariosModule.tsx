@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Users, Search, Plus, Trash2, Shield, ArrowLeft, Key } from 'lucide-react';
-import { Button } from '@shared/components/ui/button';
-import { Input } from '@shared/components/ui/input';
-import { Badge } from '@shared/components/ui/badge';
+import { Button } from '@shared/components/ui-atm/button';
+import { Input } from '@shared/components/ui-atm/input';
+import { Badge } from '@shared/components/ui-atm/badge';
 import { CreateUserModal } from './components/CreateUserModal';
 import { EditUserModal } from './components/EditUserModal';
 import { PasswordRequestsTab } from './components/PasswordRequestsTab';

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { apiRequest } from '@shared/services/apiClient';
 import { UserPlus, Search } from 'lucide-react';
-import { Input } from '@shared/components/ui/input';
+import { Input } from '@shared/components/ui-atm/input';
 
 interface AuditUserCreation {
     id: number;

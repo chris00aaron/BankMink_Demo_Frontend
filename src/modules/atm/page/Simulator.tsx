@@ -128,7 +128,7 @@ export function Simulator() {
   const risk = riskConfig[riskLevel];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30">
+    <div className="space-y-6 animate-in fade-in duration-500 pb-10">
       <div className={`space-y-6 p-6 lg:p-8 max-w-7xl mx-auto pb-16 ${styles.fadeIn}`}>
         {/* Header */}
         <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">

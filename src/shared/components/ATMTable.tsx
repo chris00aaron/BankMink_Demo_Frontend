@@ -1,5 +1,5 @@
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { Badge } from "./ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@shared/components/ui-atm/card";
+import { Badge } from "@shared/components/ui-atm/badge";
 import { MapPin, Filter, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
 import { useState, useMemo } from "react";
 import type { EstadoAtmDTO } from "@/modules/atm/services/atmService";
@@ -9,8 +9,8 @@ import {
   SelectItem, 
   SelectTrigger, 
   SelectValue 
-} from "./ui/select";
-import { Button } from "./ui/button";
+} from "@shared/components/ui-atm/select";
+import { Button } from "@shared/components/ui-atm/button";
 import clsx from "clsx";
 
 
@@ -136,10 +136,10 @@ export function ATMTable({ atms }: ATMTableProps) {
   return (
     <Card className="shadow-sm">
       <CardHeader>
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div>
             <CardTitle className="text-xl">Estado de Cajeros Automáticos</CardTitle>
-            <div className="flex gap-4 mt-2">
+            <div className="flex gap-6 mt-2">
               <span className="text-sm text-slate-600">
                 <span className="font-semibold text-red-600">{stats.criticos}</span> Críticos
               </span>
@@ -171,7 +171,7 @@ export function ATMTable({ atms }: ATMTableProps) {
             </Select>
 
             <Select value={tipoFiltro} onValueChange={setTipoFiltro}>
-              <SelectTrigger className="w-[140px]">
+              <SelectTrigger className="w-[150px]">
                 <SelectValue placeholder="Tipo" />
               </SelectTrigger>
               <SelectContent>
@@ -210,11 +210,11 @@ export function ATMTable({ atms }: ATMTableProps) {
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-200">
-                <th className="text-left p-4 font-semibold text-slate-700">ID Cajero</th>
-                <th className="text-left p-4 font-semibold text-slate-700">Ubicación</th>
-                <th className="text-left p-4 font-semibold text-slate-700">Tipo</th>
-                <th className="text-left p-4 font-semibold text-slate-700">Balance Actual</th>
-                <th className="text-left p-4 font-semibold text-slate-700">Nivel Efectivo</th>
+                <th className="text-left p-4 font-semibold text-slate-700 whitespace-nowrap">ID Cajero</th>
+                <th className="text-left p-4 font-semibold text-slate-700 min-w-[150px]">Ubicación</th>
+                <th className="text-left p-4 font-semibold text-slate-700 hidden md:table-cell">Tipo</th>
+                <th className="text-left p-4 font-semibold text-slate-700 hidden lg:table-cell whitespace-nowrap">Balance Actual</th>
+                <th className="text-left p-4 font-semibold text-slate-700 hidden sm:table-cell min-w-[180px]">Nivel Efectivo</th>
                 <th className="text-left p-4 font-semibold text-slate-700">Estado</th>
               </tr>
             </thead>
@@ -237,17 +237,17 @@ export function ATMTable({ atms }: ATMTableProps) {
                         <span className="text-slate-700">{atm.direccion}</span>
                       </div>
                     </td>
-                    <td className="p-4">
+                    <td className="p-4 hidden md:table-cell">
                       <Badge variant="outline" className="font-medium">
                         {atm.tipoLugar}
                       </Badge>
                     </td>
-                    <td className="p-4">
-                      <span className="font-semibold text-slate-900">
+                    <td className="p-4 hidden lg:table-cell">
+                      <span className="font-semibold text-slate-900 whitespace-nowrap">
                         {formatCurrency(atm.balanceActual)}
                       </span>
                     </td>
-                    <td className="p-4">
+                    <td className="p-4 hidden sm:table-cell">
                       <div className="flex items-center gap-3">
                         <div className="w-32 h-2.5 bg-slate-200 rounded-full overflow-hidden">
                           <div 

@@ -15,21 +15,16 @@ export interface ApiResponse<T> {
 }
 
 /**
- * Respuesta paginada de la API
- * @template T - Tipo de datos de cada elemento
+ * Estructura de respuesta de Paginación de Spring Boot
  */
-export interface PaginatedResponse<T> {
-  success: boolean;
-  data: T[];
-  pagination: {
-    page: number;
-    pageSize: number;
-    totalItems: number;
+export interface SpringPage<T> {
+  content: T[];
+  page: {
     totalPages: number;
-    hasNext: boolean;
-    hasPrevious: boolean;
+    totalElements: number;
+    size: number;
+    number: number;
   };
-  message?: string;
 }
 
 /**
@@ -77,17 +72,4 @@ export interface MutationState<T> {
   isError: boolean;
   data?: T;
   error?: Error;
-}
-
-/**
- * Estructura de respuesta de Paginación de Spring Boot
- */
-export interface SpringPage<T> {
-  content: T[];
-  page: {
-    totalPages: number;
-    totalElements: number;
-    size: number;
-    number: number;
-  };
 }
