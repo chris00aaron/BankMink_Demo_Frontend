@@ -18,6 +18,24 @@ import type {
 
 const API_BASE_URL = 'http://localhost:8080/api';
 
+import { getAuthToken } from '@shared/api';
+
+/**
+ * Helper interno que envuelve el fetch nativo inyectando el token JWT y credentials
+ */
+async function morosidadFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    const token = getAuthToken();
+    const headers = new Headers(init?.headers);
+    if (token) {
+        headers.set('Authorization', `Bearer ${token}`);
+    }
+    return fetch(input, {
+        ...init,
+        headers,
+        credentials: 'include'
+    });
+}
+
 /**
  * Busca clientes por nombre o ID.
  */
@@ -26,7 +44,7 @@ export async function searchCustomers(searchTerm: string): Promise<CustomerSearc
         return [];
     }
 
-    const response = await fetch(`${API_BASE_URL}/morosidad/customers/search?q=${encodeURIComponent(searchTerm)}`);
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/customers/search?q=${encodeURIComponent(searchTerm)}`);
 
     if (!response.ok) {
         throw new Error('Error al buscar clientes');
@@ -40,7 +58,7 @@ export async function searchCustomers(searchTerm: string): Promise<CustomerSearc
  * Retorna todos los datos del cliente + predicción.
  */
 export async function predictMorosidad(recordId: number): Promise<ClientePredictionDetail> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/predict/complete`, {
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/predict/complete`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -60,7 +78,7 @@ export async function predictMorosidad(recordId: number): Promise<ClientePredict
  * Filtra clientes según criterios y retorna lista de recordIds.
  */
 export async function filterCustomers(filters: BatchFilters): Promise<number[]> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/customers/filter`, {
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/customers/filter`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -79,7 +97,7 @@ export async function filterCustomers(filters: BatchFilters): Promise<number[]> 
  * Realiza predicción batch para múltiples cuentas.
  */
 export async function predictBatch(recordIds: number[], includeShap: boolean = false): Promise<BatchPredictionResponse> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/predict/batch`, {
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/predict/batch`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -98,7 +116,7 @@ export async function predictBatch(recordIds: number[], includeShap: boolean = f
  * Obtiene todos los datos del dashboard de morosidad.
  */
 export async function getDashboardData(): Promise<DashboardData> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/dashboard/morosidad`);
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/dashboard/morosidad`);
 
     if (!response.ok) {
         throw new Error('Error al obtener datos del dashboard');
@@ -134,7 +152,7 @@ export async function getDashboardClients(
     if (edadMin != null && !isNaN(edadMin)) params.append('edadMin', edadMin.toString());
     if (edadMax != null && !isNaN(edadMax)) params.append('edadMax', edadMax.toString());
 
-    const response = await fetch(`${API_BASE_URL}/morosidad/dashboard/clientes?${params.toString()}`);
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/dashboard/clientes?${params.toString()}`);
 
     if (!response.ok) {
         throw new Error('Error al obtener clientes del dashboard');
@@ -149,7 +167,7 @@ export async function getDashboardClients(
  * Obtiene todas las políticas.
  */
 export async function getAllPolicies(): Promise<DefaultPolicy[]> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/policies`);
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/policies`);
     if (!response.ok) throw new Error('Error al obtener políticas');
     return response.json();
 }
@@ -158,7 +176,7 @@ export async function getAllPolicies(): Promise<DefaultPolicy[]> {
  * Obtiene la política activa.
  */
 export async function getActivePolicy(): Promise<DefaultPolicy | null> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/policies/active`);
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/policies/active`);
     if (response.status === 404) return null;
     if (!response.ok) throw new Error('Error al obtener política activa');
     return response.json();
@@ -168,7 +186,7 @@ export async function getActivePolicy(): Promise<DefaultPolicy | null> {
  * Crea una nueva política.
  */
 export async function createPolicy(policy: PolicyRequest): Promise<DefaultPolicy> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/policies`, {
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/policies`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(policy),
@@ -181,7 +199,7 @@ export async function createPolicy(policy: PolicyRequest): Promise<DefaultPolicy
  * Actualiza una política existente.
  */
 export async function updatePolicy(id: number, policy: PolicyRequest): Promise<DefaultPolicy> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/policies/${id}`, {
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/policies/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(policy),
@@ -194,7 +212,7 @@ export async function updatePolicy(id: number, policy: PolicyRequest): Promise<D
  * Activa una política.
  */
 export async function activatePolicy(id: number): Promise<DefaultPolicy> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/policies/${id}/activate`, {
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/policies/${id}/activate`, {
         method: 'PUT',
     });
     if (!response.ok) throw new Error('Error al activar política');
@@ -205,7 +223,7 @@ export async function activatePolicy(id: number): Promise<DefaultPolicy> {
  * Obtiene el resumen de segmentos de riesgo.
  */
 export async function getStrategySegments(): Promise<StrategyResponse> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/strategy/segments`);
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/strategy/segments`);
     if (!response.ok) throw new Error('Error al obtener segmentos de riesgo');
     return response.json();
 }
@@ -214,7 +232,7 @@ export async function getStrategySegments(): Promise<StrategyResponse> {
  * Simula el impacto de una campaña sobre un segmento.
  */
 export async function simulateCampaignImpact(campaignId: number, segment: string): Promise<SimulationResult> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/strategy/simulate`, {
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/strategy/simulate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ campaignId, segment }),
@@ -229,7 +247,7 @@ export async function simulateCampaignImpact(campaignId: number, segment: string
  * Obtiene todas las campañas activas.
  */
 export async function getCampaigns(): Promise<Campaign[]> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/campaigns`);
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/campaigns`);
     if (!response.ok) throw new Error('Error al obtener campañas');
     return response.json();
 }
@@ -238,7 +256,7 @@ export async function getCampaigns(): Promise<Campaign[]> {
  * Crea una nueva campaña.
  */
 export async function createCampaign(data: CampaignRequest): Promise<Campaign> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/campaigns`, {
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/campaigns`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -251,7 +269,7 @@ export async function createCampaign(data: CampaignRequest): Promise<Campaign> {
  * Actualiza una campaña existente.
  */
 export async function updateCampaign(id: number, data: CampaignRequest): Promise<Campaign> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/campaigns/${id}`, {
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/campaigns/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -264,7 +282,7 @@ export async function updateCampaign(id: number, data: CampaignRequest): Promise
  * Elimina (soft-delete) una campaña.
  */
 export async function deleteCampaign(id: number): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/campaigns/${id}`, {
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/campaigns/${id}`, {
         method: 'DELETE',
     });
     if (!response.ok) throw new Error('Error al eliminar campaña');
@@ -274,7 +292,7 @@ export async function deleteCampaign(id: number): Promise<void> {
  * Realiza una simulación de predicción sin guardar datos.
  */
 export async function simulatePrediction(data: import('../types/morosidad.types').SimulationRequest): Promise<import('../types/morosidad.types').SimulationResponse> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/simulate`, {
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/simulate`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -294,7 +312,7 @@ export async function simulatePrediction(data: import('../types/morosidad.types'
  * Incluye probabilidad de default y estado de pago real (payX) por fecha.
  */
 export async function getPredictionTimeline(recordId: number): Promise<PredictionTimelineEntry[]> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/prediction-timeline/${recordId}`);
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/prediction-timeline/${recordId}`);
     if (!response.ok) throw new Error('Error al obtener timeline de predicción');
     return response.json();
 }
@@ -303,7 +321,7 @@ export async function getPredictionTimeline(recordId: number): Promise<Predictio
  * Obtiene el historial mensual de pagos de una cuenta (máx. 10 meses).
  */
 export async function getClientPaymentHistory(recordId: number): Promise<ClientPaymentHistoryEntry[]> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/payment-history/${recordId}`);
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/payment-history/${recordId}`);
     if (!response.ok) throw new Error('Error al obtener historial de pagos');
     return response.json();
 }
@@ -313,7 +331,7 @@ export async function getClientPaymentHistory(recordId: number): Promise<ClientP
  * Usado para navegar desde el dashboard al detalle del cliente.
  */
 export async function getLastPrediction(recordId: number): Promise<ClientePredictionDetail> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/prediccion/${recordId}/ultima`);
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/prediccion/${recordId}/ultima`);
     if (!response.ok) throw new Error('No se encontró predicción guardada para esta cuenta');
     return response.json();
 }
@@ -334,7 +352,7 @@ import type {
  * Obtiene el modelo activo en producción.
  */
 export async function getProductionModel(): Promise<ProductionModel> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/model-monitoring/production`);
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/model-monitoring/production`);
     if (!response.ok) throw new Error('Error al obtener modelo en producción');
     return response.json();
 }
@@ -343,7 +361,7 @@ export async function getProductionModel(): Promise<ProductionModel> {
  * Obtiene logs de drift PSI de los últimos N días.
  */
 export async function getDriftLogs(days: number = 30): Promise<DriftLog[]> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/model-monitoring/monitoring/drift?days=${days}`);
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/model-monitoring/monitoring/drift?days=${days}`);
     if (!response.ok) throw new Error('Error al obtener datos de drift');
     return response.json();
 }
@@ -352,7 +370,7 @@ export async function getDriftLogs(days: number = 30): Promise<DriftLog[]> {
  * Obtiene logs de validación mensual (predicción vs realidad).
  */
 export async function getValidationLogs(): Promise<ValidationLog[]> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/model-monitoring/monitoring/validation`);
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/model-monitoring/monitoring/validation`);
     if (!response.ok) throw new Error('Error al obtener validaciones');
     return response.json();
 }
@@ -361,7 +379,7 @@ export async function getValidationLogs(): Promise<ValidationLog[]> {
  * Obtiene el historial completo de entrenamientos.
  */
 export async function getTrainingHistory(): Promise<TrainingHistoryEntry[]> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/model-monitoring/training-history`);
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/model-monitoring/training-history`);
     if (!response.ok) throw new Error('Error al obtener historial');
     return response.json();
 }
@@ -370,7 +388,7 @@ export async function getTrainingHistory(): Promise<TrainingHistoryEntry[]> {
  * Verifica si la versión del modelo en BD coincide con la API de predicción.
  */
 export async function checkModelVersion(): Promise<VersionCheck> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/model-monitoring/version-check`);
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/model-monitoring/version-check`);
     if (!response.ok) throw new Error('Error al verificar versión');
     return response.json();
 }
@@ -379,7 +397,7 @@ export async function checkModelVersion(): Promise<VersionCheck> {
  * Dispara el auto-entrenamiento manual.
  */
 export async function triggerSelfTraining(optunaTrials: number = 30): Promise<Record<string, unknown>> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/self-training/trigger?optunaTrials=${optunaTrials}`, {
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/self-training/trigger?optunaTrials=${optunaTrials}`, {
         method: 'POST',
     });
     if (!response.ok) {
@@ -395,7 +413,7 @@ export async function triggerSelfTraining(optunaTrials: number = 30): Promise<Re
  * Obtiene todas las políticas de monitoreo.
  */
 export async function getMonitoringPolicies(): Promise<MonitoringPolicy[]> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/monitoring-policy`);
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/monitoring-policy`);
     if (!response.ok) throw new Error('Error al obtener políticas de monitoreo');
     return response.json();
 }
@@ -404,7 +422,7 @@ export async function getMonitoringPolicies(): Promise<MonitoringPolicy[]> {
  * Obtiene la política de monitoreo activa.
  */
 export async function getActiveMonitoringPolicy(): Promise<MonitoringPolicy | null> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/monitoring-policy/active`);
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/monitoring-policy/active`);
     if (response.status === 204) return null;
     if (!response.ok) throw new Error('Error al obtener política de monitoreo activa');
     return response.json();
@@ -414,7 +432,7 @@ export async function getActiveMonitoringPolicy(): Promise<MonitoringPolicy | nu
  * Crea una nueva política de monitoreo.
  */
 export async function createMonitoringPolicy(data: MonitoringPolicyRequest): Promise<MonitoringPolicy> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/monitoring-policy`, {
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/monitoring-policy`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -427,7 +445,7 @@ export async function createMonitoringPolicy(data: MonitoringPolicyRequest): Pro
  * Activa una política de monitoreo.
  */
 export async function activateMonitoringPolicy(id: number): Promise<MonitoringPolicy> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/monitoring-policy/${id}/activate`, {
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/monitoring-policy/${id}/activate`, {
         method: 'PUT',
     });
     if (!response.ok) throw new Error('Error al activar política de monitoreo');
@@ -438,7 +456,7 @@ export async function activateMonitoringPolicy(id: number): Promise<MonitoringPo
  * Ejecuta manualmente el análisis PSI de data drift.
  */
 export async function triggerDriftAnalysis(): Promise<{ status: string; message: string }> {
-    const response = await fetch(`${API_BASE_URL}/morosidad/model-monitoring/trigger-drift`, {
+    const response = await morosidadFetch(`${API_BASE_URL}/morosidad/model-monitoring/trigger-drift`, {
         method: 'POST',
     });
     if (!response.ok) throw new Error('Error al ejecutar análisis PSI');

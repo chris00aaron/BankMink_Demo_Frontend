@@ -29,11 +29,13 @@ import {
     ChevronUp,
     ChevronDown,
     Briefcase,
-    RefreshCw
+    RefreshCw,
+    Plus
 } from 'lucide-react';
 import { getAllPolicies, getActivePolicy, activatePolicy, createPolicy, getDashboardClients } from '../services/morosidadService';
 import { useDashboard } from '../context/DashboardContext';
-import type { DefaultPolicy, PolicyRequest, PageResponse, ClienteAltoRiesgo } from '../types/morosidad.types';
+import type { DefaultPolicy, PolicyRequest, PageResponse, ClienteAltoRiesgo, ClassificationRuleSBS } from '../types/morosidad.types';
+import { useAuth } from '@shared/contexts/AuthContext';
 import {
     Dialog,
     DialogContent,
@@ -45,6 +47,7 @@ import {
 import { Button } from "@shared/components/ui/button";
 import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@shared/components/ui/select";
 
 const SBS_COLORS: Record<string, string> = {
     'Normal': '#10b981',
@@ -59,11 +62,20 @@ const SBS_RANGES: Record<string, string> = {
     'Normal': '0-5%', 'CPP': '5-25%', 'Deficiente': '25-60%', 'Dudoso': '60-90%', 'Pérdida': '90-100%'
 };
 
+const DEFAULT_SBS_MATRIX: ClassificationRuleSBS[] = [
+    { categoria: 'Normal', min: 0, max: 8, provision: 1 },
+    { categoria: 'CPP', min: 8, max: 15, provision: 5 },
+    { categoria: 'Deficiente', min: 15, max: 30, provision: 25 },
+    { categoria: 'Dudoso', min: 30, max: 60, provision: 60 },
+    { categoria: 'Pérdida', min: 60, max: 100, provision: 100 },
+];
+
 export interface DashboardPageProps {
     onNavigateToPrediction?: (recordId: number) => void;
 }
 
 export function DashboardPage({ onNavigateToPrediction }: DashboardPageProps) {
+    const { user } = useAuth();
     const { data: dashboardData, isLoading, isRefreshing, error, refresh } = useDashboard();
 
     // Estado para paginación y filtros de clientes
@@ -120,12 +132,15 @@ export function DashboardPage({ onNavigateToPrediction }: DashboardPageProps) {
     const [activePolicy, setActivePolicy] = useState<DefaultPolicy | null>(null);
     const [selectedPolicyId, setSelectedPolicyId] = useState<string>('');
     const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
-    const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+    const [isPolicyExpanded, setIsPolicyExpanded] = useState(false);
+    const [isCreatingNew, setIsCreatingNew] = useState(false);
     const [newPolicyName, setNewPolicyName] = useState('');
     const [newPolicyThreshold, setNewPolicyThreshold] = useState(50);
     const [newPolicyLgd, setNewPolicyLgd] = useState(45);
     const [newPolicyGrace, setNewPolicyGrace] = useState(5);
-    const [newPolicyApprover, setNewPolicyApprover] = useState('');
+    const [isCreating, setIsCreating] = useState(false);
+    const [createError, setCreateError] = useState<string | null>(null);
+    const [sbsMatrix, setSbsMatrix] = useState<ClassificationRuleSBS[]>(() => DEFAULT_SBS_MATRIX.map(r => ({ ...r })));
 
     const loadPolicies = async () => {
         try {
@@ -154,27 +169,42 @@ export function DashboardPage({ onNavigateToPrediction }: DashboardPageProps) {
     };
 
     const handleCreatePolicy = async () => {
-        if (!newPolicyName || !newPolicyApprover) return;
+        if (!newPolicyName) return;
+        setCreateError(null);
+        setIsCreating(true);
+
+        const approverName = user?.name || user?.email || 'Sistema';
 
         try {
             const newPolicy: PolicyRequest = {
                 policyName: newPolicyName,
-                thresholdApproval: newPolicyThreshold,
-                factorLgd: newPolicyLgd,
+                thresholdApproval: newPolicyThreshold / 100,
+                factorLgd: newPolicyLgd / 100,
                 daysGraceDefault: newPolicyGrace,
-                approvedBy: newPolicyApprover
+                approvedBy: approverName,
+
+                sbsClassificationMatrix: sbsMatrix.map(r => ({
+                    ...r,
+                    min: r.min / 100,
+                    max: r.max / 100,
+                    provision: r.provision,
+                })),
             };
 
             await createPolicy(newPolicy);
             await loadPolicies();
-            setIsCreateDialogOpen(false);
+            setIsCreatingNew(false);
 
             // Reset form
             setNewPolicyName('');
             setNewPolicyThreshold(50);
-            setNewPolicyApprover('');
+            setNewPolicyLgd(45);
+            setNewPolicyGrace(5);
+            setSbsMatrix(DEFAULT_SBS_MATRIX.map(r => ({ ...r })));
         } catch (_error) {
-            console.error('Error al crear la política');
+            setCreateError('Error al crear la política. Verifique los datos ingresados.');
+        } finally {
+            setIsCreating(false);
         }
     };
 
@@ -255,9 +285,9 @@ export function DashboardPage({ onNavigateToPrediction }: DashboardPageProps) {
                 }
             />
 
-            {/* Banner de Política de Riesgo Activa — compacto */}
-            <Card className="p-4 bg-white border-l-4 border-blue-600 shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-4">
+            {/* Banner de Política de Riesgo Activa — expandible inline */}
+            <Card className="bg-white border-l-4 border-blue-600 shadow-sm">
+                <div className="p-4 flex flex-wrap items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
                         <Briefcase className="w-4 h-4 text-blue-600 flex-shrink-0" />
                         <span className="text-sm font-medium text-gray-700">Política activa:</span>
@@ -274,11 +304,184 @@ export function DashboardPage({ onNavigateToPrediction }: DashboardPageProps) {
                             <span className="text-gray-500">Gracia: <strong className="text-gray-900">{activePolicy.daysGraceDefault}d</strong></span>
                         </div>
                     )}
-                    <Button variant="outline" size="sm" onClick={() => setIsCreateDialogOpen(true)}
+                    <Button variant="outline" size="sm"
+                        onClick={() => { setIsPolicyExpanded(v => !v); setIsCreatingNew(false); setCreateError(null); }}
                         className="text-xs gap-1">
+                        {isPolicyExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                         Gestionar política
                     </Button>
                 </div>
+
+                {/* Sección expandible inline */}
+                {isPolicyExpanded && (
+                    <div className="border-t border-blue-100 px-4 py-4 bg-blue-50/30 space-y-4">
+                        {/* Header con Select y botón Nueva */}
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex items-center gap-2 flex-1 min-w-[200px] max-w-xs">
+                                <Label className="text-xs text-zinc-500 whitespace-nowrap">Política:</Label>
+                                <Select value={selectedPolicyId} onValueChange={(val) => {
+                                    setSelectedPolicyId(val);
+                                    setIsCreatingNew(false);
+                                }}>
+                                    <SelectTrigger size="sm" className="h-8 text-xs">
+                                        <SelectValue placeholder="Seleccionar política" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {policies.map(p => (
+                                            <SelectItem key={p.idPolicy} value={p.idPolicy.toString()}>
+                                                {p.policyName} {p.isActive ? '(✓ activa)' : ''}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="flex gap-2">
+                                {selectedPolicyId && activePolicy && selectedPolicyId !== activePolicy.idPolicy.toString() && !isCreatingNew && (
+                                    <Button size="sm" variant="default" className="text-xs gap-1 bg-blue-600 hover:bg-blue-700"
+                                        onClick={() => setIsConfirmDialogOpen(true)}>
+                                        <CheckCircle2 className="w-3 h-3" /> Establecer como activa
+                                    </Button>
+                                )}
+                                <Button size="sm" variant={isCreatingNew ? 'secondary' : 'outline'} className="text-xs gap-1"
+                                    onClick={() => { setIsCreatingNew(v => !v); setCreateError(null); }}>
+                                    <Plus className="w-3 h-3" /> Nueva política
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Contenido dinámico: detalle de política seleccionada o formulario de creación */}
+                        {isCreatingNew ? (
+                            /* ---- FORMULARIO DE CREACIÓN ---- */
+                            <div className="space-y-3">
+                                {createError && (
+                                    <div className="flex items-center gap-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+                                        <AlertTriangle className="w-3 h-3 flex-shrink-0" /> {createError}
+                                    </div>
+                                )}
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    <div className="grid gap-1 col-span-2">
+                                        <Label className="text-xs">Nombre</Label>
+                                        <Input className="h-8 text-xs" value={newPolicyName} onChange={e => setNewPolicyName(e.target.value)} placeholder="Ej: Política Conservadora 2025" />
+                                    </div>
+                                    <div className="grid gap-1">
+                                        <Label className="text-xs">Umbral Aprob. (%)</Label>
+                                        <Input className="h-8 text-xs" type="number" value={newPolicyThreshold} onChange={e => setNewPolicyThreshold(Number(e.target.value))} />
+                                    </div>
+                                    <div className="grid gap-1">
+                                        <Label className="text-xs">LGD (%)</Label>
+                                        <Input className="h-8 text-xs" type="number" value={newPolicyLgd} onChange={e => setNewPolicyLgd(Number(e.target.value))} />
+                                    </div>
+                                    <div className="grid gap-1">
+                                        <Label className="text-xs">Días Gracia</Label>
+                                        <Input className="h-8 text-xs" type="number" value={newPolicyGrace} onChange={e => setNewPolicyGrace(Number(e.target.value))} />
+                                    </div>
+                                    <div className="grid gap-1">
+                                        <Label className="text-xs">Aprobado Por</Label>
+                                        <Input className="h-8 text-xs bg-zinc-100 cursor-not-allowed" value={user?.name || user?.email || 'Sistema'} disabled />
+                                    </div>
+                                </div>
+
+                                {/* Matriz SBS compacta */}
+                                <div className="space-y-1">
+                                    <Label className="text-xs font-medium">Matriz de Clasificación SBS</Label>
+                                    <div className="overflow-x-auto rounded border border-zinc-200">
+                                        <table className="w-full text-xs">
+                                            <thead className="bg-zinc-50">
+                                                <tr>
+                                                    <th className="text-left py-1.5 px-2 text-zinc-500 font-medium">Categoría</th>
+                                                    <th className="text-center py-1.5 px-2 text-zinc-500 font-medium">Mín (%)</th>
+                                                    <th className="text-center py-1.5 px-2 text-zinc-500 font-medium">Máx (%)</th>
+                                                    <th className="text-center py-1.5 px-2 text-zinc-500 font-medium">Provisión (%)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-zinc-100">
+                                                {sbsMatrix.map((rule, idx) => (
+                                                    <tr key={rule.categoria}>
+                                                        <td className="py-1 px-2">
+                                                            <span className="inline-flex items-center gap-1">
+                                                                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: SBS_COLORS[rule.categoria] || '#a1a1aa' }} />
+                                                                <span className="font-medium text-zinc-700">{rule.categoria}</span>
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-0.5 px-1">
+                                                            <Input type="number" step="0.1" min="0" max="100" className="h-7 text-center text-xs" value={rule.min}
+                                                                onChange={e => { const u = [...sbsMatrix]; u[idx] = { ...u[idx], min: Number(e.target.value) }; setSbsMatrix(u); }} />
+                                                        </td>
+                                                        <td className="py-0.5 px-1">
+                                                            <Input type="number" step="0.1" min="0" max="100" className="h-7 text-center text-xs" value={rule.max}
+                                                                onChange={e => { const u = [...sbsMatrix]; u[idx] = { ...u[idx], max: Number(e.target.value) }; setSbsMatrix(u); }} />
+                                                        </td>
+                                                        <td className="py-0.5 px-1">
+                                                            <Input type="number" step="0.1" min="0" max="100" className="h-7 text-center text-xs" value={rule.provision}
+                                                                onChange={e => { const u = [...sbsMatrix]; u[idx] = { ...u[idx], provision: Number(e.target.value) }; setSbsMatrix(u); }} />
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-end gap-2 pt-1">
+                                    <Button size="sm" variant="outline" className="text-xs" onClick={() => setIsCreatingNew(false)} disabled={isCreating}>Cancelar</Button>
+                                    <Button size="sm" className="text-xs" onClick={handleCreatePolicy} disabled={isCreating || !newPolicyName}>
+                                        {isCreating ? <><Loader2 className="w-3 h-3 animate-spin mr-1" />Creando...</> : 'Crear Política'}
+                                    </Button>
+                                </div>
+                            </div>
+                        ) : selectedPolicyId ? (
+                            /* ---- DETALLE DE POLÍTICA SELECCIONADA (read-only) ---- */
+                            (() => {
+                                const sel = policies.find(p => p.idPolicy.toString() === selectedPolicyId);
+                                if (!sel) return null;
+                                return (
+                                    <div className="space-y-3">
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                                            <div><span className="text-zinc-500">Nombre</span><p className="font-medium text-zinc-900">{sel.policyName}</p></div>
+                                            <div><span className="text-zinc-500">Umbral Aprob.</span><p className="font-medium text-zinc-900">{sel.thresholdApproval}%</p></div>
+                                            <div><span className="text-zinc-500">LGD</span><p className="font-medium text-zinc-900">{sel.factorLgd}%</p></div>
+                                            <div><span className="text-zinc-500">Días Gracia</span><p className="font-medium text-zinc-900">{sel.daysGraceDefault}d</p></div>
+                                            {sel.approvedBy && <div><span className="text-zinc-500">Aprobado por</span><p className="font-medium text-zinc-900">{sel.approvedBy}</p></div>}
+                                            {sel.activationDate && <div><span className="text-zinc-500">Activación</span><p className="font-medium text-zinc-900">{sel.activationDate}</p></div>}
+                                        </div>
+                                        {sel.sbsClassificationMatrix && sel.sbsClassificationMatrix.length > 0 && (
+                                            <div className="space-y-1">
+                                                <Label className="text-xs font-medium">Matriz SBS</Label>
+                                                <div className="overflow-x-auto rounded border border-zinc-200">
+                                                    <table className="w-full text-xs">
+                                                        <thead className="bg-zinc-50">
+                                                            <tr>
+                                                                <th className="text-left py-1.5 px-2 text-zinc-500">Categoría</th>
+                                                                <th className="text-center py-1.5 px-2 text-zinc-500">Mín</th>
+                                                                <th className="text-center py-1.5 px-2 text-zinc-500">Máx</th>
+                                                                <th className="text-center py-1.5 px-2 text-zinc-500">Provisión</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-zinc-100">
+                                                            {sel.sbsClassificationMatrix.map(r => (
+                                                                <tr key={r.categoria}>
+                                                                    <td className="py-1 px-2">
+                                                                        <span className="inline-flex items-center gap-1">
+                                                                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: SBS_COLORS[r.categoria] || '#a1a1aa' }} />
+                                                                            {r.categoria}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="text-center py-1 px-2">{(r.min * 100).toFixed(1)}%</td>
+                                                                    <td className="text-center py-1 px-2">{(r.max * 100).toFixed(1)}%</td>
+                                                                    <td className="text-center py-1 px-2">{Number(r.provision).toFixed(1)}%</td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })()
+                        ) : null}
+                    </div>
+                )}
             </Card>
 
             {/* Métricas principales - Diseño Fintech moderno */}
@@ -425,7 +628,7 @@ export function DashboardPage({ onNavigateToPrediction }: DashboardPageProps) {
                         <div>
                             <h3 className="text-lg text-zinc-900">Tendencia de Morosidad</h3>
                             <p className="text-xs text-zinc-500 mt-1">
-                                {tendenciaMensual.length > 0 ? `Últimos ${tendenciaMensual.length} meses` : 'Sin datos'}
+                                {tendenciaMensual.length > 0 ? `Últimos ${tendenciaMensual.length} periodos` : 'Sin datos'}
                             </p>
                         </div>
                         <Activity className="w-5 h-5 text-zinc-400" />
@@ -889,47 +1092,7 @@ export function DashboardPage({ onNavigateToPrediction }: DashboardPageProps) {
                 </DialogContent>
             </Dialog>
 
-            {/* Diálogo de Nueva Política */}
-            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-                <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader>
-                        <DialogTitle>Crear Nueva Política de Riesgo</DialogTitle>
-                        <DialogDescription>
-                            Defina los parámetros para la nueva política.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                        <div className="grid gap-2">
-                            <Label htmlFor="name">Nombre de la Política</Label>
-                            <Input id="name" value={newPolicyName} onChange={e => setNewPolicyName(e.target.value)} placeholder="Ej: Política Conservadora 2025" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="grid gap-2">
-                                <Label htmlFor="threshold">Umbral Aprob. (%)</Label>
-                                <Input id="threshold" type="number" value={newPolicyThreshold} onChange={e => setNewPolicyThreshold(Number(e.target.value))} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="lgd">LGD (%)</Label>
-                                <Input id="lgd" type="number" value={newPolicyLgd} onChange={e => setNewPolicyLgd(Number(e.target.value))} />
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="grid gap-2">
-                                <Label htmlFor="grace">Días Gracia</Label>
-                                <Input id="grace" type="number" value={newPolicyGrace} onChange={e => setNewPolicyGrace(Number(e.target.value))} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="approver">Aprobado Por</Label>
-                                <Input id="approver" value={newPolicyApprover} onChange={e => setNewPolicyApprover(e.target.value)} />
-                            </div>
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancelar</Button>
-                        <Button onClick={handleCreatePolicy}>Crear Política</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+
         </div>
     );
 }
