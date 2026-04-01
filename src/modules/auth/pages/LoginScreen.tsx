@@ -4,8 +4,6 @@ import bankMindLogo from '@shared/assets/logo_BankMind.png';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
 import { Label } from '@shared/components/ui/label';
-// 🔧 DEV ONLY - Eliminar en producción
-import { DevCredentials } from '@shared/components/DevCredentials';
 
 //Interfaz para las props del componente LoginScreen -> Se define que tipo de datos va a recibir el componente
 interface XRAILoginScreenProps {
@@ -21,7 +19,7 @@ export function LoginScreen({ onLogin, onForgotPassword, loginError, isLoading =
   const [password, setPassword] = useState('');
   //Estado para mostrar u ocultar la contraseña
   const [showPassword, setShowPassword] = useState(false);
-  
+
   //Función que se ejecuta cuando se hace clic en el botón de iniciar sesión
   //React.FormEvent es el tipo de evento que se produce cuando se envía un formulario
   const handleSubmit = (e: React.FormEvent) => {
@@ -146,8 +144,6 @@ export function LoginScreen({ onLogin, onForgotPassword, loginError, isLoading =
           <span>Protegido por tecnología de seguridad avanzada</span>
         </div>
       </div>
-      {/* 🔧 DEV ONLY - Credenciales de prueba - Eliminar en producción */}
-      <DevCredentials onSelect={(email, pass) => { setUsername(email); setPassword(pass); }} />
     </div>
   );
 }
