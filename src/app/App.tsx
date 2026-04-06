@@ -100,7 +100,10 @@ function AppContent() {
         currentView !== "home" &&
         currentView !== "auditoria" &&
         currentView !== "gestion-usuarios" &&
-        currentView !== "demanda-efectivo"
+        currentView !== "morosidad-detalle" &&
+        currentView !== "anomalias-transaccionales" &&
+        currentView !== "demanda-efectivo" &&
+        currentView !== "fuga-demanda"
       ) {
         setCurrentView("home");
       }
