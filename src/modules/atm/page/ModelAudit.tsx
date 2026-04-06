@@ -117,20 +117,13 @@ export default function ModelAudit() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30">
-      {/* Subtle Pattern Overlay */}
-      <div
-        className="fixed inset-0 opacity-[0.015] pointer-events-none"
-        style={{ backgroundImage: styles.bgGridPattern }}
-      />
-
-      <div className="relative space-y-8 p-6 lg:p-8 max-w-7xl mx-auto pb-16">
-        {/* Header */}
-        <header className={styles.fadeIn}>
-          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-1 h-8 bg-gradient-to-b from-blue-600 to-blue-400 rounded-full" />
+    <div className="space-y-6 animate-in fade-in duration-500 pb-10">
+      {/* Header */}
+      <header className={styles.fadeIn}>
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-1 h-8 bg-gradient-to-b from-blue-600 to-blue-400 rounded-full" />
                 <h1 className="text-3xl lg:text-4xl font-bold text-slate-900 tracking-tight">
                   Auditoría de Modelos
                 </h1>
@@ -348,8 +341,8 @@ export default function ModelAudit() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <p className="text-slate-700">
+                    <td className="px-4 py-4">
+                      <p className="text-slate-600">
                         {model.startTraining
                           ? model.startTraining.split("T")[0]
                           : "-"}
@@ -478,7 +471,6 @@ export default function ModelAudit() {
             </div>
           </div>
         </section>
-      </div>
     </div>
   );
 }

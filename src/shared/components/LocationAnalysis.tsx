@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui-atm/card";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip} from "recharts";
 
 interface LocationData {
@@ -29,7 +29,7 @@ export function LocationAnalysis({ data }: LocationAnalysisProps) {
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ tipo, percent }) => `${tipo} ${(percent * 100).toFixed(0)}%`}
+                  label={({ tipo, percent }: any) => `${tipo} ${((percent || 0) * 100).toFixed(0)}%`}
                   outerRadius={80}
                   fill="#8884d8"
                   dataKey="demanda"
@@ -39,7 +39,8 @@ export function LocationAnalysis({ data }: LocationAnalysisProps) {
                   ))}
                 </Pie>
                 <Tooltip 
-                  formatter={(value: number) => `$${value.toLocaleString()}`}
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  formatter={(value: any) => `$${Number(value).toLocaleString()}`}
                   contentStyle={{ 
                     backgroundColor: 'white', 
                     border: '1px solid #e5e7eb',

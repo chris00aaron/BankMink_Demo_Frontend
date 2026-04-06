@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui-atm/card";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 interface DemandChartProps {
@@ -31,7 +31,8 @@ export function DemandChart({ data }: DemandChartProps) {
               tickFormatter={(value) => `$${value / 1000}k`}
             />
             <Tooltip 
-              formatter={(value: number) => `$${value.toLocaleString()}`}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              formatter={(value: any) => `$${Number(value).toLocaleString()}`}
               contentStyle={{ 
                 backgroundColor: 'white', 
                 border: '1px solid #e5e7eb',

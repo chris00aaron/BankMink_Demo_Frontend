@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
-import { Lock, Eye, EyeOff, CheckCircle, XCircle, Check, X, ShieldCheck, ShieldAlert, Shield } from 'lucide-react';
-import { Button } from '@shared/components/ui/button';
-import { Input } from '@shared/components/ui/input';
+import { Eye, EyeOff, CheckCircle, XCircle, Check, X, ShieldCheck, ShieldAlert, Shield } from 'lucide-react';
+import { Button } from '@shared/components/ui-atm/button';
+import { Input } from '@shared/components/ui-atm/input';
 import bankMindLogo from '@shared/assets/logo_BankMind.png';
 import { useAuth } from '@shared/contexts/AuthContext';
 
@@ -26,7 +26,7 @@ const validatePassword = (password: string): { checks: PasswordChecks; score: nu
         uppercase: /[A-Z]/.test(password),
         lowercase: /[a-z]/.test(password),
         number: /\d/.test(password),
-        special: /[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\\/`~]/.test(password),
+        special: /[!@#$%^&*(),.?":{}|<>_\-+=[\]\\/`~]/.test(password),
         noConsecutive: !/012|123|234|345|456|567|678|789|890/.test(password),
     };
 
@@ -116,7 +116,7 @@ export function ChangePasswordScreen({ onPasswordChanged }: ChangePasswordScreen
                 headers['Authorization'] = `Bearer ${tempToken}`;
             }
 
-            const response = await fetch('http://localhost:8080/api/auth/change-password', {
+            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || '/api'}/auth/change-password`, {
                 method: 'POST',
                 headers,
                 credentials: 'include',
@@ -137,6 +137,7 @@ export function ChangePasswordScreen({ onPasswordChanged }: ChangePasswordScreen
                 setError(data.message || 'Error al cambiar contraseña');
             }
         } catch (err) {
+            console.error('Error de cambio de contraseña:', err);
             setError('Error de conexión');
         } finally {
             setLoading(false);

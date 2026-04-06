@@ -211,7 +211,7 @@ function ATMLocationMap({ atm }: { atm: ATMWithStatus }) {
         <Marker position={[latitude, longitude]} icon={createColorMarker(health.color)}>
           <Popup>
             <div className="space-y-0.5 text-sm">
-              <p className="font-bold text-gray-800">{atm.atmData.address || `ATM ${atm.idAtm}`}</p>
+              <p className="font-bold text-gray-800">{atm.atmData.address || `ATM ${atm.id}`}</p>
               <p className="text-gray-500">{atm.atmData.locationType}</p>
               <p style={{ color: health.color }} className="font-bold">{health.status}</p>
             </div>

@@ -1,5 +1,5 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
-import { Badge } from "./ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui-atm/card";
+import { Badge } from "./ui-atm/badge";
 import { TrendingUp, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
 
 interface ModelMetricsProps {

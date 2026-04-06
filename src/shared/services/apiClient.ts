@@ -7,7 +7,7 @@
  * 3. Dispara evento de logout si el refresh también falla
  */
 
-const API_BASE_URL = 'http://localhost:8080/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 // Claves de localStorage
 const ACCESS_TOKEN_KEY = 'bankmind-token';
@@ -186,7 +186,7 @@ export const apiRequest = async <T>(
     };
 
     // Primera petición
-    let token = getAccessToken();
+    const token = getAccessToken();
     let response = await makeRequest(token);
 
     // Si es 401 o 403, intentar refresh y reintentar

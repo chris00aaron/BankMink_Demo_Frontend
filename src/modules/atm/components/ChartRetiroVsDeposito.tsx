@@ -6,6 +6,7 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
+  TooltipProps,
   ResponsiveContainer,
   Legend,
 } from "recharts";
@@ -19,16 +20,35 @@ import {
 } from "lucide-react";
 
 /* ─────────────────────────────────────────
+   TS INTERFACES
+───────────────────────────────────────── */
+export interface ChartPoint {
+  date: string;
+  Retiros: number;
+  Depósitos: number;
+}
+
+export interface ChartProps {
+  data?: ChartPoint[];
+  loading?: boolean;
+  error?: boolean;
+  refetch?: () => void;
+  appliedDesde?: string;
+  appliedHasta?: string;
+  onApplyDates?: (desde: string, hasta: string) => void;
+}
+
+/* ─────────────────────────────────────────
    UTILIDADES DE AGRUPACIÓN INTELIGENTE
 ───────────────────────────────────────── */
 
-function daysBetween(a, b) {
-  return Math.abs((new Date(b) - new Date(a)) / 86_400_000);
+function daysBetween(a: string, b: string) {
+  return Math.abs((new Date(b).getTime() - new Date(a).getTime()) / 86_400_000);
 }
 
 // Agrupa un array de puntos { date: "YYYY-MM-DD", Retiros, Depósitos }
 // según el número de días del rango seleccionado.
-function aggregateSeries(data, days) {
+function aggregateSeries(data: ChartPoint[], days: number): ChartPoint[] {
   if (!data || data.length === 0) return [];
 
   // ≤ 60 días → diario (sin agrupación)
@@ -36,7 +56,7 @@ function aggregateSeries(data, days) {
 
   // ≤ 180 días → semanal
   if (days <= 180) {
-    const buckets = {};
+    const buckets: Record<string, ChartPoint & { count: number }> = {};
     data.forEach((pt) => {
       const d = new Date(pt.date);
       // Obtener el lunes de esa semana
@@ -50,39 +70,38 @@ function aggregateSeries(data, days) {
       buckets[key].Depósitos += pt.Depósitos || 0;
       buckets[key].count++;
     });
-    return Object.values(buckets).sort((a, b) =>
-      a.date.localeCompare(b.date)
-    ).map((b) => ({
-      date: formatLabel(b.date, "week"),
-      Retiros: b.Retiros,
-      Depósitos: b.Depósitos,
-    }));
+    return Object.values(buckets)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((b) => ({
+        date: formatLabel(b.date, "week"),
+        Retiros: b.Retiros,
+        Depósitos: b.Depósitos,
+      }));
   }
 
   // > 180 días → mensual
-  const buckets = {};
+  const buckets: Record<string, ChartPoint> = {};
   data.forEach((pt) => {
     const key = pt.date.slice(0, 7); // "YYYY-MM"
-    if (!buckets[key])
-      buckets[key] = { date: key, Retiros: 0, Depósitos: 0 };
+    if (!buckets[key]) buckets[key] = { date: key, Retiros: 0, Depósitos: 0 };
     buckets[key].Retiros += pt.Retiros || 0;
     buckets[key].Depósitos += pt.Depósitos || 0;
   });
-  return Object.values(buckets).sort((a, b) =>
-    a.date.localeCompare(b.date)
-  ).map((b) => ({
-    date: formatLabel(b.date, "month"),
-    Retiros: b.Retiros,
-    Depósitos: b.Depósitos,
-  }));
+  return Object.values(buckets)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((b) => ({
+      date: formatLabel(b.date, "month"),
+      Retiros: b.Retiros,
+      Depósitos: b.Depósitos,
+    }));
 }
 
-function formatLabel(dateStr, mode) {
+function formatLabel(dateStr: string, mode: "month" | "week") {
   if (mode === "month") {
     const [y, m] = dateStr.split("-");
     const months = [
-      "Ene","Feb","Mar","Abr","May","Jun",
-      "Jul","Ago","Sep","Oct","Nov","Dic",
+      "Ene", "Feb", "Mar", "Abr", "May", "Jun",
+      "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
     ];
     return `${months[parseInt(m) - 1]} ${y.slice(2)}`;
   }
@@ -96,7 +115,15 @@ function formatLabel(dateStr, mode) {
 /* ─────────────────────────────────────────
    TOOLTIP PERSONALIZADO
 ───────────────────────────────────────── */
-function ChartTooltip({ active, payload, label }) {
+
+
+interface CustomTooltipProps extends TooltipProps<number, string> {
+  active?: boolean;
+  payload?: { dataKey?: string; value: number; color?: string }[];
+  label?: string;
+}
+
+function ChartTooltip({ active, payload, label }: CustomTooltipProps) {
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-xl border border-slate-700/60 bg-slate-900/95 p-3 shadow-2xl backdrop-blur-sm">
@@ -124,7 +151,7 @@ function ChartTooltip({ active, payload, label }) {
 /* ─────────────────────────────────────────
    BADGE DE MODO ACTUAL
 ───────────────────────────────────────── */
-function GranularityBadge({ days }) {
+function GranularityBadge({ days }: { days: number }) {
   if (days <= 60)
     return (
       <span className="rounded-full border border-sky-700/40 bg-sky-950/60 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-sky-400">
@@ -147,7 +174,14 @@ function GranularityBadge({ days }) {
 /* ─────────────────────────────────────────
    INPUT DE FECHA MEJORADO
 ───────────────────────────────────────── */
-function DateInput({ label, value, onChange, icon: Icon }) {
+interface DateInputProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  icon: React.ElementType;
+}
+
+function DateInput({ label, value, onChange, icon: Icon }: DateInputProps) {
   return (
     <div className="group relative flex flex-col gap-1">
       <label className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-slate-500 transition-colors group-focus-within:text-amber-400">
@@ -167,50 +201,31 @@ function DateInput({ label, value, onChange, icon: Icon }) {
 }
 
 /* ─────────────────────────────────────────
-   DATOS DE DEMO
-───────────────────────────────────────── */
-function generateDemoData(desde, hasta) {
-  const data = [];
-  let cur = new Date(desde + "T00:00:00");
-  const end = new Date(hasta + "T00:00:00");
-  while (cur <= end) {
-    data.push({
-      date: cur.toISOString().slice(0, 10),
-      Retiros: Math.round(Math.random() * 8000 + 1000),
-      Depósitos: Math.round(Math.random() * 12000 + 2000),
-    });
-    cur.setDate(cur.getDate() + 1);
-  }
-  return data;
-}
-
-/* ─────────────────────────────────────────
    COMPONENTE PRINCIPAL
 ───────────────────────────────────────── */
-export default function ChartSection({
-  // Props reales que recibirías de tu sistema:
-  chartSeries: externalSeries,
-  chartLoading,
-  chartError,
-  refetchChart,
-}) {
-  const today = new Date().toISOString().slice(0, 10);
-  const thirtyAgo = new Date(Date.now() - 7 * 86_400_000)
+export default function ChartRetiroVsDeposito({
+  data: externalSeries = [],
+  loading: chartLoading = false,
+  error: chartError = false,
+  refetch: refetchChart,
+  appliedDesde,
+  appliedHasta,
+  onApplyDates,
+}: ChartProps) {
+  const todayIso = new Date();
+  const today = todayIso.toISOString().slice(0, 10);
+  const thirtyAgo = new Date(todayIso.getTime() - 30 * 86_400_000)
     .toISOString()
     .slice(0, 10);
 
-  const [desde, setDesde] = useState(thirtyAgo);
-  const [hasta, setHasta] = useState(today);
-  const [appliedDesde, setAppliedDesde] = useState(thirtyAgo);
-  const [appliedHasta, setAppliedHasta] = useState(today);
+  const [desde, setDesde] = useState(appliedDesde || thirtyAgo);
+  const [hasta, setHasta] = useState(appliedHasta || today);
 
-  // En demo usamos datos generados; en producción usa externalSeries filtrado
-  const rawSeries = useMemo(
-    () => generateDemoData(appliedDesde, appliedHasta),
-    [appliedDesde, appliedHasta]
-  );
+  const internalAppliedDesde = appliedDesde || desde;
+  const internalAppliedHasta = appliedHasta || hasta;
 
-  const days = daysBetween(appliedDesde, appliedHasta);
+  const rawSeries = externalSeries;
+  const days = daysBetween(internalAppliedDesde, internalAppliedHasta);
 
   const series = useMemo(
     () => aggregateSeries(rawSeries, days),
@@ -218,8 +233,9 @@ export default function ChartSection({
   );
 
   function applyDateFilter() {
-    setAppliedDesde(desde);
-    setAppliedHasta(hasta);
+    if (onApplyDates) {
+      onApplyDates(desde, hasta);
+    }
   }
 
   // Cuántos px por punto, con un mínimo razonable
@@ -307,8 +323,14 @@ export default function ChartSection({
 /* ─────────────────────────────────────────
    SUB-COMPONENTES
 ───────────────────────────────────────── */
+interface KpiPropsRetiroVsDeposito {
+  label: string;
+  value: number;
+  icon: React.ElementType;
+  color: string;
+}
 
-function Kpi({ label, value, icon: Icon, color }) {
+function Kpi({ label, value, icon: Icon, color }: KpiPropsRetiroVsDeposito) {
   return (
     <div className="flex items-center gap-1.5">
       <Icon className={`h-3.5 w-3.5 ${color}`} />
@@ -322,7 +344,7 @@ function Kpi({ label, value, icon: Icon, color }) {
   );
 }
 
-function ErrorState({ refetch }) {
+function ErrorState({ refetch }: { refetch?: () => void }) {
   return (
     <div className="flex h-52 flex-col items-center justify-center gap-3 text-center">
       <div className="flex h-12 w-12 items-center justify-center rounded-full border border-rose-800/40 bg-rose-950/40">
@@ -348,7 +370,16 @@ function LoadingState() {
   );
 }
 
-function ChartCanvas({ series, minWidth, needsScroll }) {
+/* ─────────────────────────────────────────
+   CHART CANVAS
+───────────────────────────────────────── */
+interface ChartCanvasProps {
+  series: ChartPoint[];
+  minWidth: number;
+  needsScroll: boolean;
+}
+
+function ChartCanvas({ series, minWidth, needsScroll }: ChartCanvasProps) {
   return (
     <div className="relative">
       {/* Indicador visual de scroll */}

@@ -6,7 +6,7 @@
 import { apiClient } from "@shared/api";
 import type {
   ApiResponse,
-  PaginatedResponse,
+  SpringPage as PaginatedResponse,
   PaginationParams,
 } from "@shared/api";
 
