@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAuth } from '@shared/contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { ServiceType } from '../types/index';
 
 interface ProtectedRouteProps {
@@ -8,11 +8,11 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute = ({ children, requiredService }: ProtectedRouteProps) => {
-  const { isAuthenticated, hasAccessToService } = useAuth();
+  const { isAuthenticated, hasAccessToService} = useAuth();
 
   // 1. Si no está autenticado, no mostramos nada (la lógica de redirección va en el AppContent)
   if (!isAuthenticated) {
-    return null;
+    return null; 
   }
 
   // 2. Si se requiere un servicio específico y el usuario NO tiene acceso
@@ -24,7 +24,7 @@ export const ProtectedRoute = ({ children, requiredService }: ProtectedRouteProp
       </div>
     );
   }
-
+  
   // 3. Si todo está bien, renderizamos el contenido
   return <>{children}</>;
 };

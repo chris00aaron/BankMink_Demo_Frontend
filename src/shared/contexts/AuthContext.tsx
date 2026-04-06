@@ -293,7 +293,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           withCredentials: true
         });
       }
-    } catch (error) {
+    } catch{
       // Ignorar errores de logout
     } finally {
       clearTokens();

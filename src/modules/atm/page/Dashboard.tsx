@@ -230,10 +230,10 @@ export default function Dashboard() {
   const featureLabels: Record<string, string> = {
     ubicacion: "Ubicación",
     ambiente: "Ambiente",
-    diaSemana: "Día de Semana",
-    lag1: "Retiros Ayer",
-    lag5: "Retiros 5 días",
-    lag11: "Retiros 11 días",
+    dia_semana: "Día de la Semana",
+    lag_1: "Retiros Ayer",
+    lag_5: "Retiros 5 días",
+    lag_11: "Retiros 11 días",
     domingo_bajo: "Patrón Domingo",
     caida_reciente: "Caída Reciente",
     tendencia_lags: "Tendencia",
@@ -246,9 +246,9 @@ export default function Dashboard() {
     ubicacion: "geográfico",
     ambiente: "ambiental",
     diaSemana: "temporal",
-    lag1: "histórico",
-    lag5: "histórico",
-    lag11: "histórico",
+    lag_1: "histórico",
+    lag_5: "histórico",
+    lag_11: "histórico",
     domingo_bajo: "patrón",
     caida_reciente: "patrón",
     tendencia_lags: "tendencia",
@@ -260,7 +260,7 @@ export default function Dashboard() {
   const influenceFactors = Object.entries(dashboardData.featuresImportancia)
     .map(([key, value]) => ({
       factor: featureLabels[key] || key,
-      impacto: Math.round(Number(value) * 100),
+      impacto: Math.round(Number(value)),
       tipo: featureTypes[key] || "otro",
     }))
     .sort((a, b) => b.impacto - a.impacto)
@@ -299,15 +299,18 @@ export default function Dashboard() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
-            Dashboard Operativo
-          </h1>
-          <p className="text-slate-500 mt-1">
-            Visión general del flujo de efectivo y estado de la red.
-          </p>
-        </div>
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-1 h-8 bg-gradient-to-b from-blue-600 to-blue-400 rounded-full" />
+                <h1 className="text-3xl lg:text-4xl font-bold text-slate-900 tracking-tight">
+                  Dashboard Inteligente de ATMs
+                </h1>
+              </div>
+              <p className="text-slate-500 ml-4 lg:ml-5">
+                Visión general del flujo de efectivo y estado de la red.
+              </p>
+            </div>
         <div className="flex gap-3">
           <button
             onClick={() => refetchDashboard()}

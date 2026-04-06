@@ -1,5 +1,5 @@
 import { LucideIcon, Construction, ArrowLeft } from 'lucide-react';
-import { Button } from './ui/button';
+import { Button } from './ui-atm/button';
 import { useAuth } from '@shared/contexts/AuthContext';
 
 interface ServicePlaceholderProps {
