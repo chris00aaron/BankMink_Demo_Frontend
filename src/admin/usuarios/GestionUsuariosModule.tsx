@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Users, Search, Plus, UserX, Shield, ArrowLeft, Key } from 'lucide-react';
+import { Users, Search, Plus, UserX, UserCheck, Shield, ArrowLeft, Key } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
 import { Badge } from '@shared/components/ui/badge';
@@ -64,6 +64,24 @@ export function GestionUsuariosModule({ onBack }: GestionUsuariosModuleProps) {
         fetchUsers();
       } else {
         alert(data.message || 'Error al desactivar usuario');
+      }
+    } catch (err) {
+      alert('Error de conexión');
+    }
+  };
+
+  const handleReactivateUser = async (userId: number) => {
+    if (!confirm('¿Está seguro de reactivar este usuario? El usuario podrá acceder nuevamente al sistema.')) return;
+
+    try {
+      const data = await apiRequest<{ success: boolean; message?: string }>(
+        `/admin/users/${userId}/reactivate`,
+        'POST'
+      );
+      if (data.success) {
+        fetchUsers();
+      } else {
+        alert(data.message || 'Error al reactivar usuario');
       }
     } catch (err) {
       alert('Error de conexión');
@@ -240,29 +258,34 @@ export function GestionUsuariosModule({ onBack }: GestionUsuariosModuleProps) {
                       </tr>
                     ) : (
                       filteredUsers.map((user) => (
-                        <tr key={user.id} className="hover:bg-gray-50 transition-colors">
+                        <tr key={user.id} className={`hover:bg-gray-50 transition-colors ${!user.enable ? 'opacity-60 bg-gray-50' : ''}`}>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold">
+                              <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold ${user.enable
+                                  ? 'bg-gradient-to-br from-blue-500 to-purple-600'
+                                  : 'bg-gradient-to-br from-gray-400 to-gray-500'
+                                }`}>
                                 {user.fullName.charAt(0)}
                               </div>
                               <div>
-                                <div className="text-sm font-medium text-gray-900">{user.fullName}</div>
+                                <div className={`text-sm font-medium ${user.enable ? 'text-gray-900' : 'text-gray-500'}`}>{user.fullName}</div>
                                 <div className="text-xs text-gray-500">DNI: {user.dni}</div>
                               </div>
                             </div>
                           </td>
                           <td className="px-6 py-4">
-                            <div className="text-sm text-gray-900">{user.email}</div>
+                            <div className={`text-sm ${user.enable ? 'text-gray-900' : 'text-gray-500'}`}>{user.email}</div>
                             {user.phone && <div className="text-xs text-gray-500">{user.phone}</div>}
                           </td>
                           <td className="px-6 py-4">
                             <Badge
                               variant={user.roleCodRole === 'ADMIN' ? 'default' : 'secondary'}
                               className={
-                                user.roleCodRole === 'ADMIN'
-                                  ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
-                                  : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                                !user.enable
+                                  ? 'bg-gray-100 text-gray-500'
+                                  : user.roleCodRole === 'ADMIN'
+                                    ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                                    : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
                               }
                             >
                               {user.roleName}
@@ -273,7 +296,7 @@ export function GestionUsuariosModule({ onBack }: GestionUsuariosModuleProps) {
                               ? 'bg-green-100 text-green-700'
                               : 'bg-red-100 text-red-700'
                               }`}>
-                              {user.enable ? 'Activo' : 'Inactivo'}
+                              {user.enable ? 'Activo' : 'Desactivado'}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -283,25 +306,40 @@ export function GestionUsuariosModule({ onBack }: GestionUsuariosModuleProps) {
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2">
-                              {/* Edit Button */}
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
-                                onClick={() => setEditingUser(user)}
-                              >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
-                              </Button>
+                              {user.enable ? (
+                                <>
+                                  {/* Edit Button */}
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                                    onClick={() => setEditingUser(user)}
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                                  </Button>
 
-                              {/* Deactivate Button - only for active non-admin users */}
-                              {user.enable && user.roleCodRole !== 'ADMIN' && (
+                                  {/* Deactivate Button - only for non-admin users */}
+                                  {user.roleCodRole !== 'ADMIN' && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                      onClick={() => handleDeactivateUser(user.id)}
+                                    >
+                                      <UserX className="w-4 h-4" />
+                                    </Button>
+                                  )}
+                                </>
+                              ) : (
+                                /* Reactivate Button - only for deactivated users */
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                  onClick={() => handleDeactivateUser(user.id)}
+                                  className="text-green-600 hover:text-green-700 hover:bg-green-50 gap-1"
+                                  onClick={() => handleReactivateUser(user.id)}
                                 >
-                                  <UserX className="w-4 h-4" />
+                                  <UserCheck className="w-4 h-4" />
+                                  <span className="text-xs">Reactivar</span>
                                 </Button>
                               )}
                             </div>

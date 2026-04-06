@@ -43,6 +43,7 @@ import { GestionUsuariosModule } from "@admin/usuarios/GestionUsuariosModule";
 import { OtpVerificationScreen } from "@shared/components/OtpVerificationScreen";
 import { ForgotPasswordScreen } from "@shared/components/ForgotPasswordScreen";
 import { ChangePasswordScreen } from "@shared/components/ChangePasswordScreen";
+import { LoginScreen } from "@modules/auth/pages/LoginScreen";
 
 type AuthScreen = "login" | "otp" | "forgot-password";
 
@@ -85,7 +86,6 @@ function AppContent() {
   const handleLogin = async (
     username: string,
     password: string,
-    _rememberPassword: boolean,
   ) => {
     const result = await login(username, password);
     if (!result.success && result.error) {
@@ -241,7 +241,7 @@ function AppContent() {
 
     // Pantalla de login principal
     return (
-      <FraudeLoginScreen
+      <LoginScreen
         onLogin={handleLogin}
         onForgotPassword={() => setAuthScreen("forgot-password")}
         loginError={loginError}
