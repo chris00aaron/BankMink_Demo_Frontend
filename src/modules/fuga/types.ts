@@ -161,6 +161,8 @@ export interface ScenarioIntervention {
 export interface ScenarioResult {
     segmentName: string;
     interventionName: string;
+    segmentId: number | string;
+    strategyId: number | string;
     totalClients: number;
     clientsAtRiskBefore: number;
     clientsAtRiskAfter: number;
@@ -169,6 +171,7 @@ export interface ScenarioResult {
     retentionImprovement: number;
     campaignCost: number;
     roi: number;
+    targetIds: number[];
 }
 
 // -- TIPOS PARA GESTIÓN DE CAMPAÑAS (Execution & History) --
@@ -191,6 +194,7 @@ export interface CampaignTarget {
     customerName: string;
     status: 'TARGETED' | 'CONTACTED' | 'CONVERTED' | 'FAILED';
     contactDate?: string;
+    responseDate?: string;
 }
 
 export interface CreateCampaignRequest {
@@ -203,6 +207,34 @@ export interface CreateCampaignRequest {
     targets: number[]; // IDs de clientes
 }
 
+// -- TIPOS PARA INTELIGENCIA DE RIESGO (Muestra estratificada) --
+
+/** Cliente dentro de la muestra activa de Inteligencia de Riesgo. */
+export interface RiskSampleClient {
+    id: number;
+    name: string;
+    age: number;
+    balance: number;
+    country: string;
+    /** Probabilidad de fuga 0-100. 50 si no analizado aún. */
+    risk: number;
+    /** true = el modelo ML ya lo analizó y tiene predicción real. */
+    analyzed: boolean;
+    products: number;
+    score: number;
+    email?: string;
+}
+
+/** Respuesta del endpoint GET /api/v1/churn/risk-intelligence */
+export interface RiskIntelligenceData {
+    clients: RiskSampleClient[];
+    lastUpdated: string | null;   // ISO datetime
+    triggeredBy: 'scheduler' | 'manual' | null;
+    sampleSize: number;
+    totalCustomers: number;
+    hasSample: boolean;
+}
+
 // -- TIPOS PARA AUTO-ENTRENAMIENTO (Self-Training API) --
 
 export interface TrainMetrics {
@@ -213,15 +245,30 @@ export interface TrainMetrics {
     aucRoc: number;
 }
 
+export interface ChampionMetrics {
+    aucRoc: number;
+    f1Score: number;
+    accuracy: number;
+    precisionScore?: number;
+    recallScore?: number;
+    modelVersion?: string;
+}
+
 export interface TrainResult {
     status: 'success' | 'error';
     message?: string;
     runId?: string;
+    versionTag?: string;
     metrics?: TrainMetrics;
     trainSamples?: number;
     testSamples?: number;
     error?: string;
     uploadWarnings?: string[];
+    // Champion / Challenger
+    promoted?: boolean;
+    promotionReason?: string;
+    inProduction?: boolean;
+    championMetrics?: ChampionMetrics;
 }
 
 // -- TIPOS PARA GRÁFICOS MLOPS (Charts reales) --
@@ -241,6 +288,19 @@ export interface TrainingHistoryPoint {
 export interface PredictionBucket {
     bucket: string; // "0-10%", "10-20%", ...
     count: number;
+}
+
+// -- TIPO PARA ESTADO EN TIEMPO REAL DEL MODELO (Live Model Info) --
+
+/** Respuesta de GET /api/v1/churn/model/info — estado en vivo del modelo en producción. */
+export interface ChurnModelInfo {
+    version: string;
+    /** "ready" = modelo disponible, "updating" = descargando desde DagsHub, "not_loaded" = fallo de carga */
+    status: 'ready' | 'updating' | 'not_loaded' | 'error';
+    has_explainer: boolean;
+    has_scaler: boolean;
+    feature_count: number;
+    message?: string;
 }
 
 // -- TIPOS PARA PERFORMANCE MONITOR (Auto-Retraining by Decay) --

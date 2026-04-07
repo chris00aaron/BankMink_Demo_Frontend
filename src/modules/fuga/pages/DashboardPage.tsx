@@ -20,7 +20,7 @@ import { CustomerDashboard, CustomerRiskDetail, PriorityMatrixPoint, DashboardKp
 // ── Constants ──────────────────────────────────────────────────────────
 const PAGE_SIZE = 50;
 
-const RISK_THRESHOLD = 50;
+const RISK_THRESHOLD = 45;
 const BALANCE_THRESHOLD = 100000;
 
 // Los 3 países reales del dataset
@@ -78,7 +78,7 @@ const getQuadrant = (risk: number, balance: number) => {
 
 // ── Helper: segment from balance ────────────────────────────────────────
 const segmentFromBalance = (balance: number): 'Corporate' | 'SME' | 'Personal' =>
-    balance > 100000 ? 'Corporate' : balance > 50000 ? 'SME' : 'Personal';
+    balance >= 100000 ? 'Corporate' : balance >= 50000 ? 'SME' : 'Personal';
 
 // ── CSV Export Helper ────────────────────────────────────────────────────
 const exportTableToCSV = (customers: CustomerRiskDetail[], filename = 'clientes_riesgo.csv') => {
@@ -154,12 +154,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateToCustomer }) =
         try {
             setLoading(true);
             setError(null);
-            const countryParam = filterCountries.size === 1 ? [...filterCountries][0] : undefined;
-            const riskParam = filterRisks.size === 1 ? [...filterRisks][0] : undefined;
+            const countryParam  = filterCountries.size === 1 ? [...filterCountries][0] : undefined;
+            const riskParam     = filterRisks.size === 1    ? [...filterRisks][0]    : undefined;
+            const segmentParam  = filterSegments.size === 1 ? [...filterSegments][0] : undefined;
             const data = await ChurnService.getCustomersPaginated(
                 currentPage, PAGE_SIZE, debouncedSearch,
                 countryParam,
-                riskParam
+                riskParam,
+                segmentParam
             );
             setCustomers(data.content);
             setTotalPages(data.totalPages);
@@ -177,7 +179,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateToCustomer }) =
         } finally {
             setLoading(false);
         }
-    }, [currentPage, debouncedSearch, filterCountries, filterRisks]);
+    }, [currentPage, debouncedSearch, filterCountries, filterRisks, filterSegments]);
 
     useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
 
@@ -211,10 +213,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateToCustomer }) =
                             : false;
             });
         }
-        if (filterSegments.size > 0) {
-            list = list.filter(c => filterSegments.has(c.segment as SegmentValue));
-        }
-        return list.sort((a, b) => (b.balance * b.risk) - (a.balance * a.risk));
+        // Segment filter is handled server-side; no client-side filtering needed.
+        // Order is preserved from server (risk DESC — highest risk first).
+        return list;
     }, [customers, loading, error, filterCountries, filterRisks, filterSegments]);
 
     // ── Pagination ───────────────────────────────────────────────────────
@@ -414,6 +415,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateToCustomer }) =
             {!loading && !error && (
                 <>
                     {/* ─── 3. KPI CARDS ───────────────────────────────── */}
+                    {hasActiveFilters && (
+                        <div className="mb-4 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-600 flex items-center gap-1.5">
+                            <Filter className="w-3.5 h-3.5" />
+                            Los KPIs reflejan el total global de la cartera, independientemente del filtro activo.
+                        </div>
+                    )}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
 
                         {/* Capital en Riesgo */}
@@ -461,8 +468,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateToCustomer }) =
                     <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
                         <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white z-10">
                             <div>
-                                <h3 className="text-lg font-bold text-slate-800">Clientes Priorizados por Riesgo de Fuga e Impacto Financiero</h3>
-                                <p className="text-sm text-slate-500">Ordenados por impacto financiero ponderado</p>
+                                <h3 className="text-lg font-bold text-slate-800">Clientes Priorizados por Riesgo de Fuga</h3>
+                                <p className="text-sm text-slate-500">Ordenados por probabilidad de fuga (mayor riesgo primero)</p>
                             </div>
                             <div className="flex items-center gap-3">
                                 <span className="text-sm text-slate-400 font-medium">
@@ -516,20 +523,24 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateToCustomer }) =
                                             <td className="px-6 py-4 text-sm text-slate-600">{client.country}</td>
                                             <td className="px-6 py-4 text-slate-600 font-medium">{formatMoney(client.balance)}</td>
                                             <td className="px-6 py-4">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                                        <div
-                                                            className={`h-full rounded-full ${client.risk > 75 ? 'bg-red-500' : client.risk > 50 ? 'bg-orange-400' : 'bg-green-500'}`}
-                                                            style={{ width: `${client.risk}%` }}
-                                                        ></div>
+                                                {client.risk == null ? (
+                                                    <span className="text-xs text-slate-400 italic">Sin predicción</span>
+                                                ) : (
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                                            <div
+                                                                className={`h-full rounded-full ${client.risk > 70 ? 'bg-red-500' : client.risk > 45 ? 'bg-orange-400' : 'bg-green-500'}`}
+                                                                style={{ width: `${client.risk}%` }}
+                                                            ></div>
+                                                        </div>
+                                                        <span className={`text-sm font-bold ${client.risk > 70 ? 'text-red-600' : client.risk > 45 ? 'text-orange-500' : 'text-green-600'}`}>
+                                                            {client.risk}%
+                                                        </span>
                                                     </div>
-                                                    <span className={`text-sm font-bold ${client.risk > 75 ? 'text-red-600' : client.risk > 50 ? 'text-orange-500' : 'text-green-600'}`}>
-                                                        {client.risk}%
-                                                    </span>
-                                                </div>
+                                                )}
                                             </td>
                                             <td className="px-6 py-4 text-right font-bold text-slate-800">
-                                                {formatMoney(client.balance * (client.risk / 100))}
+                                                {client.risk == null ? '—' : formatMoney(client.balance * (client.risk / 100))}
                                             </td>
                                             <td className="px-6 py-4 text-center">
                                                 <button

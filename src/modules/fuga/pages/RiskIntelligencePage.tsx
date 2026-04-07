@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import {
     Globe, AlertCircle, Info, TrendingUp,
-    BarChart2, PieChart as PieIcon, DollarSign, Users, Target
+    BarChart2, PieChart as PieIcon, DollarSign, Users, Target, RefreshCw, Clock
 } from 'lucide-react';
 import {
     ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
@@ -11,10 +11,10 @@ import {
     RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis
 } from 'recharts';
 import { ChurnService } from '../churn.service';
-import { GeographyStats, DashboardKpis, PriorityMatrixPoint, CustomerDashboard } from '../types';
+import { GeographyStats, PriorityMatrixPoint, RiskIntelligenceData, RiskSampleClient } from '../types';
 
 // ── Constants ──────────────────────────────────────────────────────────
-const RISK_THRESHOLD = 50;
+const RISK_THRESHOLD = 45;
 const BALANCE_THRESHOLD = 100000;
 
 const QUADRANT_COLORS = {
@@ -38,101 +38,32 @@ const quadrantAction: Record<string, string> = {
     vip: '💎 Cross-Sell',
 };
 
+const quadrantCriteria: Record<string, string> = {
+    danger: `Riesgo > ${RISK_THRESHOLD}% · Balance > €100K`,
+    watch:  `Riesgo > ${RISK_THRESHOLD}% · Balance ≤ €100K`,
+    safe:   `Riesgo ≤ ${RISK_THRESHOLD}% · Balance ≤ €100K`,
+    vip:    `Riesgo ≤ ${RISK_THRESHOLD}% · Balance > €100K`,
+};
+
+const quadrantStyles: Record<string, { border: string; bg: string; badge: string; count: string }> = {
+    danger: { border: 'border-red-200',     bg: 'bg-red-50',     badge: 'bg-red-100 text-red-700',         count: 'text-red-600'     },
+    watch:  { border: 'border-amber-200',   bg: 'bg-amber-50',   badge: 'bg-amber-100 text-amber-700',     count: 'text-amber-600'   },
+    safe:   { border: 'border-emerald-200', bg: 'bg-emerald-50', badge: 'bg-emerald-100 text-emerald-700', count: 'text-emerald-600' },
+    vip:    { border: 'border-blue-200',    bg: 'bg-blue-50',    badge: 'bg-blue-100 text-blue-700',       count: 'text-blue-600'    },
+};
+
+// Neutral palette for radar — avoids confusion with red=risk / green=safe semantics
 const COUNTRY_COLORS: Record<string, string> = {
-    Germany: '#EF4444',
-    Alemania: '#EF4444',
-    France: '#3B82F6',
-    Francia: '#3B82F6',
-    Spain: '#10B981',
-    España: '#10B981',
+    Germany: '#6366F1',
+    Alemania: '#6366F1',
+    France: '#0EA5E9',
+    Francia: '#0EA5E9',
+    Spain: '#8B5CF6',
+    España: '#8B5CF6',
 };
 
 const AGE_GROUPS = ['18-25', '26-35', '36-45', '46-55', '56+'];
 
-// ── Hybrid Priority Sampling Configuration ─────────────────────────────
-// Top-N + Random Sample: guarantees critical customers are always visible
-// while maintaining statistical diversity from the rest of the portfolio.
-const SAMPLE_CONFIG = {
-    TOP_N: 100,            // Always include the N highest-risk customers
-    RANDOM_PERCENT: 0.10,  // 10% random sample from the remaining pool
-    MIN_TOTAL: 50,         // Floor: never show fewer than this
-    MAX_TOTAL: 500,        // Ceiling: cap to keep charts readable
-} as const;
-
-/** Metadata describing the sample used for the current dashboard render. */
-interface SampleMeta {
-    totalAnalyzed: number;   // Total analyzed customers in DB
-    topN: number;            // How many came from the Top-N priority slice
-    randomCount: number;     // How many came from the random slice
-    totalSample: number;     // Final sample size shown in charts
-}
-
-/**
- * Builds a hybrid priority sample from the analyzed customer pool.
- *
- * Strategy (used by SAS Risk Management / Salesforce Einstein):
- *   1. ALWAYS include the Top-N highest-risk customers (never missed).
- *   2. Random sample of RANDOM_PERCENT from the remaining pool.
- *   3. Apply MIN/MAX caps for predictable chart performance.
- *
- * @param analyzed - Full list of analyzed customers (risk !== 50)
- * @returns { customers, meta } - Sampled list + metadata for UI indicator
- */
-function buildHybridSample(analyzed: CustomerDashboard[]): {
-    customers: CustomerDashboard[];
-    meta: SampleMeta;
-} {
-    const totalAnalyzed = analyzed.length;
-
-    // Edge case: if pool is smaller than MIN, return everything
-    if (totalAnalyzed <= SAMPLE_CONFIG.MIN_TOTAL) {
-        return {
-            customers: analyzed,
-            meta: { totalAnalyzed, topN: totalAnalyzed, randomCount: 0, totalSample: totalAnalyzed },
-        };
-    }
-
-    // 1. Sort descending by risk to identify critical customers
-    const sorted = [...analyzed].sort((a, b) => b.risk - a.risk);
-
-    // 2. Slice the Top-N highest-risk (always visible)
-    const topNCount = Math.min(SAMPLE_CONFIG.TOP_N, sorted.length);
-    const topSlice = sorted.slice(0, topNCount);
-    const topIds = new Set(topSlice.map(c => c.id));
-
-    // 3. Shuffle remaining pool (Fisher-Yates) for unbiased random sample
-    const remaining = sorted.filter(c => !topIds.has(c.id));
-    for (let i = remaining.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [remaining[i], remaining[j]] = [remaining[j], remaining[i]];
-    }
-    const randomCount = Math.ceil(remaining.length * SAMPLE_CONFIG.RANDOM_PERCENT);
-    const randomSlice = remaining.slice(0, randomCount);
-
-    // 4. Combine and apply floor / ceiling caps
-    let combined = [...topSlice, ...randomSlice];
-
-    // Floor: if still below MIN, pad from remaining
-    if (combined.length < SAMPLE_CONFIG.MIN_TOTAL) {
-        const needed = SAMPLE_CONFIG.MIN_TOTAL - combined.length;
-        combined = [...combined, ...remaining.slice(randomCount, randomCount + needed)];
-    }
-
-    // Ceiling: cap to MAX
-    if (combined.length > SAMPLE_CONFIG.MAX_TOTAL) {
-        combined = combined.slice(0, SAMPLE_CONFIG.MAX_TOTAL);
-    }
-
-    return {
-        customers: combined,
-        meta: {
-            totalAnalyzed,
-            topN: topSlice.length,
-            randomCount: combined.length - topSlice.length,
-            totalSample: combined.length,
-        },
-    };
-}
 
 // ── Helpers ────────────────────────────────────────────────────────────
 const getQuadrant = (risk: number, balance: number) => {
@@ -153,11 +84,11 @@ const pointFill = (risk: number, balance: number) => {
     }
 };
 
+// Calibrated to real data range (~35-45%)
 const getColorByChurn = (rate: number) => {
-    if (rate > 25) return '#ef4444';
-    if (rate > 15) return '#f97316';
-    if (rate > 10) return '#eab308';
-    return '#22c55e';
+    if (rate > 40) return '#ef4444';  // Alto
+    if (rate > 35) return '#f59e0b';  // Medio
+    return '#22c55e';                  // Bajo
 };
 
 const getAgeGroup = (age: number): string => {
@@ -168,11 +99,11 @@ const getAgeGroup = (age: number): string => {
     return '56+';
 };
 
+// Unified with donut thresholds: Alto >70% / Medio 45-70% / Bajo <45%
 const getRiskColor = (risk: number): string => {
-    if (risk > 70) return '#EF4444';
-    if (risk > 55) return '#F59E0B';
-    if (risk > 40) return '#FB923C';
-    return '#10B981';
+    if (risk > 70) return '#EF4444';   // Alto
+    if (risk >= 45) return '#F59E0B';  // Medio
+    return '#10B981';                   // Bajo
 };
 
 // ── Custom Scatter Tooltip ──────────────────────────────────────────────
@@ -271,9 +202,10 @@ const EuropeMap: React.FC<EuropeMapProps> = ({ countryData, onHover }) => {
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════
 const RiskIntelligencePage: React.FC = () => {
-    // ── Strategy data (scatter / donut) ─────────────────────────────────
-    const [kpis, setKpis] = useState<DashboardKpis | null>(null);
-    const [loadingKpis, setLoadingKpis] = useState(true);
+    // ── Risk Intelligence data (muestra estratificada unificada) ─────────
+    const [riskData, setRiskData] = useState<RiskIntelligenceData | null>(null);
+    const [loadingRisk, setLoadingRisk] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
 
     // ── Geography data ───────────────────────────────────────────────────
     const [countryData, setCountryData] = useState<GeographyStats[]>([]);
@@ -281,50 +213,46 @@ const RiskIntelligencePage: React.FC = () => {
     const [errorGeo, setErrorGeo] = useState<string | null>(null);
     const [hoveredCountry, setHoveredCountry] = useState<GeographyStats | null>(null);
 
-    // ── Customer data (for Bubble Chart) ─────────────────────────────────
-    const [customers, setCustomers] = useState<CustomerDashboard[]>([]);
-    const [sampleMeta, setSampleMeta] = useState<SampleMeta | null>(null);
-
-    // Fetch strategy KPIs + scatterData + customers for Bubble chart
+    // Fetch muestra estratificada (única fuente para scatter + donut + bubble)
     useEffect(() => {
         const load = async () => {
             try {
-                const data = await ChurnService.getCustomersPaginated(0, 5000, '');
-                if (data.kpis) {
-                    setKpis({
-                        ...data.kpis,
-                        capitalAtRisk: parseFloat(String(data.kpis.capitalAtRisk ?? 0)),
-                        totalCustomers: Number(data.kpis.totalCustomers ?? 0),
-                        customersAtRisk: Number(data.kpis.customersAtRisk ?? 0),
-                        retentionRate: parseFloat(String(data.kpis.retentionRate ?? 0)),
-                    });
-                }
-
-                // ── Hybrid Priority Sampling (Top-N + Random) ─────────────
-                const allCustomers = data.content || [];
-
-                // Filter only analyzed customers (risk !== 50 is the
-                // server-side default assigned to customers without a
-                // prediction — they haven't been scored yet).
-                let analyzedPool = allCustomers.filter(c => c.risk !== 50);
-
-                // Graceful fallback: if nobody has been analyzed yet,
-                // use the entire dataset so the dashboard is never empty.
-                if (analyzedPool.length === 0 && allCustomers.length > 0) {
-                    analyzedPool = allCustomers;
-                }
-
-                const { customers: sampled, meta } = buildHybridSample(analyzedPool);
-                setCustomers(sampled);
-                setSampleMeta(meta);
+                const data = await ChurnService.getRiskIntelligence();
+                setRiskData(data);
             } catch (e) {
-                console.error('Error cargando KPIs estratégicos:', e);
+                console.error('Error cargando Inteligencia de Riesgo:', e);
             } finally {
-                setLoadingKpis(false);
+                setLoadingRisk(false);
             }
         };
         load();
     }, []);
+
+    // Refresco manual
+    const handleRefresh = async () => {
+        if (!window.confirm('¿Generar nueva muestra? El proceso analiza ~500 clientes y puede tardar 2-3 minutos.')) return;
+        setRefreshing(true);
+        try {
+            await ChurnService.refreshRiskSample(500);
+            const fresh = await ChurnService.getRiskIntelligence();
+            setRiskData(fresh);
+        } catch (e) {
+            console.error('Error refrescando muestra:', e);
+        } finally {
+            setRefreshing(false);
+        }
+    };
+
+    // Indicador de frescura
+    const freshnessLabel = useMemo(() => {
+        if (!riskData?.lastUpdated) return null;
+        const updated = new Date(riskData.lastUpdated);
+        const hoursAgo = (Date.now() - updated.getTime()) / (1000 * 60 * 60);
+        if (hoursAgo < 1) return { text: 'Actualizada hace menos de 1 hora', stale: false };
+        if (hoursAgo < 24) return { text: `Actualizada hace ${Math.floor(hoursAgo)}h`, stale: false };
+        if (hoursAgo < 48) return { text: 'Actualizada ayer', stale: true };
+        return { text: `Actualizada hace ${Math.floor(hoursAgo / 24)} días`, stale: true };
+    }, [riskData]);
 
     // Fetch geography
     useEffect(() => {
@@ -345,8 +273,13 @@ const RiskIntelligencePage: React.FC = () => {
         load();
     }, []);
 
-    // ── Derived: scatter ─────────────────────────────────────────────────
-    const scatterData: PriorityMatrixPoint[] = kpis?.scatterData || [];
+    // ── Derived: scatter — solo clientes con predicción real ─────────────
+    const scatterData: PriorityMatrixPoint[] = useMemo(() => {
+        if (!riskData?.clients) return [];
+        return riskData.clients
+            .filter((c: RiskSampleClient) => c.analyzed)
+            .map((c: RiskSampleClient) => ({ x: c.risk, y: c.balance, z: 100, name: c.name, id: c.id, country: c.country }));
+    }, [riskData]);
 
     const maxBalance = useMemo(() => {
         if (!scatterData.length) return 250000;
@@ -360,15 +293,20 @@ const RiskIntelligencePage: React.FC = () => {
         return counts;
     }, [scatterData]);
 
-    // ── Derived: donut ───────────────────────────────────────────────────
+    // ── Derived: donut — 4 categorías (incluye "Sin Analizar") ───────────
     const donutData = useMemo(() => {
-        if (!kpis) return [];
+        if (!riskData?.clients?.length) return [];
+        const high = riskData.clients.filter((c: RiskSampleClient) => c.analyzed && c.risk > 70).length;
+        const medium = riskData.clients.filter((c: RiskSampleClient) => c.analyzed && c.risk >= 45 && c.risk <= 70).length;
+        const low = riskData.clients.filter((c: RiskSampleClient) => c.analyzed && c.risk < 45).length;
+        const unanalyzed = riskData.clients.filter((c: RiskSampleClient) => !c.analyzed).length;
         return [
-            { name: 'Alto Riesgo (>70%)', value: kpis.highRiskCount, fill: '#EF4444' },
-            { name: 'Riesgo Medio (50-70%)', value: kpis.mediumRiskCount, fill: '#F59E0B' },
-            { name: 'Bajo Riesgo (<50%)', value: kpis.lowRiskCount, fill: '#10B981' },
-        ];
-    }, [kpis]);
+            { name: 'Alto Riesgo (>70%)', value: high, fill: '#EF4444' },
+            { name: 'Riesgo Medio (45-70%)', value: medium, fill: '#F59E0B' },
+            { name: 'Bajo Riesgo (<45%)', value: low, fill: '#10B981' },
+            { name: 'Sin Analizar', value: unanalyzed, fill: '#94A3B8' },
+        ].filter(d => d.value > 0);
+    }, [riskData]);
 
     // ══════════════════════════════════════════════════════════════════════
     // NEW CHART 1: Capital en Riesgo por País (Stacked Horizontal Bars)
@@ -394,12 +332,12 @@ const RiskIntelligencePage: React.FC = () => {
     // NEW CHART 2: Bubble Chart — Riesgo por Segmento (Edad × Productos)
     // ══════════════════════════════════════════════════════════════════════
     const bubbleData = useMemo(() => {
-        if (!customers.length) return [];
+        if (!riskData?.clients?.length) return [];
 
         // Group customers by (ageGroup, products)
         const groups: Record<string, { totalRisk: number; totalBalance: number; count: number; ageIdx: number; products: number }> = {};
 
-        customers.forEach(c => {
+        (riskData?.clients ?? []).forEach((c: RiskSampleClient) => {
             const ageGroup = getAgeGroup(c.age);
             const products = Math.min(c.products || 1, 4); // Cap at 4
             const key = `${ageGroup}_${products}`;
@@ -422,7 +360,7 @@ const RiskIntelligencePage: React.FC = () => {
             label: `${AGE_GROUPS[g.ageIdx]} años, ${g.products} prod.`,
             ageGroup: AGE_GROUPS[g.ageIdx],
         }));
-    }, [customers]);
+    }, [riskData]);
 
     // ══════════════════════════════════════════════════════════════════════
     // NEW CHART 3: Radar Chart — Perfil Comparativo Multi-País
@@ -462,14 +400,10 @@ const RiskIntelligencePage: React.FC = () => {
         });
     }, [countryData]);
 
-    // ── Global header totals (from server-side KPIs — 100% of the DB) ────
-    // These MUST come from kpis (which uses customerRepository.count()),
-    // NOT from the geography API (which only loads up to 2000 clients
-    // and excludes those without financial data).
-    const totalCustomersGlobal = kpis?.totalCustomers ?? 0;
-    const totalHighRiskGlobal = kpis?.highRiskCount ?? 0;
+    const totalCustomersGlobal = riskData?.totalCustomers ?? 0;
+    const analyzedCount = riskData?.clients?.filter((c: RiskSampleClient) => c.analyzed).length ?? 0;
 
-    const loading = loadingKpis || loadingGeo;
+    const loading = loadingRisk || loadingGeo;
 
     if (loading) {
         return (
@@ -486,21 +420,40 @@ const RiskIntelligencePage: React.FC = () => {
         <div className="p-6 lg:p-8 bg-[#F8FAFC] min-h-screen font-sans text-slate-800">
 
             {/* ─── HEADER ──────────────────────────────────────────────── */}
-            <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
+            <div className="flex flex-col md:flex-row justify-between items-start mb-8 gap-4">
                 <div>
                     <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-1">Módulo de Retención</h2>
                     <h1 className="text-3xl font-bold text-[#0F172A]">Inteligencia de Riesgo</h1>
-                    <p className="text-sm text-slate-500 mt-1">Análisis estratégico de riesgo · Distribución y geografía de fuga</p>
+                    <p className="text-sm text-slate-500 mt-1">Muestra estratificada · país × cuartil de balance · todos los gráficos sobre la misma población</p>
+                    {freshnessLabel && (
+                        <div className={`flex items-center gap-1.5 mt-2 text-xs font-medium ${freshnessLabel.stale ? 'text-amber-600' : 'text-emerald-600'}`}>
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>{freshnessLabel.text}</span>
+                            {freshnessLabel.stale && <span className="text-amber-500">· Se recomienda refrescar</span>}
+                        </div>
+                    )}
+                    {!riskData?.hasSample && !loadingRisk && (
+                        <p className="text-amber-600 text-xs mt-2 font-medium">⚠ No hay muestra activa. Genera la primera muestra para ver el análisis.</p>
+                    )}
                 </div>
-                <div className="flex gap-4">
+                <div className="flex items-start gap-3">
                     <div className="bg-white px-4 py-2 rounded-lg border border-slate-100 shadow-sm text-right">
-                        <p className="text-xs text-slate-500 uppercase">Total Clientes</p>
+                        <p className="text-xs text-slate-500 uppercase">Total Clientes BD</p>
                         <p className="text-2xl font-bold text-slate-800">{totalCustomersGlobal.toLocaleString('es-ES')}</p>
                     </div>
-                    <div className="bg-red-50 px-4 py-2 rounded-lg border border-red-100 text-right">
-                        <p className="text-xs text-red-600 uppercase">Alto Riesgo Global</p>
-                        <p className="text-2xl font-bold text-red-600">{totalHighRiskGlobal.toLocaleString('es-ES')}</p>
+                    <div className="bg-indigo-50 px-4 py-2 rounded-lg border border-indigo-100 text-right">
+                        <p className="text-xs text-indigo-600 uppercase">Muestra activa</p>
+                        <p className="text-2xl font-bold text-indigo-700">{(riskData?.sampleSize ?? 0).toLocaleString('es-ES')}</p>
+                        <p className="text-[10px] text-indigo-400">{analyzedCount} analizados</p>
                     </div>
+                    <button
+                        onClick={handleRefresh}
+                        disabled={refreshing}
+                        className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white text-sm font-medium rounded-lg hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                    >
+                        <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                        {refreshing ? 'Analizando...' : 'Actualizar muestra'}
+                    </button>
                 </div>
             </div>
 
@@ -513,7 +466,7 @@ const RiskIntelligencePage: React.FC = () => {
                 </div>
             </div>
 
-            {loadingKpis ? (
+            {loadingRisk ? (
                 <div className="flex justify-center items-center h-48 bg-white rounded-xl border border-slate-100 mb-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
                 </div>
@@ -527,8 +480,8 @@ const RiskIntelligencePage: React.FC = () => {
                                 <div>
                                     <h3 className="text-lg font-bold text-slate-800">Matriz de Prioridad de Retención</h3>
                                     <p className="text-sm text-slate-500 mt-0.5">
-                                        Muestra estratificada: hasta 150 clientes por cuadrante (máx. 600 total).
-                                        Cada punto representa un cliente real — posición por probabilidad de fuga vs balance.
+                                        Clientes con predicción real del modelo. Misma muestra que el resto de gráficos.
+                                        Cada punto: probabilidad de fuga vs balance.
                                     </p>
                                 </div>
                                 {scatterData.length > 0 && (
@@ -581,14 +534,22 @@ const RiskIntelligencePage: React.FC = () => {
                         </div>
 
                         {/* Quadrant counts */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
-                            {(['danger', 'watch', 'safe', 'vip'] as const).map(q => (
-                                <div key={q} className="text-left p-2.5 rounded-lg border border-slate-100">
-                                    <p className="text-xs font-semibold text-slate-600">{quadrantLabel[q]}</p>
-                                    <p className="text-lg font-bold text-slate-800">{quadrantCounts[q]}</p>
-                                    <p className="text-[10px] text-slate-400">{quadrantAction[q]}</p>
-                                </div>
-                            ))}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
+                            {(['danger', 'watch', 'safe', 'vip'] as const).map(q => {
+                                const s = quadrantStyles[q];
+                                return (
+                                    <div key={q} className={`p-3 rounded-xl border ${s.border} ${s.bg} flex flex-col gap-1.5`}>
+                                        <p className="text-xs font-bold text-slate-700 leading-tight">{quadrantLabel[q]}</p>
+                                        <p className={`text-2xl font-black ${s.count}`}>{quadrantCounts[q]}</p>
+                                        <span className={`self-start text-[10px] font-semibold px-2 py-0.5 rounded-full ${s.badge}`}>
+                                            {quadrantAction[q]}
+                                        </span>
+                                        <p className="text-[10px] text-slate-400 leading-tight font-mono mt-0.5">
+                                            {quadrantCriteria[q]}
+                                        </p>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
 
@@ -598,7 +559,7 @@ const RiskIntelligencePage: React.FC = () => {
                             <PieIcon className="w-4 h-4 text-indigo-500" />
                             <h3 className="text-lg font-bold text-slate-800">Distribución de Riesgo</h3>
                         </div>
-                        <p className="text-sm text-slate-500 mb-4">Clasificación de toda la base de clientes.</p>
+                        <p className="text-sm text-slate-500 mb-4">Distribución de probabilidad de fuga sobre la muestra activa.</p>
 
                         <div className="flex-1 min-h-[240px]">
                             <ResponsiveContainer width="100%" height="100%">
@@ -642,101 +603,13 @@ const RiskIntelligencePage: React.FC = () => {
                 </div>
             )}
 
-            {/* ══ SECCIÓN 2 — CAPITAL EN RIESGO POR PAÍS (NEW) ═══════════ */}
-            <div className="mb-3">
-                <div className="flex items-center gap-2 mb-4">
-                    <DollarSign className="w-5 h-5 text-rose-500" />
-                    <h2 className="text-base font-bold text-slate-700 uppercase tracking-wider">Impacto Financiero por País</h2>
-                    <div className="flex-1 h-px bg-slate-200 ml-2" />
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
-                {/* Stacked Bar Chart */}
-                <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
-                    <div className="mb-4">
-                        <h3 className="text-lg font-bold text-slate-800">Capital en Riesgo por País</h3>
-                        <p className="text-sm text-slate-500">
-                            Distribución del capital expuesto por nivel de riesgo. Tamaño de barra = impacto financiero real.
-                        </p>
-                    </div>
-                    <div className="h-72 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={capitalAtRiskData} layout="vertical"
-                                margin={{ top: 10, right: 30, bottom: 10, left: 20 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" horizontal={false} />
-                                <XAxis type="number"
-                                    tickFormatter={(val: number) => val >= 1000000 ? `€${(val / 1000000).toFixed(1)}M` : val >= 1000 ? `€${(val / 1000).toFixed(0)}K` : `€${val}`}
-                                    tick={{ fill: '#94A3B8', fontSize: 11 }}
-                                />
-                                <YAxis type="category" dataKey="country" width={130}
-                                    tick={{ fill: '#334155', fontSize: 13, fontWeight: 600 }}
-                                />
-                                <RechartsTooltip
-                                    formatter={(value: number, name: string) => [
-                                        `€${value.toLocaleString('es-ES')}`,
-                                        name
-                                    ]}
-                                    contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
-                                />
-                                <RechartsLegend verticalAlign="top" height={36}
-                                    formatter={(value: string) => <span className="text-xs text-slate-600">{value}</span>}
-                                />
-                                <Bar dataKey="capitalAltoRiesgo" name="🔴 Alto Riesgo" stackId="capital" fill="#EF4444" radius={[0, 0, 0, 0]} />
-                                <Bar dataKey="capitalMedioRiesgo" name="🟡 Medio Riesgo" stackId="capital" fill="#F59E0B" />
-                                <Bar dataKey="capitalBajoRiesgo" name="🟢 Bajo Riesgo" stackId="capital" fill="#10B981" radius={[0, 4, 4, 0]} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-
-                {/* Capital Summary Cards */}
-                <div className="space-y-4">
-                    <div className="bg-gradient-to-br from-red-50 to-rose-50 rounded-xl border border-red-100 p-5">
-                        <div className="flex items-center gap-2 mb-2">
-                            <AlertCircle className="w-4 h-4 text-red-500" />
-                            <h4 className="font-bold text-red-800 text-sm">Capital Crítico</h4>
-                        </div>
-                        <p className="text-2xl font-bold text-red-700">
-                            €{capitalAtRiskData.reduce((s, c) => s + c.capitalAltoRiesgo, 0).toLocaleString('es-ES')}
-                        </p>
-                        <p className="text-xs text-red-600 mt-1">
-                            En clientes con riesgo &gt;70% de fuga
-                        </p>
-                    </div>
-
-                    {capitalAtRiskData.map((c, idx) => {
-                        const pctHigh = c.totalCapital > 0 ? (c.capitalAltoRiesgo / c.totalCapital * 100) : 0;
-                        return (
-                            <div key={idx} className="bg-white rounded-xl border border-slate-100 p-4 shadow-sm">
-                                <div className="flex justify-between items-center mb-2">
-                                    <span className="font-bold text-slate-800 text-sm">{c.country}</span>
-                                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${pctHigh > 30 ? 'bg-red-100 text-red-700' : pctHigh > 15 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
-                                        {pctHigh.toFixed(1)}% en riesgo alto
-                                    </span>
-                                </div>
-                                <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                                    <div className="h-full flex">
-                                        <div className="bg-red-500 h-full" style={{ width: `${(c.capitalAltoRiesgo / maxCapital) * 100}%` }} />
-                                        <div className="bg-yellow-400 h-full" style={{ width: `${(c.capitalMedioRiesgo / maxCapital) * 100}%` }} />
-                                        <div className="bg-green-400 h-full" style={{ width: `${(c.capitalBajoRiesgo / maxCapital) * 100}%` }} />
-                                    </div>
-                                </div>
-                                <p className="text-xs text-slate-500 mt-1.5">
-                                    Total: €{c.totalCapital.toLocaleString('es-ES')}
-                                </p>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-
-            {/* ══ SECCIÓN 3 — SEGMENTACIÓN DEMOGRÁFICA (NEW) ═══════════════ */}
+            {/* ══ SECCIÓN 2 — SEGMENTACIÓN DEMOGRÁFICA ════════════════════ */}
             <div className="mb-3">
                 <div className="flex items-center gap-2 mb-4">
                     <Users className="w-5 h-5 text-violet-500" />
                     <h2 className="text-base font-bold text-slate-700 uppercase tracking-wider">Segmentación Demográfica de Riesgo</h2>
                     <div className="flex-1 h-px bg-slate-200 ml-2" />
+                    <span className="text-xs text-slate-400 font-medium flex-shrink-0">🧪 Muestra activa · {riskData?.sampleSize ?? 0} clientes</span>
                 </div>
             </div>
 
@@ -748,16 +621,15 @@ const RiskIntelligencePage: React.FC = () => {
                             <div>
                                 <h3 className="text-lg font-bold text-slate-800">Mapa de Riesgo: Edad × Productos</h3>
                                 <p className="text-sm text-slate-500 mt-0.5">
-                                    Muestreo híbrido: los {sampleMeta?.topN ?? 0} clientes de mayor riesgo (siempre visibles)
-                                    + muestra aleatoria del resto. Cada burbuja = segmento demográfico.
-                                    Tamaño = cantidad de clientes. Color = riesgo promedio.
+                                    Todos los clientes de la muestra activa (analizados y pendientes).
+                                    Cada burbuja = segmento demográfico. Tamaño = cantidad. Color = riesgo promedio.
                                 </p>
                             </div>
-                            {sampleMeta && (
+                            {riskData?.sampleSize ? (
                                 <span className="ml-4 flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full bg-violet-50 text-violet-600 border border-violet-100 whitespace-nowrap">
-                                    {sampleMeta.totalSample} de {sampleMeta.totalAnalyzed} analizados
+                                    {riskData.sampleSize} clientes
                                 </span>
-                            )}
+                            ) : null}
                         </div>
                     </div>
                     <div className="h-80 w-full">
@@ -791,12 +663,11 @@ const RiskIntelligencePage: React.FC = () => {
                         </ResponsiveContainer>
                     </div>
 
-                    {/* Leyenda de colores */}
+                    {/* Leyenda de colores — mismos umbrales que el donut */}
                     <div className="flex items-center gap-6 mt-4 justify-center text-xs text-slate-600">
-                        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-500" /> Riesgo &gt;70%</div>
-                        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-amber-500" /> Riesgo 55-70%</div>
-                        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-orange-400" /> Riesgo 40-55%</div>
-                        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-emerald-500" /> Riesgo &lt;40%</div>
+                        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-500" /> Alto (&gt;70%)</div>
+                        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-amber-500" /> Medio (45-70%)</div>
+                        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-emerald-500" /> Bajo (&lt;45%)</div>
                         <div className="flex items-center gap-1.5 ml-4 border-l pl-4 border-slate-200">⬤ Grande = más clientes</div>
                     </div>
                 </div>
@@ -849,12 +720,13 @@ const RiskIntelligencePage: React.FC = () => {
                 </div>
             </div>
 
-            {/* ══ SECCIÓN 4 — ANÁLISIS GEOGRÁFICO + RADAR (UPDATED) ═══════ */}
+            {/* ══ SECCIÓN 3 — ANÁLISIS GEOGRÁFICO Y FINANCIERO ═══════════ */}
             <div className="mb-3">
                 <div className="flex items-center gap-2 mb-4">
                     <Globe className="w-5 h-5 text-emerald-500" />
-                    <h2 className="text-base font-bold text-slate-700 uppercase tracking-wider">Análisis Geográfico Comparativo</h2>
+                    <h2 className="text-base font-bold text-slate-700 uppercase tracking-wider">Análisis Geográfico y Financiero</h2>
                     <div className="flex-1 h-px bg-slate-200 ml-2" />
+                    <span className="text-xs text-slate-400 font-medium flex-shrink-0">🌍 Población total · BD completa ({totalCustomersGlobal.toLocaleString('es-ES')} clientes)</span>
                 </div>
             </div>
 
@@ -878,8 +750,8 @@ const RiskIntelligencePage: React.FC = () => {
                                 <div className="flex items-center gap-2">
                                     <Globe className="w-5 h-5 text-indigo-600" />
                                     <div>
-                                        <h3 className="text-lg font-semibold text-slate-800">Mapa de Riesgo (EMEA)</h3>
-                                        <p className="text-sm text-slate-500">Color indica tasa de fuga por país.</p>
+                                        <h3 className="text-lg font-semibold text-slate-800">Tasa de Fuga Histórica por País (EMEA)</h3>
+                                        <p className="text-sm text-slate-500">% de clientes que ya abandonaron el banco, agrupado por país.</p>
                                     </div>
                                 </div>
                                 {hoveredCountry && (
@@ -892,12 +764,11 @@ const RiskIntelligencePage: React.FC = () => {
                                 <EuropeMap countryData={countryData} onHover={setHoveredCountry} />
                                 {/* Leyenda */}
                                 <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm p-3 rounded-lg border border-slate-200 shadow-sm text-xs">
-                                    <p className="font-bold text-slate-700 mb-2">Nivel de Riesgo</p>
+                                    <p className="font-bold text-slate-700 mb-2">Tasa de Fuga Promedio</p>
                                     <div className="space-y-1.5">
-                                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-green-500"></div><span>Bajo (&lt;10%)</span></div>
-                                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-yellow-500"></div><span>Medio (10-15%)</span></div>
-                                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-orange-500"></div><span>Alto (15-25%)</span></div>
-                                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-500"></div><span>Crítico (&gt;25%)</span></div>
+                                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-green-500"></div><span>Bajo (&lt;35%)</span></div>
+                                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-amber-500"></div><span>Medio (35-40%)</span></div>
+                                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-500"></div><span>Alto (&gt;40%)</span></div>
                                     </div>
                                 </div>
                             </div>
@@ -945,6 +816,76 @@ const RiskIntelligencePage: React.FC = () => {
                         </div>
                     </div>
 
+                    {/* ── Capital en Riesgo por País ──────────────────────── */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+                        <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
+                            <div className="mb-4">
+                                <h3 className="text-lg font-bold text-slate-800">Capital en Riesgo por País</h3>
+                                <p className="text-sm text-slate-500">
+                                    Distribución del capital expuesto por nivel de riesgo. Tamaño de barra = impacto financiero real.
+                                </p>
+                            </div>
+                            <div className="h-72 w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={capitalAtRiskData} layout="vertical"
+                                        margin={{ top: 10, right: 30, bottom: 10, left: 20 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" horizontal={false} />
+                                        <XAxis type="number"
+                                            tickFormatter={(val: number) => val >= 1000000 ? `€${(val / 1000000).toFixed(1)}M` : val >= 1000 ? `€${(val / 1000).toFixed(0)}K` : `€${val}`}
+                                            tick={{ fill: '#94A3B8', fontSize: 11 }}
+                                        />
+                                        <YAxis type="category" dataKey="country" width={130}
+                                            tick={{ fill: '#334155', fontSize: 13, fontWeight: 600 }}
+                                        />
+                                        <RechartsTooltip
+                                            formatter={(value: number, name: string) => [`€${value.toLocaleString('es-ES')}`, name]}
+                                            contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+                                        />
+                                        <RechartsLegend verticalAlign="top" height={36}
+                                            formatter={(value: string) => <span className="text-xs text-slate-600">{value}</span>}
+                                        />
+                                        <Bar dataKey="capitalAltoRiesgo" name="🔴 Alto Riesgo (>70%)" stackId="capital" fill="#EF4444" radius={[0, 0, 0, 0]} />
+                                        <Bar dataKey="capitalMedioRiesgo" name="🟡 Medio Riesgo (45-70%)" stackId="capital" fill="#F59E0B" />
+                                        <Bar dataKey="capitalBajoRiesgo" name="🟢 Bajo Riesgo (<45%)" stackId="capital" fill="#10B981" radius={[0, 4, 4, 0]} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                        <div className="space-y-4">
+                            <div className="bg-gradient-to-br from-red-50 to-rose-50 rounded-xl border border-red-100 p-5">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <AlertCircle className="w-4 h-4 text-red-500" />
+                                    <h4 className="font-bold text-red-800 text-sm">Capital Crítico</h4>
+                                </div>
+                                <p className="text-2xl font-bold text-red-700">
+                                    €{capitalAtRiskData.reduce((s, c) => s + c.capitalAltoRiesgo, 0).toLocaleString('es-ES')}
+                                </p>
+                                <p className="text-xs text-red-600 mt-1">En clientes con riesgo &gt;70% de fuga</p>
+                            </div>
+                            {capitalAtRiskData.map((c, idx) => {
+                                const pctHigh = c.totalCapital > 0 ? (c.capitalAltoRiesgo / c.totalCapital * 100) : 0;
+                                return (
+                                    <div key={idx} className="bg-white rounded-xl border border-slate-100 p-4 shadow-sm">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="font-bold text-slate-800 text-sm">{c.country}</span>
+                                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${pctHigh > 30 ? 'bg-red-100 text-red-700' : pctHigh > 15 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                                                {pctHigh.toFixed(1)}% en riesgo alto
+                                            </span>
+                                        </div>
+                                        <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                                            <div className="h-full flex">
+                                                <div className="bg-red-500 h-full" style={{ width: `${(c.capitalAltoRiesgo / maxCapital) * 100}%` }} />
+                                                <div className="bg-yellow-400 h-full" style={{ width: `${(c.capitalMedioRiesgo / maxCapital) * 100}%` }} />
+                                                <div className="bg-green-400 h-full" style={{ width: `${(c.capitalBajoRiesgo / maxCapital) * 100}%` }} />
+                                            </div>
+                                        </div>
+                                        <p className="text-xs text-slate-500 mt-1.5">Total: €{c.totalCapital.toLocaleString('es-ES')}</p>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
                     {/* Ranking + Cards por País */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
                         {/* Ranking */}
@@ -961,7 +902,7 @@ const RiskIntelligencePage: React.FC = () => {
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <p className={`font-bold ${country.churnRate > 15 ? 'text-red-600' : 'text-green-600'}`}>
+                                            <p className={`font-bold ${country.churnRate > 40 ? 'text-red-600' : country.churnRate > 35 ? 'text-amber-600' : 'text-green-600'}`}>
                                                 {country.churnRate.toFixed(1)}%
                                             </p>
                                             <p className="text-xs text-slate-400">tasa fuga</p>
@@ -1041,7 +982,7 @@ const RiskIntelligencePage: React.FC = () => {
 
             {/* Footer */}
             <div className="mt-6 text-center text-sm text-slate-400">
-                <p>📊 Datos en tiempo real · Análisis estratégico + geográfico + demográfico · KPIs server-side</p>
+                <p>🧪 Secciones 1 y 2 sobre muestra estratificada ({(riskData?.sampleSize ?? 0).toLocaleString('es-ES')} clientes) · 🌍 Sección 3 sobre población total BD completa ({totalCustomersGlobal.toLocaleString('es-ES')} clientes)</p>
             </div>
         </div>
     );

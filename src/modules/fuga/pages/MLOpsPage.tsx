@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     LineChart,
     Line,
@@ -23,23 +23,29 @@ import {
     Zap,
     AlertTriangle,
     Loader2,
-    X as XIcon
+    Server,
+    RotateCcw,
+    Brain
 } from 'lucide-react';
 import { ChurnService } from '../churn.service';
-import type { TrainResult, MLOpsMetrics, PerformanceStatus, TrainingHistoryPoint, PredictionBucket } from '../types';
+import type { TrainResult, MLOpsMetrics, PerformanceStatus, TrainingHistoryPoint, PredictionBucket, ChurnModelInfo } from '../types';
 
 // Colores por nivel de probabilidad para el histograma de distribución
 const bucketColor = (bucket: string): string => {
     const start = parseInt(bucket.split('-')[0]);
     if (start >= 70) return '#EF4444'; // Alto riesgo — rojo
-    if (start >= 40) return '#F59E0B'; // Riesgo medio — ámbar
+    if (start >= 45) return '#F59E0B'; // Riesgo medio — ámbar
     return '#10B981';                  // Bajo riesgo — verde
 };
 
 const triggerLabel: Record<string, { label: string; color: string }> = {
-    manual_training:  { label: 'Manual',        color: 'bg-slate-100 text-slate-700'   },
-    performance_decay:{ label: 'Auto (Decay)',   color: 'bg-red-100 text-red-700'       },
-    scheduled_check:  { label: 'Check Prog.',    color: 'bg-emerald-100 text-emerald-700'},
+    manual_training:    { label: 'Manual',          color: 'bg-slate-100 text-slate-700'    },
+    performance_decay:  { label: 'Auto (Decay)',     color: 'bg-red-100 text-red-700'        },
+    scheduled_check:    { label: 'Check Prog.',      color: 'bg-emerald-100 text-emerald-700'},
+    initial_training:   { label: 'Inicial',          color: 'bg-blue-100 text-blue-700'      },
+    auto_training:      { label: 'Automático',       color: 'bg-purple-100 text-purple-700'  },
+    drift_detected:     { label: 'Drift Detectado',  color: 'bg-orange-100 text-orange-700'  },
+    manual_evaluation:  { label: 'Evaluación Man.',  color: 'bg-slate-100 text-slate-700'    },
 };
 
 // Circular progress ring component
@@ -104,6 +110,17 @@ const MLOpsPage: React.FC = () => {
     const [trainingEvolution, setTrainingEvolution] = useState<TrainingHistoryPoint[]>([]);
     const [predictionDistribution, setPredictionDistribution] = useState<PredictionBucket[]>([]);
     const [chartsLoading, setChartsLoading] = useState(true);
+    const [chartsError, setChartsError] = useState<string | null>(null);
+
+    // Ref to track the reload polling interval — allows cleanup on unmount
+    const reloadPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    // Clear the polling interval when the component unmounts
+    useEffect(() => {
+        return () => {
+            if (reloadPollRef.current) clearInterval(reloadPollRef.current);
+        };
+    }, []);
 
     const fetchMetrics = async () => {
         try {
@@ -121,6 +138,7 @@ const MLOpsPage: React.FC = () => {
 
     const fetchChartData = async () => {
         setChartsLoading(true);
+        setChartsError(null);
         try {
             const [evolution, distribution] = await Promise.all([
                 ChurnService.getTrainingEvolution(),
@@ -130,6 +148,7 @@ const MLOpsPage: React.FC = () => {
             setPredictionDistribution(distribution);
         } catch (err) {
             console.error('Error fetching chart data:', err);
+            setChartsError('No se pudieron cargar los datos de gráficos. Verifique la conexión con el servidor.');
         } finally {
             setChartsLoading(false);
         }
@@ -163,14 +182,13 @@ const MLOpsPage: React.FC = () => {
         setIsEvaluating(true);
         try {
             const result = await ChurnService.triggerEvaluation();
-            // If auto-training was triggered, refresh main metrics too
             if (result.autoTrainingTriggered) {
                 await fetchMetrics();
             }
-            // Re-fetch complete status (consistent with GET /monitor/status)
             await fetchMonitorStatus();
         } catch (err) {
             console.error('Error evaluating performance:', err);
+            setMonitorStatus({ status: 'error', message: 'Error al ejecutar la evaluación. Verifique que la API Python esté disponible.' });
         } finally {
             setIsEvaluating(false);
         }
@@ -179,6 +197,63 @@ const MLOpsPage: React.FC = () => {
     useEffect(() => {
         fetchMonitorStatus();
     }, []);
+
+    // ============================================================
+    // LIVE MODEL STATUS STATE
+    // ============================================================
+    const [modelInfo, setModelInfo] = useState<ChurnModelInfo | null>(null);
+    const [modelInfoLoading, setModelInfoLoading] = useState(false);
+    const [isReloading, setIsReloading] = useState(false);
+
+    const fetchModelInfo = async () => {
+        try {
+            setModelInfoLoading(true);
+            const data = await ChurnService.getModelInfo();
+            setModelInfo(data);
+        } catch (err) {
+            console.error('Error fetching model info:', err);
+        } finally {
+            setModelInfoLoading(false);
+        }
+    };
+
+    const handleReloadModel = async () => {
+        setIsReloading(true);
+        // Clear any previous poll before starting a new one
+        if (reloadPollRef.current) clearInterval(reloadPollRef.current);
+        try {
+            await ChurnService.reloadModel();
+            // Poll until status changes from 'updating' back to 'ready'
+            reloadPollRef.current = setInterval(async () => {
+                const info = await ChurnService.getModelInfo();
+                setModelInfo(info);
+                if (info.status !== 'updating') {
+                    if (reloadPollRef.current) clearInterval(reloadPollRef.current);
+                    reloadPollRef.current = null;
+                    setIsReloading(false);
+                    await fetchMetrics();
+                }
+            }, 2000);
+        } catch (err) {
+            console.error('Error reloading model:', err);
+            setModelInfo(prev => prev
+                ? { ...prev, status: 'error', message: 'No se pudo iniciar la recarga. Verifique que la API Python esté disponible.' }
+                : null
+            );
+            setIsReloading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchModelInfo();
+    }, []);
+
+    // Auto-refresh: 30s when healthy, 2min when error (avoids log spam on ECONNREFUSED)
+    useEffect(() => {
+        const delay = modelInfo?.status === 'error' ? 120000 : 30000;
+        const interval = setInterval(fetchModelInfo, delay);
+        return () => clearInterval(interval);
+    }, [modelInfo?.status]);
 
     // Handle metrics export
     const handleExportMetrics = () => {
@@ -205,7 +280,7 @@ const MLOpsPage: React.FC = () => {
         a.href = url;
         a.download = `churn_mlops_metrics_${new Date().toISOString().slice(0, 10)}.json`;
         a.click();
-        URL.revokeObjectURL(url);
+        setTimeout(() => URL.revokeObjectURL(url), 100);
     };
 
     // Handle training trigger
@@ -298,81 +373,157 @@ const MLOpsPage: React.FC = () => {
             )}
 
             {/* Training Result Banner */}
-            {trainResult && (
-                <div className={`mb-6 rounded-xl p-5 border flex items-start gap-4 ${trainResult.status === 'success'
-                    ? 'bg-emerald-50 border-emerald-200'
-                    : 'bg-red-50 border-red-200'
-                    }`}>
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${trainResult.status === 'success' ? 'bg-emerald-100' : 'bg-red-100'
-                        }`}>
-                        {trainResult.status === 'success'
-                            ? <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                            : <AlertTriangle className="w-5 h-5 text-red-600" />
-                        }
-                    </div>
-                    <div className="flex-1">
-                        <h4 className={`font-semibold ${trainResult.status === 'success' ? 'text-emerald-800' : 'text-red-800'
-                            }`}>
-                            {trainResult.status === 'success' ? '✅ Entrenamiento Exitoso' : '❌ Error en Entrenamiento'}
-                        </h4>
-                        <p className={`text-sm mt-1 ${trainResult.status === 'success' ? 'text-emerald-700' : 'text-red-700'
-                            }`}>
-                            {trainResult.message || trainResult.error}
-                        </p>
+            {trainResult && (() => {
+                const isError    = trainResult.status === 'error';
+                const isPromoted = trainResult.status === 'success' && trainResult.promoted === true;
+                const isRejected = trainResult.status === 'success' && !isPromoted;
 
-                        {/* Show metrics on success */}
+                const bannerCls = isError    ? 'bg-red-50 border-red-200'
+                                : isRejected ? 'bg-amber-50 border-amber-200'
+                                :              'bg-emerald-50 border-emerald-200';
+                const iconCls   = isError    ? 'bg-red-100'
+                                : isRejected ? 'bg-amber-100'
+                                :              'bg-emerald-100';
+                const textCls   = isError    ? 'text-red-800'
+                                : isRejected ? 'text-amber-800'
+                                :              'text-emerald-800';
+                const subCls    = isError    ? 'text-red-600'
+                                : isRejected ? 'text-amber-600'
+                                :              'text-emerald-600';
+
+                const title = isError    ? 'Error en Entrenamiento'
+                            : isRejected ? 'Modelo Entrenado — Sin Promoción'
+                            :              'Nuevo Modelo Promovido a Producción';
+
+                const challengerVals = trainResult.metrics ? [
+                    trainResult.metrics.accuracy,
+                    trainResult.metrics.f1Score,
+                    trainResult.metrics.precision,
+                    trainResult.metrics.recall,
+                    trainResult.metrics.aucRoc,
+                ] : [];
+
+                const championVals = trainResult.championMetrics ? [
+                    trainResult.championMetrics.accuracy,
+                    trainResult.championMetrics.f1Score,
+                    trainResult.championMetrics.precisionScore,
+                    trainResult.championMetrics.recallScore,
+                    trainResult.championMetrics.aucRoc,
+                ] : [];
+
+                const fmt = (v: number | null | undefined) =>
+                    v != null ? (v * 100).toFixed(1) + '%' : '—';
+
+                const delta = (nv: number | null | undefined, cv: number | null | undefined) => {
+                    if (nv == null || cv == null) return null;
+                    const d = (nv - cv) * 100;
+                    if (Math.abs(d) < 0.05) return null;
+                    return d;
+                };
+
+                return (
+                    <div className={`mb-6 rounded-xl border overflow-hidden ${bannerCls}`}>
+                        {/* Header */}
+                        <div className="flex items-center gap-3 px-5 py-4 border-b border-current/10">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${iconCls}`}>
+                                {isError    ? <AlertTriangle className="w-4 h-4 text-red-600" />
+                               : isRejected ? <AlertTriangle className="w-4 h-4 text-amber-600" />
+                               :              <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
+                            </div>
+                            <div className="flex-1">
+                                <h4 className={`font-semibold text-sm ${textCls}`}>{title}</h4>
+                                {(trainResult.promotionReason || trainResult.message || trainResult.error) && (
+                                    <p className={`text-xs mt-0.5 ${subCls}`}>
+                                        {trainResult.promotionReason || trainResult.message || trainResult.error}
+                                    </p>
+                                )}
+                            </div>
+                            <button onClick={() => setTrainResult(null)} className="text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0">
+                                <span className="text-lg leading-none">&times;</span>
+                            </button>
+                        </div>
+
+                        {/* Metrics comparison table */}
                         {trainResult.status === 'success' && trainResult.metrics && (
-                            <div className="mt-3 grid grid-cols-2 md:grid-cols-5 gap-3">
-                                <div className="bg-white/70 rounded-lg p-2 text-center">
-                                    <p className="text-xs text-emerald-600 font-medium">Accuracy</p>
-                                    <p className="text-lg font-bold text-slate-800">
-                                        {(trainResult.metrics.accuracy * 100).toFixed(1)}%
+                            <div className="px-5 py-4">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="text-xs font-medium text-slate-400 uppercase tracking-wide">
+                                            <th className="text-left pb-2 font-medium">Modelo</th>
+                                            <th className="text-center pb-2 font-medium">Accuracy</th>
+                                            <th className="text-center pb-2 font-medium">F1</th>
+                                            <th className="text-center pb-2 font-medium">Precision</th>
+                                            <th className="text-center pb-2 font-medium">Recall</th>
+                                            <th className="text-center pb-2 font-medium">AUC-ROC</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-200/60">
+                                        {/* Challenger row */}
+                                        <tr className="bg-white/50">
+                                            <td className="py-2.5 pr-3">
+                                                <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded ${isPromoted ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${isPromoted ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                                                    {isPromoted ? 'Nuevo Modelo' : 'Challenger'}
+                                                </span>
+                                                {trainResult.versionTag && (
+                                                    <span className="block text-slate-400 mt-0.5" style={{fontSize:'10px'}}>{trainResult.versionTag}</span>
+                                                )}
+                                            </td>
+                                            {challengerVals.map((v, i) => (
+                                                <td key={i} className="text-center py-2.5">
+                                                    <span className="font-bold text-slate-800">{fmt(v)}</span>
+                                                    {(() => {
+                                                        const d = delta(v, championVals[i]);
+                                                        if (d == null) return null;
+                                                        return (
+                                                            <span className={`block text-xs font-medium ${d > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                                                                {d > 0 ? '+' : ''}{d.toFixed(1)}pp
+                                                            </span>
+                                                        );
+                                                    })()}
+                                                </td>
+                                            ))}
+                                        </tr>
+
+                                        {/* Champion row */}
+                                        {trainResult.championMetrics ? (
+                                            <tr>
+                                                <td className="py-2.5 pr-3">
+                                                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                                        En Producción
+                                                    </span>
+                                                    {trainResult.championMetrics.modelVersion && (
+                                                        <span className="block text-slate-400 mt-0.5" style={{fontSize:'10px'}}>{trainResult.championMetrics.modelVersion}</span>
+                                                    )}
+                                                </td>
+                                                {championVals.map((v, i) => (
+                                                    <td key={i} className="text-center py-2.5">
+                                                        <span className="font-medium text-slate-500">{fmt(v)}</span>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                        ) : (
+                                            <tr>
+                                                <td colSpan={6} className="py-2.5 text-xs text-slate-400 italic">
+                                                    Sin modelo previo en producción — este es el primer entrenamiento registrado.
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+
+                                {trainResult.runId && (
+                                    <p className="mt-3 text-xs text-slate-400 font-mono">
+                                        MLflow Run ID: {trainResult.runId}
                                     </p>
-                                </div>
-                                <div className="bg-white/70 rounded-lg p-2 text-center">
-                                    <p className="text-xs text-emerald-600 font-medium">F1 Score</p>
-                                    <p className="text-lg font-bold text-slate-800">
-                                        {(trainResult.metrics.f1Score * 100).toFixed(1)}%
-                                    </p>
-                                </div>
-                                <div className="bg-white/70 rounded-lg p-2 text-center">
-                                    <p className="text-xs text-emerald-600 font-medium">Precision</p>
-                                    <p className="text-lg font-bold text-slate-800">
-                                        {(trainResult.metrics.precision * 100).toFixed(1)}%
-                                    </p>
-                                </div>
-                                <div className="bg-white/70 rounded-lg p-2 text-center">
-                                    <p className="text-xs text-emerald-600 font-medium">Recall</p>
-                                    <p className="text-lg font-bold text-slate-800">
-                                        {(trainResult.metrics.recall * 100).toFixed(1)}%
-                                    </p>
-                                </div>
-                                <div className="bg-white/70 rounded-lg p-2 text-center">
-                                    <p className="text-xs text-emerald-600 font-medium">AUC-ROC</p>
-                                    <p className="text-lg font-bold text-slate-800">
-                                        {(trainResult.metrics.aucRoc * 100).toFixed(1)}%
-                                    </p>
-                                </div>
+                                )}
                             </div>
                         )}
-
-                        {/* MLflow Run ID */}
-                        {trainResult.runId && (
-                            <p className="mt-2 text-xs text-emerald-600 font-mono">
-                                MLflow Run: {trainResult.runId}
-                            </p>
-                        )}
                     </div>
+                );
+            })()}
 
-                    {/* Dismiss button */}
-                    <button
-                        onClick={() => setTrainResult(null)}
-                        className="text-slate-400 hover:text-slate-600 transition-colors"
-                    >
-                        <XIcon className="w-4 h-4" />
-                    </button>
-                </div>
-            )}
 
             {/* Header */}
             <div className="flex justify-between items-center mb-8">
@@ -449,35 +600,160 @@ const MLOpsPage: React.FC = () => {
                 </div>
             </div>
 
-            {/* Metrics Performance Section */}
+            {/* ============================================================ */}
+            {/* LIVE MODEL STATUS CARD (equivalente a ATM /v1/withdrawal/info) */}
+            {/* ============================================================ */}
             <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm mb-8">
-                <div className="flex items-center gap-3 mb-6">
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center">
-                        <Zap className="w-5 h-5 text-white" />
+                <div className="flex items-center gap-3 mb-5">
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                        modelInfo?.status === 'ready' ? 'bg-gradient-to-br from-emerald-400 to-teal-500'
+                        : modelInfo?.status === 'updating' ? 'bg-gradient-to-br from-amber-400 to-orange-500'
+                        : 'bg-gradient-to-br from-slate-400 to-slate-500'
+                    }`}>
+                        <Server className="w-5 h-5 text-white" />
                     </div>
                     <div>
-                        <h2 className="text-xl font-semibold text-slate-800">Métricas de Rendimiento</h2>
+                        <h2 className="text-xl font-semibold text-slate-800">Estado del Modelo en Producción</h2>
                         <p className="text-sm text-slate-500">
-                            Último entrenamiento: {metrics.lastTrainingDate || 'N/A'}
+                            Monitoreo en tiempo real — versión activa, SHAP y disponibilidad
                         </p>
                     </div>
-                    {monitorStatus && monitorStatus.status !== 'no_evaluations' && monitorStatus.status !== 'error' && monitorStatus.status !== 'insufficient_data' && (
-                        <div className={`ml-auto flex items-center gap-2 px-3 py-1.5 rounded-full ${
-                            monitorStatus.status === 'healthy'
-                                ? 'bg-emerald-50'
-                                : 'bg-red-50'
-                        }`}>
-                            {monitorStatus.status === 'healthy'
-                                ? <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                                : <AlertTriangle className="w-4 h-4 text-red-600" />
-                            }
-                            <span className={`text-sm font-medium ${
-                                monitorStatus.status === 'healthy' ? 'text-emerald-700' : 'text-red-700'
+                    <div className="ml-auto flex items-center gap-3">
+                        {/* Live status badge */}
+                        {modelInfo && (
+                            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${
+                                modelInfo.status === 'ready' ? 'bg-emerald-50 text-emerald-700'
+                                : modelInfo.status === 'updating' ? 'bg-amber-50 text-amber-700'
+                                : 'bg-red-50 text-red-700'
                             }`}>
-                                {monitorStatus.status === 'healthy' ? 'Modelo Óptimo' : 'Modelo Degradado'}
-                            </span>
+                                <span className={`w-2 h-2 rounded-full ${
+                                    modelInfo.status === 'ready' ? 'bg-emerald-500'
+                                    : modelInfo.status === 'updating' ? 'bg-amber-500 animate-pulse'
+                                    : 'bg-red-500'
+                                } ${modelInfo.status === 'ready' ? 'animate-pulse' : ''}`}></span>
+                                {modelInfo.status === 'ready' ? 'Activo'
+                                : modelInfo.status === 'updating' ? 'Actualizando...'
+                                : 'No Disponible'}
+                            </div>
+                        )}
+                        {/* Refresh info button */}
+                        <button
+                            onClick={fetchModelInfo}
+                            disabled={modelInfoLoading}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-200 transition-all"
+                            title="Refrescar estado"
+                        >
+                            <RefreshCw className={`w-3.5 h-3.5 ${modelInfoLoading ? 'animate-spin' : ''}`} />
+                            Refrescar
+                        </button>
+                        {/* Hot-reload from DagsHub button */}
+                        <button
+                            onClick={handleReloadModel}
+                            disabled={isReloading || modelInfo?.status === 'updating'}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                                isReloading || modelInfo?.status === 'updating'
+                                ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                                : 'bg-[#0F172A] text-white hover:bg-slate-800'
+                            }`}
+                        >
+                            {isReloading ? (
+                                <><Loader2 className="w-4 h-4 animate-spin" /> Recargando...</>
+                            ) : (
+                                <><RotateCcw className="w-4 h-4" /> Recargar desde DagsHub</>
+                            )}
+                        </button>
+                    </div>
+                </div>
+
+                {!modelInfo ? (
+                    <div className="flex items-center justify-center py-8 text-slate-400">
+                        <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                        <span className="text-sm">Consultando estado del modelo...</span>
+                    </div>
+                ) : modelInfo.status === 'error' ? (
+                    <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-200 text-slate-500">
+                        <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+                        <div>
+                            <p className="text-sm font-medium text-slate-700">No se pudo contactar con la API</p>
+                            <p className="text-xs text-slate-400 mt-0.5">
+                                {modelInfo.message || 'Verifica que la API Python y el backend Java estén en ejecución.'}
+                            </p>
                         </div>
-                    )}
+                        <button onClick={fetchModelInfo} className="ml-auto text-xs text-slate-500 hover:text-slate-700 underline">
+                            Reintentar
+                        </button>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {/* Version */}
+                        <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                            <div className="flex items-center gap-2 mb-2">
+                                <GitBranch className="w-4 h-4 text-purple-500" />
+                                <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Versión Activa</span>
+                            </div>
+                            <p className="text-xl font-bold text-slate-800">{modelInfo.version}</p>
+                        </div>
+                        {/* Status */}
+                        <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Activity className="w-4 h-4 text-blue-500" />
+                                <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Estado</span>
+                            </div>
+                            <p className={`text-xl font-bold ${
+                                modelInfo.status === 'ready' ? 'text-emerald-600'
+                                : modelInfo.status === 'updating' ? 'text-amber-600'
+                                : 'text-red-600'
+                            }`}>
+                                {modelInfo.status === 'ready' ? 'Listo'
+                                : modelInfo.status === 'updating' ? 'Actualizando'
+                                : 'No Cargado'}
+                            </p>
+                        </div>
+                        {/* Features */}
+                        <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Database className="w-4 h-4 text-teal-500" />
+                                <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Features</span>
+                            </div>
+                            <p className="text-xl font-bold text-slate-800">
+                                {modelInfo.feature_count > 0 ? modelInfo.feature_count : '—'}
+                            </p>
+                            <p className="text-xs text-slate-400 mt-0.5">
+                                Scaler: {modelInfo.has_scaler ? 'OK' : 'N/A'}
+                            </p>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* ============================================================ */}
+            {/* TRAINING METRICS — calculadas sobre test split              */}
+            {/* ============================================================ */}
+
+            {/* Section divider: Training */}
+            <div className="flex items-center gap-3 mb-4">
+                <div className="h-px flex-1 bg-slate-200" />
+                <span className="text-xs font-bold text-blue-600 uppercase tracking-widest px-2">
+                    Métricas de Entrenamiento
+                </span>
+                <div className="h-px flex-1 bg-slate-200" />
+            </div>
+
+            <div className="bg-white rounded-xl p-6 border border-blue-100 shadow-sm mb-4">
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                        <Brain className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-semibold text-slate-800">Métricas de Entrenamiento</h2>
+                        <p className="text-sm text-slate-500">
+                            Evaluadas sobre el split de test · Último entrenamiento: {metrics.lastTrainingDate || 'N/A'}
+                        </p>
+                    </div>
+                    <div className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold">
+                        <Database className="w-3.5 h-3.5" />
+                        Fuente: Split de Test
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-8 justify-items-center">
@@ -486,12 +762,24 @@ const MLOpsPage: React.FC = () => {
                     <MetricRing value={metrics.f1Score} label="F1 Score" color="#8B5CF6" />
                     <MetricRing value={metrics.aucRoc} label="AUC-ROC" color="#F59E0B" />
                 </div>
+                <p className="text-xs text-slate-400 text-center mt-4">
+                    Estas métricas reflejan el rendimiento del modelo sobre datos históricos reservados para evaluación, no sobre predicciones reales en producción.
+                </p>
+            </div>
+
+            {/* Section divider: Production Monitor */}
+            <div className="flex items-center gap-3 mb-4 mt-8">
+                <div className="h-px flex-1 bg-slate-200" />
+                <span className="text-xs font-bold text-emerald-600 uppercase tracking-widest px-2">
+                    Métricas de Producción (Monitor)
+                </span>
+                <div className="h-px flex-1 bg-slate-200" />
             </div>
 
             {/* ============================================================ */}
-            {/* PERFORMANCE MONITOR CARD */}
+            {/* PERFORMANCE MONITOR CARD                                   */}
             {/* ============================================================ */}
-            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm mb-8">
+            <div className="bg-white rounded-xl p-6 border border-emerald-100 shadow-sm mb-8">
                 <div className="flex items-center gap-3 mb-5">
                     <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${monitorStatus?.status === 'healthy' ? 'bg-gradient-to-br from-emerald-400 to-green-500'
                         : monitorStatus?.status === 'degraded' ? 'bg-gradient-to-br from-red-400 to-rose-500'
@@ -500,12 +788,16 @@ const MLOpsPage: React.FC = () => {
                         <Activity className="w-5 h-5 text-white" />
                     </div>
                     <div>
-                        <h2 className="text-xl font-semibold text-slate-800">Monitor de Rendimiento</h2>
+                        <h2 className="text-xl font-semibold text-slate-800">Métricas de Producción (Monitor)</h2>
                         <p className="text-sm text-slate-500">
-                            Evaluación automática contra ground truth (account_details.exited)
+                            Predicciones reales comparadas contra <code className="text-xs bg-slate-100 px-1 rounded">account_details.exited</code> (ground truth)
                         </p>
                     </div>
                     <div className="ml-auto flex items-center gap-3">
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Fuente: Ground Truth
+                        </div>
                         {monitorStatus && monitorStatus.status !== 'no_evaluations' && monitorStatus.status !== 'error' && (
                             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${monitorStatus.status === 'healthy'
                                 ? 'bg-emerald-50 text-emerald-700'
@@ -644,23 +936,63 @@ const MLOpsPage: React.FC = () => {
                         {/* Confusion Matrix + Info */}
                         <div className="space-y-3">
                             <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Matriz de Confusión</h3>
-                            <div className="grid grid-cols-2 gap-2">
-                                <div className="bg-emerald-50 rounded-lg p-3 text-center border border-emerald-100">
-                                    <p className="text-xs text-emerald-600 font-medium">Verdaderos Positivos</p>
-                                    <p className="text-xl font-bold text-emerald-800">{monitorStatus.truePositives ?? '--'}</p>
-                                </div>
-                                <div className="bg-red-50 rounded-lg p-3 text-center border border-red-100">
-                                    <p className="text-xs text-red-600 font-medium">Falsos Positivos</p>
-                                    <p className="text-xl font-bold text-red-800">{monitorStatus.falsePositives ?? '--'}</p>
-                                </div>
-                                <div className="bg-amber-50 rounded-lg p-3 text-center border border-amber-100">
-                                    <p className="text-xs text-amber-600 font-medium">Falsos Negativos</p>
-                                    <p className="text-xl font-bold text-amber-800">{monitorStatus.falseNegatives ?? '--'}</p>
-                                </div>
-                                <div className="bg-blue-50 rounded-lg p-3 text-center border border-blue-100">
-                                    <p className="text-xs text-blue-600 font-medium">Verdaderos Negativos</p>
-                                    <p className="text-xl font-bold text-blue-800">{monitorStatus.trueNegatives ?? '--'}</p>
-                                </div>
+
+                            {/* Tabla con ejes etiquetados */}
+                            <div className="overflow-auto">
+                                <table className="w-full text-xs border-collapse">
+                                    <thead>
+                                        <tr>
+                                            <td className="p-1" />
+                                            <td colSpan={2} className="text-center font-bold text-slate-500 pb-1">
+                                                Real (ground truth)
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td className="p-1" />
+                                            <td className="text-center font-semibold text-slate-400 pb-1 w-1/2">Fugó (1)</td>
+                                            <td className="text-center font-semibold text-slate-400 pb-1 w-1/2">Se quedó (0)</td>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td className="font-bold text-slate-500 pr-2 whitespace-nowrap align-middle"
+                                                style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', textAlign: 'center', width: 24 }}
+                                                rowSpan={2}>
+                                                Predicho
+                                            </td>
+                                            <td className="p-1">
+                                                <div className="bg-emerald-50 rounded-lg p-3 text-center border border-emerald-100">
+                                                    <p className="font-semibold text-emerald-700 mb-0.5">Fugó (1)</p>
+                                                    <p className="text-xs text-emerald-600">Verdadero Positivo</p>
+                                                    <p className="text-xl font-bold text-emerald-800 mt-1">{monitorStatus.truePositives ?? '--'}</p>
+                                                </div>
+                                            </td>
+                                            <td className="p-1">
+                                                <div className="bg-red-50 rounded-lg p-3 text-center border border-red-100">
+                                                    <p className="font-semibold text-red-700 mb-0.5">Fugó (1)</p>
+                                                    <p className="text-xs text-red-600">Falso Positivo</p>
+                                                    <p className="text-xl font-bold text-red-800 mt-1">{monitorStatus.falsePositives ?? '--'}</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td className="p-1">
+                                                <div className="bg-amber-50 rounded-lg p-3 text-center border border-amber-100">
+                                                    <p className="font-semibold text-amber-700 mb-0.5">Se quedó (0)</p>
+                                                    <p className="text-xs text-amber-600">Falso Negativo</p>
+                                                    <p className="text-xl font-bold text-amber-800 mt-1">{monitorStatus.falseNegatives ?? '--'}</p>
+                                                </div>
+                                            </td>
+                                            <td className="p-1">
+                                                <div className="bg-blue-50 rounded-lg p-3 text-center border border-blue-100">
+                                                    <p className="font-semibold text-blue-700 mb-0.5">Se quedó (0)</p>
+                                                    <p className="text-xs text-blue-600">Verdadero Negativo</p>
+                                                    <p className="text-xl font-bold text-blue-800 mt-1">{monitorStatus.trueNegatives ?? '--'}</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
                             <div className="flex justify-between text-xs text-slate-400 mt-2">
                                 <span>Muestras: {monitorStatus.evaluatedSamples ?? '--'} / mín. {monitorStatus.minSamplesRequired ?? 50}</span>
@@ -686,12 +1018,18 @@ const MLOpsPage: React.FC = () => {
                 </div>
                 <p className="text-sm text-slate-500 mb-6">
                     Tendencia real de Recall, Precision y F1-Score a lo largo del tiempo ·
-                    Línea roja = umbral mínimo de Recall (75%)
+                    Línea roja = umbral mínimo de Recall (70%)
                 </p>
 
                 {chartsLoading ? (
                     <div className="h-72 flex items-center justify-center">
                         <Loader2 className="w-6 h-6 animate-spin text-slate-300" />
+                    </div>
+                ) : chartsError ? (
+                    <div className="h-72 flex flex-col items-center justify-center text-slate-400 gap-2">
+                        <AlertTriangle className="w-8 h-8 text-amber-400 opacity-80" />
+                        <p className="text-sm font-medium text-slate-600">{chartsError}</p>
+                        <button onClick={fetchChartData} className="text-xs text-indigo-500 hover:underline mt-1">Reintentar</button>
                     </div>
                 ) : trainingEvolution.length === 0 ? (
                     <div className="h-72 flex flex-col items-center justify-center text-slate-400">
@@ -708,7 +1046,7 @@ const MLOpsPage: React.FC = () => {
                                     dataKey="date"
                                     stroke="#94A3B8"
                                     tick={{ fontSize: 11 }}
-                                    tickFormatter={(val: string) => val.slice(5)} // Show MM-DD
+                                    tickFormatter={(val: string) => val.slice(5)}
                                 />
                                 <YAxis
                                     stroke="#94A3B8"
@@ -722,13 +1060,18 @@ const MLOpsPage: React.FC = () => {
                                     labelStyle={{ fontWeight: 600, color: '#0F172A', marginBottom: 4 }}
                                 />
                                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 12 }} />
-                                {/* Umbral mínimo de Recall */}
+                                {/* Umbral mínimo de Recall — usa el valor real del monitor si está disponible */}
                                 <ReferenceLine
-                                    y={75}
+                                    y={monitorStatus?.recallThreshold != null ? monitorStatus.recallThreshold * 100 : 70}
                                     stroke="#EF4444"
                                     strokeDasharray="6 3"
                                     strokeWidth={1.5}
-                                    label={{ value: 'Umbral 75%', position: 'insideTopRight', fontSize: 10, fill: '#EF4444' }}
+                                    label={{
+                                        value: `Umbral ${monitorStatus?.recallThreshold != null ? (monitorStatus.recallThreshold * 100).toFixed(0) : 70}%`,
+                                        position: 'insideTopRight',
+                                        fontSize: 10,
+                                        fill: '#EF4444'
+                                    }}
                                 />
                                 <Line type="monotone" dataKey="recall"    stroke="#3B82F6" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} name="Recall"    connectNulls />
                                 <Line type="monotone" dataKey="precision" stroke="#10B981" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} name="Precision" connectNulls />
@@ -755,6 +1098,11 @@ const MLOpsPage: React.FC = () => {
                     {chartsLoading ? (
                         <div className="h-64 flex items-center justify-center">
                             <Loader2 className="w-6 h-6 animate-spin text-slate-300" />
+                        </div>
+                    ) : chartsError ? (
+                        <div className="h-64 flex flex-col items-center justify-center text-slate-400 gap-2">
+                            <AlertTriangle className="w-7 h-7 text-amber-400 opacity-80" />
+                            <p className="text-sm text-slate-500">Error cargando distribución.</p>
                         </div>
                     ) : predictionDistribution.every(b => b.count === 0) ? (
                         <div className="h-64 flex flex-col items-center justify-center text-slate-400">
@@ -861,7 +1209,9 @@ const MLOpsPage: React.FC = () => {
                     </div>
                     <div>
                         <p className="text-xs text-slate-400 uppercase tracking-wide mb-1">Features</p>
-                        <p className="font-semibold">14 variables</p>
+                        <p className="font-semibold">
+                            {modelInfo?.feature_count > 0 ? `${modelInfo.feature_count} variables` : '14 variables'}
+                        </p>
                     </div>
                     <div>
                         <p className="text-xs text-slate-400 uppercase tracking-wide mb-1">Repositorio</p>

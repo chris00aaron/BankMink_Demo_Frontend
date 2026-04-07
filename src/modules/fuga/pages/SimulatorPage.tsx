@@ -20,7 +20,8 @@ import {
     X,
     Trophy,
     RotateCcw,
-    Layers
+    Layers,
+    Rocket,
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 
@@ -56,6 +57,12 @@ const SimulatorPage = () => {
 
     // ── Multi-simulation results ────────────────────────────────────
     const [results, setResults] = useState<ScenarioResult[]>([]);
+
+    // ── Launch Campaign modal state ─────────────────────────────────
+    const [showCampaignModal, setShowCampaignModal] = useState(false);
+    const [campaignSourceIdx, setCampaignSourceIdx] = useState<number>(0);
+    const [campaignName, setCampaignName] = useState('');
+    const [launchingCampaign, setLaunchingCampaign] = useState(false);
 
     // ── Create Segment modal state ──────────────────────────────────
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -136,8 +143,41 @@ const SimulatorPage = () => {
         }
     };
 
+    // ── Launch Campaign from simulation ────────────────────────────
+    const openCampaignModal = (idx: number) => {
+        const r = results[idx];
+        setCampaignSourceIdx(idx);
+        setCampaignName(`${r.segmentName} — ${r.interventionName}`);
+        setShowCampaignModal(true);
+    };
+
+    const handleLaunchCampaign = async () => {
+        if (!campaignName.trim()) { toast.error('El nombre de la campaña es obligatorio'); return; }
+        const r = results[campaignSourceIdx];
+        setLaunchingCampaign(true);
+        try {
+            await ChurnService.createCampaign({
+                name: campaignName.trim(),
+                segmentId: r.segmentId,
+                strategyId: r.strategyId,
+                budget: r.campaignCost,
+                expectedRoi: r.roi,
+                targetedCount: r.totalClients,
+                targets: r.targetIds,
+            });
+            toast.success(`Campaña "${campaignName.trim()}" creada con éxito`);
+            setShowCampaignModal(false);
+        } catch (error) {
+            console.error(error);
+            toast.error('Error al crear la campaña');
+        } finally {
+            setLaunchingCampaign(false);
+        }
+    };
+
     // ── Delete Segment ──────────────────────────────────────────────
     const handleDeleteSegment = async (seg: ScenarioSegment) => {
+        if (!window.confirm(`¿Eliminar el segmento "${seg.name}"? Esta acción no se puede deshacer.`)) return;
         try {
             await ChurnService.deleteSegment(seg.id);
             setAvailableSegments(prev => prev.filter(s => s.id !== seg.id));
@@ -172,8 +212,18 @@ const SimulatorPage = () => {
     const formatMoney = (val: number) =>
         new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(val);
 
+    const formatNumber = (val: number, decimals: number = 0) =>
+        new Intl.NumberFormat('es-ES', { 
+            minimumFractionDigits: decimals, 
+            maximumFractionDigits: decimals 
+        }).format(val);
+
     const latestResult = results.length > 0 ? results[results.length - 1] : null;
-    const bestRoiIndex = results.length > 0 ? results.reduce((best, r, i) => r.roi > results[best].roi ? i : best, 0) : -1;
+    const bestRoiIndex = (() => {
+        if (results.length <= 1) return -1;
+        const idx = results.reduce((best, r, i) => r.roi > results[best].roi ? i : best, 0);
+        return results[idx].roi > 0 ? idx : -1;
+    })();
 
     return (
         <div className="p-8 bg-[#F8FAFC] min-h-screen text-slate-800 font-sans">
@@ -371,6 +421,7 @@ const SimulatorPage = () => {
                                                 <th className="text-right px-5 py-3 font-semibold">Capital Salvado</th>
                                                 <th className="text-right px-5 py-3 font-semibold">Costo</th>
                                                 <th className="text-right px-5 py-3 font-semibold">ROI</th>
+                                                <th className="px-5 py-3 font-semibold"></th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -395,17 +446,27 @@ const SimulatorPage = () => {
                                                         </td>
                                                         <td className="px-5 py-3 font-medium text-slate-700">{r.segmentName}</td>
                                                         <td className="px-5 py-3 text-slate-600">{r.interventionName}</td>
-                                                        <td className="px-5 py-3 text-right text-slate-600">{r.totalClients}</td>
+                                                        <td className="px-5 py-3 text-right text-slate-600">{formatNumber(r.totalClients)}</td>
                                                         <td className="px-5 py-3 text-right">
-                                                            <span className="font-semibold text-emerald-600">{retained}</span>
+                                                            <span className="font-semibold text-emerald-600">{formatNumber(retained)}</span>
                                                             <span className="text-slate-400 text-xs ml-1">({r.retentionImprovement.toFixed(1)}%)</span>
                                                         </td>
                                                         <td className="px-5 py-3 text-right font-medium text-emerald-600">{formatMoney(capitalSaved)}</td>
                                                         <td className="px-5 py-3 text-right text-slate-600">{formatMoney(r.campaignCost)}</td>
                                                         <td className="px-5 py-3 text-right">
                                                             <span className={`font-bold ${r.roi > 100 ? 'text-emerald-600' : r.roi > 0 ? 'text-yellow-600' : 'text-red-500'}`}>
-                                                                {r.roi.toFixed(0)}%
+                                                                {formatNumber(r.roi)}%
                                                             </span>
+                                                        </td>
+                                                        <td className="px-5 py-3">
+                                                            <button
+                                                                onClick={() => openCampaignModal(i)}
+                                                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors whitespace-nowrap"
+                                                                title="Convertir esta simulación en campaña"
+                                                            >
+                                                                <Rocket className="w-3.5 h-3.5" />
+                                                                Lanzar
+                                                            </button>
                                                         </td>
                                                     </tr>
                                                 );
@@ -427,14 +488,14 @@ const SimulatorPage = () => {
                                             <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Clientes Retenidos</p>
                                             <div className="flex items-end gap-2 mt-2">
                                                 <span className="text-3xl font-bold text-slate-800">
-                                                    {latestResult.clientsAtRiskBefore - latestResult.clientsAtRiskAfter}
+                                                    {formatNumber(latestResult.clientsAtRiskBefore - latestResult.clientsAtRiskAfter)}
                                                 </span>
                                                 <span className="text-sm font-medium text-emerald-600 mb-1 flex items-center">
                                                     <TrendingUp className="w-3 h-3 mr-1" />
                                                     {latestResult.retentionImprovement.toFixed(1)}%
                                                 </span>
                                             </div>
-                                            <p className="text-xs text-slate-400 mt-2">de {latestResult.totalClients} clientes totales</p>
+                                            <p className="text-xs text-slate-400 mt-2">de {formatNumber(latestResult.totalClients)} clientes totales</p>
                                         </div>
 
                                         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden group">
@@ -457,7 +518,7 @@ const SimulatorPage = () => {
                                             <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">ROI Campaña</p>
                                             <div className="flex items-end gap-2 mt-2">
                                                 <span className={`text-3xl font-bold ${latestResult.roi > 0 ? 'text-purple-600' : 'text-red-500'}`}>
-                                                    {latestResult.roi.toFixed(0)}%
+                                                    {formatNumber(latestResult.roi)}%
                                                 </span>
                                             </div>
                                             <p className="text-xs text-slate-400 mt-2">Costo: {formatMoney(latestResult.campaignCost)}</p>
@@ -487,7 +548,7 @@ const SimulatorPage = () => {
                                                         <YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 12, fontWeight: 600 }} />
                                                         <Tooltip
                                                             cursor={{ fill: 'transparent' }}
-                                                            formatter={(val: number) => [`${val} Clientes`, 'Riesgo Alto']}
+                                                            formatter={(val: number, _name: string, props: any) => [`${val} Clientes`, props?.payload?.name ?? '']}
                                                         />
                                                         <Bar dataKey="value" barSize={30} radius={[0, 4, 4, 0]}>
                                                             {
@@ -500,7 +561,7 @@ const SimulatorPage = () => {
                                                 </ResponsiveContainer>
                                             </div>
                                             <div className="mt-4 p-3 bg-slate-50 rounded-lg text-xs text-slate-500 text-center">
-                                                La estrategia reduce el grupo de riesgo en un <strong>{((latestResult.clientsAtRiskBefore - latestResult.clientsAtRiskAfter) / latestResult.clientsAtRiskBefore * 100).toFixed(1)}%</strong>.
+                                                La estrategia reduce el grupo de riesgo en un <strong>{latestResult.clientsAtRiskBefore > 0 ? ((latestResult.clientsAtRiskBefore - latestResult.clientsAtRiskAfter) / latestResult.clientsAtRiskBefore * 100).toFixed(1) : '0.0'}%</strong>.
                                             </div>
                                         </div>
 
@@ -527,8 +588,9 @@ const SimulatorPage = () => {
                                                 </div>
                                                 <div className="flex justify-between items-center">
                                                     <span className="text-sm font-bold text-slate-800">Beneficio Neto</span>
-                                                    <span className="font-bold text-indigo-600 text-lg">
-                                                        +{formatMoney((latestResult.capitalAtRiskBefore - latestResult.capitalAtRiskAfter) - latestResult.campaignCost)}
+                                                    <span className={`font-bold text-lg ${(latestResult.capitalAtRiskBefore - latestResult.capitalAtRiskAfter - latestResult.campaignCost) >= 0 ? 'text-indigo-600' : 'text-red-500'}`}>
+                                                        {(latestResult.capitalAtRiskBefore - latestResult.capitalAtRiskAfter - latestResult.campaignCost) >= 0 ? '+' : ''}
+                                                        {formatMoney((latestResult.capitalAtRiskBefore - latestResult.capitalAtRiskAfter) - latestResult.campaignCost)}
                                                     </span>
                                                 </div>
                                             </div>
@@ -557,6 +619,103 @@ const SimulatorPage = () => {
                     )}
                 </div>
             </div>
+
+            {/* ═══════════════════════════════════════════════════════════════
+                LAUNCH CAMPAIGN MODAL
+               ═══════════════════════════════════════════════════════════════ */}
+            {showCampaignModal && results[campaignSourceIdx] && (() => {
+                const r = results[campaignSourceIdx];
+                return (
+                    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+                            <div className="flex items-center justify-between p-6 border-b border-slate-100">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-indigo-50 rounded-lg">
+                                        <Rocket className="w-5 h-5 text-indigo-600" />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-lg font-bold text-slate-800">Lanzar como Campaña</h2>
+                                        <p className="text-xs text-slate-500">La simulación se guardará como campaña activa</p>
+                                    </div>
+                                </div>
+                                <button onClick={() => setShowCampaignModal(false)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                                    <X className="w-5 h-5 text-slate-400" />
+                                </button>
+                            </div>
+
+                            <div className="p-6 space-y-5">
+                                {/* Resumen de la simulación */}
+                                <div className="bg-slate-50 rounded-xl border border-slate-100 p-4 space-y-2 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500">Segmento</span>
+                                        <span className="font-semibold text-slate-800">{r.segmentName}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500">Estrategia</span>
+                                        <span className="font-semibold text-slate-800">{r.interventionName}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500">Clientes objetivo</span>
+                                        <span className="font-semibold text-slate-800">{formatNumber(r.totalClients)}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500">Presupuesto</span>
+                                        <span className="font-semibold text-slate-800">{formatMoney(r.campaignCost)}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500">ROI proyectado</span>
+                                        <span className={`font-bold ${r.roi > 100 ? 'text-emerald-600' : r.roi > 0 ? 'text-yellow-600' : 'text-red-500'}`}>
+                                            {formatNumber(r.roi)}%
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Nombre de la campaña */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">Nombre de la Campaña</label>
+                                    <input
+                                        type="text"
+                                        value={campaignName}
+                                        onChange={e => setCampaignName(e.target.value)}
+                                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow"
+                                        placeholder="Nombre de la campaña..."
+                                        autoFocus
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
+                                <button
+                                    onClick={() => setShowCampaignModal(false)}
+                                    className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={handleLaunchCampaign}
+                                    disabled={launchingCampaign || !campaignName.trim()}
+                                    className={`px-5 py-2 text-sm font-bold text-white rounded-lg transition-all flex items-center gap-2 ${launchingCampaign || !campaignName.trim()
+                                        ? 'bg-slate-300 cursor-not-allowed'
+                                        : 'bg-indigo-600 hover:bg-indigo-700 shadow-md hover:shadow-lg'
+                                    }`}
+                                >
+                                    {launchingCampaign ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                            Creando...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Rocket className="w-4 h-4" />
+                                            Crear Campaña
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
 
             {/* ═══════════════════════════════════════════════════════════════
                 CREATE SEGMENT MODAL

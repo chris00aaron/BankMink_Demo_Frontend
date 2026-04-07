@@ -1,38 +1,33 @@
 import React, { useState, useEffect } from 'react';
+
+interface ExecutiveMetrics {
+    totalAnalyzed:    number;
+    highRiskCount:    number;
+    mediumRiskCount:  number;
+    lowRiskCount:     number;
+    totalCampaigns:   number;
+    totalTargeted:    number;
+    totalConverted:   number;
+    totalInvestment:  number;
+    strategicInsights: Array<{
+        cause:   string;
+        segment: string;
+        impact:  'ALTO' | 'MEDIO' | 'BAJO';
+        pct:     number;
+    }>;
+}
 import {
-    TrendingDown,
-    DollarSign,
-    BarChart3,
-    ShieldCheck,
+    Users,
     AlertTriangle,
+    ShieldCheck,
+    BarChart3,
+    Megaphone,
+    TrendingDown,
     Target,
-    Zap
+    TrendingUp,
 } from 'lucide-react';
-import {
-    Tooltip, ResponsiveContainer, Cell,
-    PieChart as RePieChart, Pie
-} from 'recharts';
 import { ChurnService } from '../churn.service';
 
-// ── Fix 1: Badge dinámico según efficiencyScore ──────────────────────────────
-const EFFICIENCY_CONFIG: Record<string, {
-    text: string; classes: string; iconClass: string; useAlert: boolean;
-}> = {
-    'MÁXIMA': { text: 'Operación Rentable',   classes: 'bg-emerald-50 border-emerald-100 text-emerald-700', iconClass: 'text-emerald-600', useAlert: false },
-    'ALTA':   { text: 'Operación Estable',    classes: 'bg-blue-50 border-blue-100 text-blue-700',         iconClass: 'text-blue-600',    useAlert: false },
-    'MEDIA':  { text: 'Atención Requerida',   classes: 'bg-amber-50 border-amber-100 text-amber-700',      iconClass: 'text-amber-600',   useAlert: true  },
-    'BAJA':   { text: 'Intervención Urgente', classes: 'bg-red-50 border-red-100 text-red-700',            iconClass: 'text-red-600',     useAlert: true  },
-};
-
-// ── Fix 3: Mapa de efficiencyScore (string) a valor numérico ─────────────────
-const EFFICIENCY_SCORE_MAP: Record<string, number> = {
-    'MÁXIMA': 95, 'ALTA': 80, 'MEDIA': 60, 'BAJA': 35,
-};
-
-// ── Fix 5: Anchos de barra por nivel de impacto ──────────────────────────────
-const IMPACT_WIDTH: Record<string, string> = {
-    'ALTO': '85%', 'MEDIO': '55%', 'BAJO': '25%',
-};
 const IMPACT_COLOR: Record<string, string> = {
     'ALTO': 'bg-red-500', 'MEDIO': 'bg-orange-400', 'BAJO': 'bg-yellow-400',
 };
@@ -41,30 +36,34 @@ const IMPACT_BADGE: Record<string, string> = {
 };
 
 const ExecutiveInsightsPage: React.FC = () => {
-    const [metrics, setMetrics] = useState<any>(null);
+    const [metrics, setMetrics] = useState<ExecutiveMetrics | null>(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        const fetchExecutiveData = async () => {
-            try {
-                // En un entorno real, ChurnService tendría getExecutiveMetrics()
-                // Simulamos la llamada basándonos en el nuevo endpoint del backend
-                const data = await ChurnService.getExecutiveMetrics();
-                setMetrics(data);
-            } catch (e) {
-                console.error("Error cargando métricas ejecutivas", e);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchExecutiveData();
+        ChurnService.getExecutiveMetrics()
+            .then(setMetrics)
+            .catch(e => {
+                console.error('Error cargando métricas ejecutivas', e);
+                setError('No se pudieron cargar las métricas ejecutivas. Verifique que el servidor esté disponible.');
+            })
+            .finally(() => setLoading(false));
     }, []);
 
     if (loading) return (
         <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="animate-pulse flex flex-col items-center">
-                <div className="h-12 w-12 bg-slate-200 rounded-full mb-4"></div>
-                <div className="h-4 w-48 bg-slate-200 rounded"></div>
+            <div className="animate-pulse flex flex-col items-center gap-4">
+                <div className="h-12 w-12 bg-slate-200 rounded-full" />
+                <div className="h-4 w-48 bg-slate-200 rounded" />
+            </div>
+        </div>
+    );
+
+    if (error) return (
+        <div className="p-6">
+            <div className="bg-red-50 border border-red-200 rounded-xl p-6 flex items-center gap-3">
+                <AlertTriangle className="text-red-600 w-6 h-6 flex-shrink-0" />
+                <p className="text-red-700 font-medium">{error}</p>
             </div>
         </div>
     );
@@ -72,158 +71,224 @@ const ExecutiveInsightsPage: React.FC = () => {
     const formatMoney = (val: number) =>
         new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(val);
 
-    // ── Valores derivados de datos reales ────────────────────────────────────
-    const erosion: number  = metrics?.capitalErosionProyectada ?? 0;
-    const savings: number  = metrics?.estimatedSavings ?? 0;
-    const vipRisk: number  = metrics?.vipCapitalAtRisk ?? 0;
+    const totalAnalyzed: number  = metrics?.totalAnalyzed  ?? 0;
+    const highRisk: number       = metrics?.highRiskCount   ?? 0;
+    const mediumRisk: number     = metrics?.mediumRiskCount ?? 0;
+    const lowRisk: number        = metrics?.lowRiskCount    ?? 0;
 
-    // Fix 2: % retenido real (estimatedSavings / capitalErosionProyectada)
-    const retentionPct = erosion > 0 ? ((savings / erosion) * 100).toFixed(1) : '0.0';
+    // Largest Remainder Method — garantiza que highPct + mediumPct + lowPct = 100
+    const [highPct, mediumPct, lowPct] = (() => {
+        if (totalAnalyzed === 0) return [0, 0, 0];
+        const raw = [
+            { key: 0, exact: (highRisk   / totalAnalyzed) * 100 },
+            { key: 1, exact: (mediumRisk / totalAnalyzed) * 100 },
+            { key: 2, exact: (lowRisk    / totalAnalyzed) * 100 },
+        ];
+        const floored = raw.map(r => ({ ...r, floor: Math.floor(r.exact), remainder: r.exact - Math.floor(r.exact) }));
+        const totalFloored = floored.reduce((s, r) => s + r.floor, 0);
+        let remaining = 100 - totalFloored;
+        floored.sort((a, b) => b.remainder - a.remainder);
+        floored.forEach(r => { if (remaining > 0) { r.floor++; remaining--; } });
+        floored.sort((a, b) => a.key - b.key);
+        return [floored[0].floor, floored[1].floor, floored[2].floor];
+    })();
 
-    // Fix 3: eficiencia como número
-    const efficiencyKey   = metrics?.efficiencyScore ?? '';
-    const efficiencyValue = EFFICIENCY_SCORE_MAP[efficiencyKey] ?? 0;
-    const efficiencyConf  = EFFICIENCY_CONFIG[efficiencyKey] ?? EFFICIENCY_CONFIG['MÁXIMA'];
+    const totalCampaigns: number  = metrics?.totalCampaigns  ?? 0;
+    const totalTargeted: number   = metrics?.totalTargeted   ?? 0;
+    const totalConverted: number  = metrics?.totalConverted  ?? 0;
+    const totalInvestment: number = metrics?.totalInvestment ?? 0;
 
-    // Fix 4: % VIP en riesgo sobre total erosión
-    const vipRiskPct  = erosion > 0 ? Math.round((vipRisk / erosion) * 1000) / 10 : 25;
-    const vipSafePct  = Math.round((100 - vipRiskPct) * 10) / 10;
+    const conversionRate = totalTargeted > 0
+        ? ((totalConverted / totalTargeted) * 100).toFixed(1)
+        : '0.0';
+
+    const insights = metrics?.strategicInsights ?? [];
 
     return (
         <div className="p-6 space-y-8 animate-in fade-in duration-500">
-            {/* Header Estratégico */}
-            <div className="flex justify-between items-end">
-                <div>
-                    <h1 className="text-3xl font-black text-[#0F172A] tracking-tight">Visión Ejecutiva del Negocio</h1>
-                    <p className="text-slate-500 text-sm mt-1">Análisis de impacto financiero y optimización de capital retenido.</p>
-                </div>
-                {/* Fix 1: badge dinámico según efficiencyScore del backend */}
-                <div className={`flex items-center gap-2 px-4 py-2 border rounded-lg ${efficiencyConf.classes}`}>
-                    {efficiencyConf.useAlert
-                        ? <AlertTriangle className={`w-5 h-5 ${efficiencyConf.iconClass}`} />
-                        : <ShieldCheck    className={`w-5 h-5 ${efficiencyConf.iconClass}`} />
-                    }
-                    <span className={`text-sm font-bold`}>Estado: {efficiencyConf.text}</span>
-                </div>
+
+            {/* Header */}
+            <div>
+                <h1 className="text-3xl font-black text-[#0F172A] tracking-tight">Visión Ejecutiva</h1>
+                <p className="text-slate-500 text-sm mt-1">
+                    Resumen estratégico del riesgo de fuga, sus causas y las acciones en curso.
+                </p>
             </div>
 
-            {/* Fila 1: KPIs Monetarios (C-Level Focus) */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex justify-between items-start mb-4">
-                        <div className="p-2 bg-red-50 rounded-lg"><TrendingDown className="w-6 h-6 text-red-600" /></div>
-                        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">{retentionPct}% retenido</span>
-                    </div>
-                    <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Erosión de Capital (30d)</p>
-                    <h2 className="text-2xl font-black text-[#0F172A] mt-1">{formatMoney(metrics?.capitalErosionProyectada ?? 0)}</h2>
-                    <p className="text-[10px] text-slate-400 mt-2 italic">*Capital proyectado a salir por riesgo de fuga.</p>
-                </div>
+            {/* ── Sección 1: Perfil de Riesgo de la Cartera ── */}
+            <section>
+                <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <Users className="w-4 h-4" />
+                    Perfil de Riesgo de la Cartera
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                    <div className="flex justify-between items-start mb-4">
-                        <div className="p-2 bg-emerald-50 rounded-lg"><Zap className="w-6 h-6 text-emerald-600" /></div>
-                        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">ROI: {metrics?.retentionROI ?? 0}x</span>
-                    </div>
-                    <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Capital Salvado (Est.)</p>
-                    <h2 className="text-2xl font-black text-[#0F172A] mt-1">{formatMoney(metrics?.estimatedSavings ?? 0)}</h2>
-                    <p className="text-[10px] text-slate-400 mt-2 italic">Impacto directo de campañas de retención.</p>
-                </div>
-
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                    <div className="flex justify-between items-start mb-4">
-                        <div className="p-2 bg-indigo-50 rounded-lg"><DollarSign className="w-6 h-6 text-indigo-600" /></div>
-                    </div>
-                    <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Inversión en Retención</p>
-                    <h2 className="text-2xl font-black text-[#0F172A] mt-1">{formatMoney(metrics?.totalInvestment ?? 0)}</h2>
-                    <p className="text-[10px] text-slate-400 mt-2 italic">Costo operativo de beneficios y upgrades.</p>
-                </div>
-
-                <div className="bg-[#0F172A] p-6 rounded-2xl shadow-xl shadow-indigo-100 text-white">
-                    <div className="flex justify-between items-start mb-4">
-                        <div className="p-2 bg-indigo-500/20 rounded-lg"><Target className="w-6 h-6 text-indigo-300" /></div>
-                    </div>
-                    <p className="text-indigo-300/60 text-xs font-bold uppercase tracking-wider">Eficiencia de Cartera</p>
-                    <h2 className="text-3xl font-black text-white mt-1">{efficiencyValue}%</h2>
-                    <p className="text-indigo-300/50 text-[10px] mt-0.5">{efficiencyKey || '—'}</p>
-                    <div className="w-full bg-slate-700 h-1.5 rounded-full mt-3 overflow-hidden">
-                        <div className="bg-indigo-400 h-full transition-all duration-700"
-                            style={{ width: `${efficiencyValue}%` }} />
-                    </div>
-                </div>
-            </div>
-
-            {/* Fila 2: Análisis Estratégico */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-                {/* Causas Sistémicas */}
-                <div className="lg:col-span-2 bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
-                    <h3 className="text-lg font-bold text-[#0F172A] mb-6 flex items-center gap-2">
-                        <BarChart3 className="w-5 h-5 text-indigo-600" />
-                        Distribución Estratégica de Fuga (Causas Sistémicas)
-                    </h3>
-                    <div className="space-y-6">
-                        {metrics?.strategicInsights?.map((insight: any, i: number) => (
-                            <div key={i} className="group p-4 bg-slate-50 rounded-xl border border-transparent hover:border-slate-200 hover:bg-white transition-all cursor-default">
-                                {/* Fix 5: badge y barra con 3 niveles: ALTO / MEDIO / BAJO */}
-                                <div className="flex justify-between items-center mb-2">
-                                    <span className="text-sm font-bold text-slate-700">{insight.cause}</span>
-                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded ${IMPACT_BADGE[insight.impact] ?? 'bg-slate-100 text-slate-600'}`}>
-                                        IMPACTO {insight.impact}
-                                    </span>
-                                </div>
-                                <div className="flex items-center gap-4">
-                                    <div className="flex-1 bg-slate-200 h-2 rounded-full overflow-hidden">
-                                        <div className={`h-full rounded-full transition-all duration-500 ${IMPACT_COLOR[insight.impact] ?? 'bg-slate-400'}`}
-                                            style={{ width: IMPACT_WIDTH[insight.impact] ?? '20%' }} />
-                                    </div>
-                                    <span className="text-xs font-bold text-slate-400">Segmento: {insight.segment}</span>
-                                </div>
+                    {/* Alto Riesgo */}
+                    <div className="bg-white rounded-2xl border border-red-100 p-6 shadow-sm">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="p-2 bg-red-50 rounded-lg">
+                                <AlertTriangle className="w-5 h-5 text-red-600" />
                             </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Composición de Capital VIP en Riesgo */}
-                <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center">
-                    {/* Fix 4: título y datos del donut calculados desde backend */}
-                    <h3 className="text-lg font-bold text-[#0F172A] mb-8 w-full text-left">Composición del Capital en Riesgo</h3>
-                    <div className="h-64 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <RePieChart>
-                                <Pie
-                                    data={[
-                                        { name: 'Capital No VIP en Riesgo', value: vipSafePct  },
-                                        { name: 'Capital VIP en Riesgo',    value: vipRiskPct  }
-                                    ]}
-                                    innerRadius={60}
-                                    outerRadius={80}
-                                    paddingAngle={5}
-                                    dataKey="value"
-                                >
-                                    <Cell fill="#10B981" />
-                                    <Cell fill="#F43F5E" />
-                                </Pie>
-                                <Tooltip formatter={(val: any) => [`${val}%`, '']} />
-                            </RePieChart>
-                        </ResponsiveContainer>
-                    </div>
-                    <div className="mt-4 space-y-2 w-full">
-                        <div className="flex justify-between items-center text-sm font-medium">
-                            <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-emerald-500"></span> No VIP en Riesgo</div>
-                            <span className="text-slate-600">{vipSafePct}%</span>
+                            <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded-full">
+                                Alto &gt;70%
+                            </span>
                         </div>
-                        <div className="flex justify-between items-center text-sm font-medium text-red-600">
-                            <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-red-500"></span> VIP en Riesgo</div>
-                            <span className="font-bold">{vipRiskPct}%</span>
+                        <p className="text-3xl font-black text-slate-800">{highRisk.toLocaleString('es-ES')}</p>
+                        <p className="text-sm text-slate-500 mt-1">clientes en riesgo crítico</p>
+                        <div className="mt-4 w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                            <div className="bg-red-500 h-full rounded-full transition-all duration-700"
+                                style={{ width: `${highPct}%` }} />
                         </div>
+                        <p className="text-xs text-slate-400 mt-1">{highPct}% del total analizado</p>
                     </div>
-                    <div className="mt-8 text-center bg-slate-50 p-4 rounded-xl w-full border border-dashed border-slate-300">
-                        <p className="text-[10px] text-slate-400 font-bold uppercase">Exposición Total VIP</p>
-                        <p className="text-2xl font-black text-red-600">{formatMoney(vipRisk)}</p>
-                    </div>
-                </div>
 
-            </div>
+                    {/* Riesgo Medio */}
+                    <div className="bg-white rounded-2xl border border-orange-100 p-6 shadow-sm">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="p-2 bg-orange-50 rounded-lg">
+                                <TrendingDown className="w-5 h-5 text-orange-500" />
+                            </div>
+                            <span className="text-xs font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded-full">
+                                Medio 45–70%
+                            </span>
+                        </div>
+                        <p className="text-3xl font-black text-slate-800">{mediumRisk.toLocaleString('es-ES')}</p>
+                        <p className="text-sm text-slate-500 mt-1">clientes en zona de vigilancia</p>
+                        <div className="mt-4 w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                            <div className="bg-orange-400 h-full rounded-full transition-all duration-700"
+                                style={{ width: `${mediumPct}%` }} />
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1">{mediumPct}% del total analizado</p>
+                    </div>
+
+                    {/* Bajo Riesgo */}
+                    <div className="bg-white rounded-2xl border border-emerald-100 p-6 shadow-sm">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="p-2 bg-emerald-50 rounded-lg">
+                                <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                            </div>
+                            <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full">
+                                Bajo &lt;45%
+                            </span>
+                        </div>
+                        <p className="text-3xl font-black text-slate-800">{lowRisk.toLocaleString('es-ES')}</p>
+                        <p className="text-sm text-slate-500 mt-1">clientes con perfil estable</p>
+                        <div className="mt-4 w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                            <div className="bg-emerald-500 h-full rounded-full transition-all duration-700"
+                                style={{ width: `${lowPct}%` }} />
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1">{lowPct}% del total analizado</p>
+                    </div>
+
+                </div>
+                <p className="text-xs text-slate-400 mt-2 text-right">
+                    Total analizado por el modelo: {totalAnalyzed.toLocaleString('es-ES')} clientes
+                </p>
+            </section>
+
+            {/* ── Sección 2: Causas Principales de Fuga ── */}
+            <section>
+                <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <BarChart3 className="w-4 h-4" />
+                    Causas Principales de Fuga
+                </h2>
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                    {insights.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-12 text-center text-slate-400 space-y-2">
+                            <BarChart3 className="w-10 h-10 text-slate-200" />
+                            <p className="text-sm font-medium">Sin datos suficientes</p>
+                            <p className="text-xs">
+                                Genera predicciones desde el Centro de Mando<br />
+                                o la sección Inteligencia de Riesgo.
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {insights.map((insight, i) => (
+                                <div key={i}
+                                    className="p-4 bg-slate-50 rounded-xl hover:bg-white border border-transparent hover:border-slate-200 transition-all">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className="text-sm font-bold text-slate-700">{insight.cause}</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs text-slate-400">
+                                                {insight.pct}% de clientes en riesgo
+                                            </span>
+                                            <span className={`text-[10px] font-black px-2 py-0.5 rounded ${IMPACT_BADGE[insight.impact] ?? 'bg-slate-100 text-slate-600'}`}>
+                                                {insight.impact}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex-1 bg-slate-200 h-2.5 rounded-full overflow-hidden">
+                                            <div
+                                                className={`h-full rounded-full transition-all duration-700 ${IMPACT_COLOR[insight.impact] ?? 'bg-slate-400'}`}
+                                                style={{ width: `${Math.min(insight.pct ?? 0, 100)}%` }}
+                                            />
+                                        </div>
+                                        <span className="text-xs text-slate-400 whitespace-nowrap">
+                                            Seg.: {insight.segment}
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </section>
+
+            {/* ── Sección 3: Acciones en Curso ── */}
+            <section>
+                <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <Megaphone className="w-4 h-4" />
+                    Acciones en Curso — Campañas de Retención
+                </h2>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+
+                    <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                        <div className="p-2 bg-indigo-50 rounded-lg w-fit mb-4">
+                            <Megaphone className="w-5 h-5 text-indigo-600" />
+                        </div>
+                        <p className="text-3xl font-black text-slate-800">{totalCampaigns}</p>
+                        <p className="text-sm text-slate-500 mt-1">campañas registradas</p>
+                    </div>
+
+                    <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                        <div className="p-2 bg-blue-50 rounded-lg w-fit mb-4">
+                            <Target className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <p className="text-3xl font-black text-slate-800">{totalTargeted.toLocaleString('es-ES')}</p>
+                        <p className="text-sm text-slate-500 mt-1">clientes alcanzados</p>
+                    </div>
+
+                    <div className="bg-[#0F172A] rounded-2xl p-6 shadow-xl text-white">
+                        <div className="p-2 bg-white/10 rounded-lg w-fit mb-4">
+                            <ShieldCheck className="w-5 h-5 text-indigo-300" />
+                        </div>
+                        <p className="text-3xl font-black text-white">{formatMoney(totalInvestment)}</p>
+                        <p className="text-sm text-indigo-300/70 mt-1">inversión total en campañas</p>
+                    </div>
+
+                    <div className="bg-white rounded-2xl border border-emerald-100 p-6 shadow-sm">
+                        <div className="p-2 bg-emerald-50 rounded-lg w-fit mb-4">
+                            <TrendingUp className="w-5 h-5 text-emerald-600" />
+                        </div>
+                        <p className="text-3xl font-black text-slate-800">
+                            {totalConverted.toLocaleString('es-ES')}
+                            <span className="text-base font-semibold text-slate-400 ml-1">
+                                ({conversionRate}%)
+                            </span>
+                        </p>
+                        <p className="text-sm text-slate-500 mt-1">clientes convertidos</p>
+                        {totalTargeted > 0 && (
+                            <p className="text-xs text-slate-400 mt-2">
+                                de {totalTargeted.toLocaleString('es-ES')} contactados
+                            </p>
+                        )}
+                    </div>
+
+                </div>
+            </section>
+
         </div>
     );
 };

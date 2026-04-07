@@ -29,6 +29,9 @@ const GeographyPage: React.FC = () => {
 
     const totalCustomers = countryData.reduce((sum, c) => sum + c.totalCustomers, 0);
     const totalHighRisk = countryData.reduce((sum, c) => sum + c.highRisk, 0);
+    const highestChurnCountry = countryData.length > 0
+        ? countryData.reduce((prev, curr) => curr.churnRate > prev.churnRate ? curr : prev)
+        : null;
 
     // Función para obtener color según tasa de fuga
     const getColorByChurn = (rate: number) => {
@@ -310,18 +313,23 @@ const GeographyPage: React.FC = () => {
             </div>
 
             {/* Insights */}
-            <div className="mt-6 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl p-6 border border-emerald-100">
-                <div className="flex items-start gap-3">
-                    <TrendingUp className="w-6 h-6 text-emerald-600 mt-0.5" />
-                    <div>
-                        <h3 className="font-semibold text-emerald-800">Insight Clave</h3>
-                        <p className="text-sm text-emerald-700 mt-1">
-                            Según los datos en tiempo real, <strong>Alemania</strong> presenta la mayor tasa de fuga
-                            con un balance promedio crítico. Se recomienda implementar campañas de retención focalizadas en esta región.
-                        </p>
+            {highestChurnCountry && (
+                <div className="mt-6 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl p-6 border border-emerald-100">
+                    <div className="flex items-start gap-3">
+                        <TrendingUp className="w-6 h-6 text-emerald-600 mt-0.5" />
+                        <div>
+                            <h3 className="font-semibold text-emerald-800">Insight Clave</h3>
+                            <p className="text-sm text-emerald-700 mt-1">
+                                Según los datos en tiempo real, <strong>{highestChurnCountry.country}</strong> presenta
+                                la mayor tasa de fuga ({highestChurnCountry.churnRate.toFixed(1)}%)
+                                con {highestChurnCountry.highRisk.toLocaleString()} clientes en alto riesgo
+                                y un balance promedio de €{highestChurnCountry.avgBalance.toLocaleString()}.
+                                Se recomienda implementar campañas de retención focalizadas en esta región.
+                            </p>
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
         </div>
     );
 };
