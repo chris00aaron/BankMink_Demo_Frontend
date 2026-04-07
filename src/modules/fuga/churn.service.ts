@@ -1,8 +1,11 @@
-import axios from 'axios';
+// Servicio para comunicarse con la API de churn/fuga
+// Usa el cliente centralizado que adjunta automáticamente el token JWT
+
+import { apiRequest } from '@shared/services/apiClient';
 import { ChurnSimulationRequest, ChurnPredictionResponse, CustomerPageResponse, ScenarioResult, ScenarioSegment, ScenarioIntervention, SegmentRule, CampaignLog, CreateCampaignRequest, TrainResult, PerformanceStatus, TrainingHistoryPoint, PredictionBucket } from './types';
 
-// Configura la URL base (usando Proxy de Vite)
-const API_URL = '/api/v1/churn';
+// Prefijo de ruta (sin /api, ya que apiRequest lo agrega)
+const BASE = '/v1/churn';
 
 // Note: IN_MEMORY_CAMPAIGNS removed — campaigns now persist in the database via backend API
 
@@ -19,7 +22,6 @@ const evaluateRules = (customer: any, rules: SegmentRule[]): boolean => {
             case '<': return value < target;
             case '>=': return value >= target;
             case '<=': return value <= target;
-            case '=':
             case '==': return value == target;
             case '!=': return value != target;
             default: return false;
@@ -30,29 +32,31 @@ const evaluateRules = (customer: any, rules: SegmentRule[]): boolean => {
 export const ChurnService = {
     // 1. Obtener clientes paginados para el dashboard
     getCustomersPaginated: async (page: number = 0, size: number = 50, search: string = '', country?: string, riskLevel?: string): Promise<CustomerPageResponse> => {
-        const response = await axios.get<CustomerPageResponse>(`${API_URL}/customers`, {
-            params: { page, size, search, country: country || undefined, riskLevel: riskLevel || undefined }
+        const params = new URLSearchParams({
+            page: page.toString(),
+            size: size.toString(),
         });
-        return response.data;
+        if (search) params.append('search', search);
+        if (country) params.append('country', country);
+        if (riskLevel) params.append('riskLevel', riskLevel);
+
+        return apiRequest<CustomerPageResponse>(`${BASE}/customers?${params.toString()}`);
     },
 
     // 2. Simular Escenario (Conectado a /simulate)
     simulate: async (data: ChurnSimulationRequest): Promise<ChurnPredictionResponse> => {
-        const response = await axios.post<ChurnPredictionResponse>(`${API_URL}/simulate`, data);
-        return response.data;
+        return apiRequest<ChurnPredictionResponse>(`${BASE}/simulate`, 'POST', data);
     },
 
     // 3. Analizar Cliente Real (Conectado a /analyze/{id})
     analyzeCustomer: async (id: number): Promise<ChurnPredictionResponse> => {
-        const response = await axios.post<ChurnPredictionResponse>(`${API_URL}/analyze/${id}`);
-        return response.data;
+        return apiRequest<ChurnPredictionResponse>(`${BASE}/analyze/${id}`, 'POST');
     },
 
     // 3.1 Obtener Historial de Riesgo (Real)
     getHistory: async (id: number): Promise<any[]> => {
         try {
-            const response = await axios.get<any[]>(`${API_URL}/history/${id}`);
-            return response.data;
+            return await apiRequest<any[]>(`${BASE}/history/${id}`);
         } catch (error) {
             console.warn("Historial no disponible. El componente usará su fallback visual.");
             return []; // El componente usará su fallback si recibe array vacío
@@ -62,8 +66,7 @@ export const ChurnService = {
     // 3.2 Obtener Recomendación "Next Best Action" (Real)
     getRecommendation: async (id: number): Promise<ScenarioIntervention | null> => {
         try {
-            const response = await axios.get<ScenarioIntervention>(`${API_URL}/recommendation/${id}`);
-            return response.data;
+            return await apiRequest<ScenarioIntervention>(`${BASE}/recommendation/${id}`);
         } catch (error) {
             console.warn("Backend no disponible para recomendación.");
             return null;
@@ -72,28 +75,23 @@ export const ChurnService = {
 
     // 3.3 Registrar Interacción con Cliente
     logInteraction: async (id: number, actionType: string): Promise<void> => {
-        await axios.post(`${API_URL}/interact/${id}`, null, {
-            params: { actionType }
-        });
+        await apiRequest<void>(`${BASE}/interact/${id}?actionType=${encodeURIComponent(actionType)}`, 'POST');
     },
 
     // 4. Estadísticas Geográficas
     getGeographyStats: async (): Promise<import('./types').GeographyStats[]> => {
-        const response = await axios.get<import('./types').GeographyStats[]>(`${API_URL}/geography`);
-        return response.data;
+        return apiRequest<import('./types').GeographyStats[]>(`${BASE}/geography`);
     },
 
     // 5. Métricas MLOps
     getMLOpsMetrics: async (): Promise<import('./types').MLOpsMetrics> => {
-        const response = await axios.get<import('./types').MLOpsMetrics>(`${API_URL}/mlops`);
-        return response.data;
+        return apiRequest<import('./types').MLOpsMetrics>(`${BASE}/mlops`);
     },
 
     // 6. Obtener Definiciones de Segmentos (Desde BD)
     getSegments: async (): Promise<ScenarioSegment[]> => {
         try {
-            const response = await axios.get<ScenarioSegment[]>(`${API_URL}/config/segments`);
-            return response.data;
+            return await apiRequest<ScenarioSegment[]>(`${BASE}/config/segments`);
         } catch (error) {
             // Fallback: Datos que coinciden con los INSERTs del SQL
             return [
@@ -129,20 +127,18 @@ export const ChurnService = {
 
     // 6.1 Crear Segmento Personalizado (Persiste en BD)
     createSegment: async (segment: Omit<ScenarioSegment, 'id'>): Promise<ScenarioSegment> => {
-        const response = await axios.post<ScenarioSegment>(`${API_URL}/config/segments`, segment);
-        return response.data;
+        return apiRequest<ScenarioSegment>(`${BASE}/config/segments`, 'POST', segment);
     },
 
     // 6.2 Eliminar Segmento
     deleteSegment: async (id: number | string): Promise<void> => {
-        await axios.delete(`${API_URL}/config/segments/${id}`);
+        await apiRequest<void>(`${BASE}/config/segments/${id}`, 'DELETE');
     },
 
     // 7. Obtener Estrategias Disponibles (Desde BD)
     getStrategies: async (): Promise<ScenarioIntervention[]> => {
         try {
-            const response = await axios.get<ScenarioIntervention[]>(`${API_URL}/config/strategies`);
-            return response.data;
+            return await apiRequest<ScenarioIntervention[]>(`${BASE}/config/strategies`);
         } catch (error) {
             // Fallback: Datos que coinciden con los INSERTs del SQL
             return [
@@ -224,8 +220,7 @@ export const ChurnService = {
     // 9. GESTIÓN DE CAMPAÑAS — Real Backend Persistence (M2)
     getCampaignHistory: async (): Promise<CampaignLog[]> => {
         try {
-            const response = await axios.get<CampaignLog[]>(`${API_URL}/campaigns`);
-            return response.data;
+            return await apiRequest<CampaignLog[]>(`${BASE}/campaigns`);
         } catch (error) {
             console.warn("Backend campaigns not available, returning empty list.");
             return [];
@@ -233,29 +228,15 @@ export const ChurnService = {
     },
 
     createCampaign: async (req: CreateCampaignRequest): Promise<CampaignLog> => {
-        const response = await axios.post<CampaignLog>(`${API_URL}/campaigns`, req);
-        return response.data;
+        return apiRequest<CampaignLog>(`${BASE}/campaigns`, 'POST', req);
     },
 
     // 10. AUTO-ENTRENAMIENTO
     trainModel: async (): Promise<TrainResult> => {
         try {
-            const response = await axios.post<TrainResult>(`${API_URL}/train`, {}, {
-                timeout: 120000 // 2 minutos de timeout para entrenamiento
-            });
-            return response.data;
+            return await apiRequest<TrainResult>(`${BASE}/train`, 'POST', {});
         } catch (error: any) {
-            // If the server returned a structured error response, use it
-            if (error.response?.data?.error) {
-                return {
-                    status: 'error',
-                    error: error.response.data.error
-                };
-            }
-            // Network error or timeout
-            const message = error.code === 'ECONNABORTED'
-                ? 'El entrenamiento excedió el tiempo de espera (2 min). Puede seguir ejecutándose en el servidor.'
-                : error.message || 'Error de conexión con el servidor.';
+            const message = error.message || 'Error de conexión con el servidor.';
             return {
                 status: 'error',
                 error: message
@@ -269,8 +250,7 @@ export const ChurnService = {
 
     getTrainingEvolution: async (): Promise<TrainingHistoryPoint[]> => {
         try {
-            const response = await axios.get<TrainingHistoryPoint[]>(`${API_URL}/mlops/training-evolution`);
-            return response.data;
+            return await apiRequest<TrainingHistoryPoint[]>(`${BASE}/mlops/training-evolution`);
         } catch {
             return [];
         }
@@ -278,8 +258,7 @@ export const ChurnService = {
 
     getPredictionDistribution: async (): Promise<PredictionBucket[]> => {
         try {
-            const response = await axios.get<PredictionBucket[]>(`${API_URL}/mlops/prediction-distribution`);
-            return response.data;
+            return await apiRequest<PredictionBucket[]>(`${BASE}/mlops/prediction-distribution`);
         } catch {
             return [];
         }
@@ -295,12 +274,11 @@ export const ChurnService = {
      */
     async getMonitorStatus(): Promise<PerformanceStatus> {
         try {
-            const response = await axios.get<PerformanceStatus>(`${API_URL}/monitor/status`);
-            return response.data;
+            return await apiRequest<PerformanceStatus>(`${BASE}/monitor/status`);
         } catch (error: any) {
             return {
                 status: 'error',
-                message: error.response?.data?.message || error.message || 'Error consultando estado del monitor.'
+                message: error.message || 'Error consultando estado del monitor.'
             };
         }
     },
@@ -311,14 +289,11 @@ export const ChurnService = {
      */
     async triggerEvaluation(): Promise<PerformanceStatus> {
         try {
-            const response = await axios.post<PerformanceStatus>(`${API_URL}/monitor/evaluate`, {}, {
-                timeout: 60000 // 1 minuto de timeout
-            });
-            return response.data;
+            return await apiRequest<PerformanceStatus>(`${BASE}/monitor/evaluate`, 'POST', {});
         } catch (error: any) {
             return {
                 status: 'error',
-                message: error.response?.data?.message || error.message || 'Error disparando evaluación manual.'
+                message: error.message || 'Error disparando evaluación manual.'
             };
         }
     },
@@ -328,8 +303,7 @@ export const ChurnService = {
      */
     getExecutiveMetrics: async (): Promise<any> => {
         try {
-            const response = await axios.get(`${API_URL}/executive-metrics`);
-            return response.data;
+            return await apiRequest(`${BASE}/executive-metrics`);
         } catch (error: any) {
             console.error('Error al obtener métricas ejecutivas:', error);
             // Fallback mock data if endpoint is not yet published in controller
@@ -348,4 +322,3 @@ export const ChurnService = {
         }
     },
 };
-
