@@ -1,15 +1,16 @@
 import { useState } from 'react';
-import { FileText, ArrowLeft, LogIn, UserPlus, Edit3 } from 'lucide-react';
+import { FileText, ArrowLeft, LogIn, UserPlus, Edit3, UserX } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import { AuditoriaLoginTab } from './components/AuditoriaLoginTab';
 import { AuditoriaCreationTab } from './components/AuditoriaCreationTab';
 import { AuditoriaUpdateTab } from './components/AuditoriaUpdateTab';
+import { AuditoriaDeactivationTab } from './components/AuditoriaDeactivationTab';
 
 interface AuditoriaModuleProps {
   onBack: () => void;
 }
 
-type TabType = 'login' | 'creation' | 'update';
+type TabType = 'login' | 'creation' | 'update' | 'deactivation';
 
 export function AuditoriaModule({ onBack }: AuditoriaModuleProps) {
   const [activeTab, setActiveTab] = useState<TabType>('login');
@@ -73,6 +74,16 @@ export function AuditoriaModule({ onBack }: AuditoriaModuleProps) {
               <Edit3 className="w-4 h-4" />
               Actualización de Datos
             </button>
+            <button
+              onClick={() => setActiveTab('deactivation')}
+              className={`px-4 py-2 flex items-center gap-2 rounded-lg font-medium transition-all whitespace-nowrap ${activeTab === 'deactivation'
+                ? 'bg-indigo-100 text-indigo-700'
+                : 'text-gray-600 hover:bg-gray-100'
+                }`}
+            >
+              <UserX className="w-4 h-4" />
+              Desactivación de Usuarios
+            </button>
           </div>
         </div>
       </header>
@@ -82,6 +93,7 @@ export function AuditoriaModule({ onBack }: AuditoriaModuleProps) {
         {activeTab === 'login' && <AuditoriaLoginTab />}
         {activeTab === 'creation' && <AuditoriaCreationTab />}
         {activeTab === 'update' && <AuditoriaUpdateTab />}
+        {activeTab === 'deactivation' && <AuditoriaDeactivationTab />}
       </main>
     </div>
   );

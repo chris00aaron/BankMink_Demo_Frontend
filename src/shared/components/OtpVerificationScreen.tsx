@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Shield, ArrowLeft, RefreshCw, Clock } from 'lucide-react';
 import bankMindLogo from '@shared/assets/logo_BankMind.png';
-import { Button } from '@shared/components/ui/button';
-import { Input } from '@shared/components/ui/input';
+import { Button } from '@shared/components/ui-atm/button';
+import { Input } from '@shared/components/ui-atm/input';
 
 interface OtpVerificationScreenProps {
     emailHint: string;
@@ -26,7 +26,6 @@ export function OtpVerificationScreen({
 }: OtpVerificationScreenProps) {
     const [code, setCode] = useState(['', '', '', '', '', '']);
     const [timeLeft, setTimeLeft] = useState(300); // 5 minutos
-    const [canResend, setCanResend] = useState(false);
     const [resendCooldown, setResendCooldown] = useState(0);
     const [resendCount, setResendCount] = useState(0);
     const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -34,7 +33,6 @@ export function OtpVerificationScreen({
     // Timer de expiración
     useEffect(() => {
         if (timeLeft <= 0) {
-            setCanResend(true);
             return;
         }
         const timer = setInterval(() => {
@@ -113,7 +111,6 @@ export function OtpVerificationScreen({
         await onResendCode();
         setResendCount(prev => prev + 1);
         setTimeLeft(300);
-        setCanResend(false);
         setResendCooldown(RESEND_COOLDOWN_SECONDS);
         setCode(['', '', '', '', '', '']);
         inputRefs.current[0]?.focus();

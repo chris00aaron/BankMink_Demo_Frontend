@@ -1,5 +1,10 @@
-import { useState } from 'react';
-import { Shield, Activity, Brain, ArrowRight, Sparkles, ChevronDown, TrendingDown, AlertTriangle, DollarSign, LogOut } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import {
+  Shield, Brain, ArrowRight, Sparkles, ChevronDown,
+  TrendingDown, AlertTriangle, DollarSign, LogOut,
+  ChevronLeft, ChevronRight, BarChart3, Cpu, Zap,
+  Users, LineChart, Target
+} from 'lucide-react';
 import { useAuth } from '@shared/contexts/AuthContext';
 import { ServiceType } from '@shared/types/index';
 import bankMindLogo from '@shared/assets/logo_BankMind.png';
@@ -9,100 +14,248 @@ interface HomePageProps {
   onLogout: () => void;
 }
 
+/* ─── Banner slide data ─── */
+const bannerSlides = [
+  {
+    title: 'Inteligencia Artificial\nal Servicio de la Banca',
+    subtitle: 'Plataforma integral de Machine Learning para la toma de decisiones financieras inteligentes, con modelos predictivos de última generación.',
+    accent: 'from-blue-500 via-cyan-400 to-teal-400',
+    bgGradient: 'from-slate-900 via-blue-950 to-slate-900',
+    icon: Brain,
+    particles: 'bg-blue-400',
+  },
+  {
+    title: 'Predicción de Riesgos\nen Tiempo Real',
+    subtitle: 'Detecta morosidad, fraudes y fugas de clientes antes de que impacten tu negocio. Modelos entrenados con datos reales del sector bancario.',
+    accent: 'from-violet-500 via-purple-400 to-fuchsia-400',
+    bgGradient: 'from-slate-900 via-purple-950 to-slate-900',
+    icon: Target,
+    particles: 'bg-purple-400',
+  },
+  {
+    title: 'Optimización Financiera\nBasada en Datos',
+    subtitle: 'Mejora la eficiencia operativa con simulaciones y estrategias automatizadas respaldadas por modelos de Machine Learning avanzados.',
+    accent: 'from-emerald-500 via-green-400 to-teal-400',
+    bgGradient: 'from-slate-900 via-emerald-950 to-slate-900',
+    icon: LineChart,
+    particles: 'bg-emerald-400',
+  },
+];
+
+/* ─── 4 Model Definitions (static info only) ─── */
+const models: Array<{
+  id: ServiceType;
+  title: string;
+  description: string;
+  techStack: string;
+  icon: typeof Shield;
+  gradient: string;
+  shadowColor: string;
+  features: string[];
+}> = [
+    {
+      id: 'morosidad-detalle',
+      title: 'Morosidad',
+      description: 'Predicción del riesgo de incumplimiento de pagos mediante análisis de patrones crediticios y comportamiento financiero del cliente.',
+      techStack: 'XGBoost · SHAP · Auto-reentrenamiento',
+      icon: TrendingDown,
+      gradient: 'from-rose-500 to-red-600',
+      shadowColor: 'shadow-rose-500/20',
+      features: ['Predicción Individual y Lote', 'Campañas de Cobranza', 'Simulación de Escenarios'],
+    },
+    {
+      id: 'anomalias-transaccionales',
+      title: 'Anomalías Transaccionales',
+      description: 'Detección inteligente de transacciones fraudulentas o anómalas utilizando modelos supervisados y no supervisados en tiempo real.',
+      techStack: 'XGBoost · Isolation Forest · Scoring',
+      icon: Shield,
+      gradient: 'from-blue-500 to-indigo-600',
+      shadowColor: 'shadow-blue-500/20',
+      features: ['Análisis en Tiempo Real', 'Scoring de Riesgo', 'Monitoreo de Modelo'],
+    },
+    {
+      id: 'demanda-efectivo',
+      title: 'Demanda de Efectivo',
+      description: 'Pronóstico de la demanda de efectivo en cajeros automáticos y sucursales para optimizar la gestión de liquidez y reducir costos operativos.',
+      techStack: 'Series Temporales · LSTM · Prophet',
+      icon: DollarSign,
+      gradient: 'from-emerald-500 to-green-600',
+      shadowColor: 'shadow-emerald-500/20',
+      features: ['Predicción por Sucursal', 'Optimización de Rutas', 'Alertas de Reabastecimiento'],
+    },
+    {
+      id: 'fuga-demanda',
+      title: 'Fuga de Clientes',
+      description: 'Detección temprana de clientes con riesgo de abandonar productos o servicios bancarios, permitiendo acciones de retención preventivas.',
+      techStack: 'Random Forest · Gradient Boosting',
+      icon: AlertTriangle,
+      gradient: 'from-amber-500 to-orange-600',
+      shadowColor: 'shadow-amber-500/20',
+      features: ['Segmentación de Riesgo', 'Campañas de Retención', 'Análisis de Churn'],
+    },
+  ];
+
+/* ─── Floating Particle Component ─── */
+function FloatingParticles({ colorClass }: { colorClass: string }) {
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden>
+      {Array.from({ length: 20 }).map((_, i) => (
+        <div
+          key={i}
+          className={`absolute rounded-full ${colorClass} opacity-20`}
+          style={{
+            width: `${Math.random() * 6 + 2}px`,
+            height: `${Math.random() * 6 + 2}px`,
+            left: `${Math.random() * 100}%`,
+            top: `${Math.random() * 100}%`,
+            animation: `floatParticle ${Math.random() * 10 + 8}s ease-in-out ${Math.random() * 5}s infinite alternate`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
+   HomePage Component
+   ═══════════════════════════════════════════════════ */
 export function HomePage({ onNavigateToService, onLogout }: HomePageProps) {
   const { user, isAdmin } = useAuth();
   const [showServicesDropdown, setShowServicesDropdown] = useState(false);
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const slideInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [hoveredCard, setHoveredCard] = useState<string | null>(null);
 
-  const services: Array<{
-    id: ServiceType;
-    title: string;
-    description: string;
-    icon: typeof Shield;
-    color: string;
-  }> = [
-      {
-        id: 'morosidad-detalle',
-        title: 'Morosidad Detalle',
-        description: 'Análisis detallado de patrones de morosidad y predicción de incumplimiento de pagos',
-        icon: TrendingDown,
-        color: 'red'
-      },
-      {
-        id: 'anomalias-transaccionales',
-        title: 'Anomalías Transaccionales',
-        description: 'Sistema avanzado de ML con XGBoost e Isolation Forest para identificar transacciones fraudulentas en tiempo real',
-        icon: Shield,
-        color: 'blue'
-      },
-      {
-        id: 'demanda-efectivo',
-        title: 'Demanda Efectivo',
-        description: 'Predicción de demanda de efectivo en cajeros automáticos y sucursales bancarias',
-        icon: DollarSign,
-        color: 'green'
-      },
-      {
-        id: 'fuga-demanda',
-        title: 'Fuga Demanda',
-        description: 'Detección temprana de clientes con riesgo de abandonar productos o servicios bancarios',
-        icon: AlertTriangle,
-        color: 'orange'
-      }
-    ];
+  /* Auto-play banner */
+  const startAutoPlay = () => {
+    if (slideInterval.current) clearInterval(slideInterval.current);
+    slideInterval.current = setInterval(() => {
+      goToSlide((prev: number) => (prev + 1) % bannerSlides.length);
+    }, 6000);
+  };
+
+  useEffect(() => {
+    startAutoPlay();
+    return () => {
+      if (slideInterval.current) clearInterval(slideInterval.current);
+    };
+  }, []);
+
+  const goToSlide = (indexOrFn: number | ((prev: number) => number)) => {
+    if (isTransitioning) return;
+    setIsTransitioning(true);
+    setCurrentSlide((prev) => {
+      const next = typeof indexOrFn === 'function' ? indexOrFn(prev) : indexOrFn;
+      return next;
+    });
+    setTimeout(() => setIsTransitioning(false), 700);
+    startAutoPlay();
+  };
+
+  const nextSlide = () => goToSlide((prev: number) => (prev + 1) % bannerSlides.length);
+  const prevSlide = () => goToSlide((prev: number) => (prev - 1 + bannerSlides.length) % bannerSlides.length);
+
+  const slide = bannerSlides[currentSlide];
+  const SlideIcon = slide.icon;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50">
-      {/* Top Navigation Bar */}
-      <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-white/70 border-b border-gray-200/50 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+    <div className="min-h-screen bg-gray-50">
+      {/* ═══ CSS Animations (injected inline) ═══ */}
+      <style>{`
+        @keyframes floatParticle {
+          0%   { transform: translate(0, 0) scale(1); }
+          100% { transform: translate(30px, -40px) scale(1.5); }
+        }
+        @keyframes slideInUp {
+          from { opacity: 0; transform: translateY(30px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to   { opacity: 1; }
+        }
+        @keyframes pulseGlow {
+          0%, 100% { opacity: 0.4; transform: scale(1); }
+          50%      { opacity: 0.7; transform: scale(1.05); }
+        }
+        @keyframes gradientShift {
+          0%   { background-position: 0% 50%; }
+          50%  { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        @keyframes orbit {
+          0%   { transform: rotate(0deg) translateX(120px) rotate(0deg); }
+          100% { transform: rotate(360deg) translateX(120px) rotate(-360deg); }
+        }
+        .banner-text-enter {
+          animation: slideInUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .card-hover-lift {
+          transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s ease;
+        }
+        .card-hover-lift:hover {
+          transform: translateY(-8px);
+        }
+        .gradient-animate {
+          background-size: 200% 200%;
+          animation: gradientShift 8s ease infinite;
+        }
+      `}</style>
+
+      {/* ═══ Navigation Bar ═══ */}
+      <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-white/80 border-b border-gray-200/60 shadow-sm">
+        <div className="max-w-7xl mx-auto px-6 py-3">
           <div className="flex items-center justify-between">
             {/* Logo */}
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden">
                 <img src={bankMindLogo} alt="BankMind" className="w-full h-full object-contain" />
               </div>
               <div>
-                <h1 className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+                <h1 className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
                   BankMind
                 </h1>
-                <p className="text-xs text-gray-500">INTELIGENCIA FINANCIERA EN TIEMPO REAL</p>
+                <p className="text-[10px] font-semibold tracking-widest text-gray-400 uppercase">
+                  Inteligencia Financiera
+                </p>
               </div>
             </div>
 
-            {/* Navigation Items */}
-            <div className="hidden md:flex items-center gap-8">
-              {/* Servicios Dropdown */}
+            {/* Nav Links */}
+            <div className="hidden md:flex items-center gap-6">
+              {/* Servicios dropdown */}
               <div className="relative">
                 <button
                   onClick={() => setShowServicesDropdown(!showServicesDropdown)}
-                  className="flex items-center gap-1 text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors"
+                  className="flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors px-3 py-2 rounded-lg hover:bg-blue-50/60"
                 >
-                  Servicios
-                  <ChevronDown className={`w-4 h-4 transition-transform ${showServicesDropdown ? 'rotate-180' : ''}`} />
+                  Modelos IA
+                  <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${showServicesDropdown ? 'rotate-180' : ''}`} />
                 </button>
 
                 {showServicesDropdown && (
                   <>
-                    <div
-                      className="fixed inset-0 z-10"
-                      onClick={() => setShowServicesDropdown(false)}
-                    ></div>
-                    <div className="absolute top-full mt-2 left-0 w-72 bg-white rounded-xl shadow-xl border border-gray-200 py-2 z-20">
-                      {services.map((service) => {
-                        const Icon = service.icon;
+                    <div className="fixed inset-0 z-10" onClick={() => setShowServicesDropdown(false)} />
+                    <div className="absolute top-full mt-2 left-0 w-80 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl shadow-gray-200/60 border border-gray-200/60 py-2 z-20 overflow-hidden">
+                      {models.map((model) => {
+                        const Icon = model.icon;
                         return (
                           <button
-                            key={service.id}
+                            key={model.id}
                             onClick={() => {
                               setShowServicesDropdown(false);
-                              onNavigateToService(service.id);
+                              onNavigateToService(model.id);
                             }}
-                            className="w-full px-4 py-3 flex items-center gap-3 hover:bg-blue-50 transition-colors text-left"
+                            className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gradient-to-r hover:from-blue-50 hover:to-transparent transition-all text-left group"
                           >
-                            <div className={`w-8 h-8 rounded-lg bg-gradient-to-br from-${service.color}-500 to-${service.color}-700 flex items-center justify-center flex-shrink-0`}>
+                            <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${model.gradient} flex items-center justify-center flex-shrink-0 shadow-md group-hover:scale-110 transition-transform`}>
                               <Icon className="w-4 h-4 text-white" />
                             </div>
-                            <span className="text-sm font-medium text-gray-900">{service.title}</span>
+                            <div>
+                              <span className="text-sm font-semibold text-gray-800 block">{model.title}</span>
+                              <span className="text-xs text-gray-400">{model.techStack.split(' · ')[0]}</span>
+                            </div>
                           </button>
                         );
                       })}
@@ -111,164 +264,188 @@ export function HomePage({ onNavigateToService, onLogout }: HomePageProps) {
                 )}
               </div>
 
-              {/* Admin-only menu items */}
+              {/* Admin links */}
               {isAdmin() && (
                 <>
                   <button
                     onClick={() => onNavigateToService('auditoria')}
-                    className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors"
+                    className="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors px-3 py-2 rounded-lg hover:bg-blue-50/60"
                   >
                     Auditoría
                   </button>
                   <button
                     onClick={() => onNavigateToService('gestion-usuarios')}
-                    className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors"
+                    className="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors px-3 py-2 rounded-lg hover:bg-blue-50/60"
                   >
-                    Gestión de Usuarios
+                    Usuarios
                   </button>
                 </>
               )}
-
-              <button className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors">
-                Soporte
-              </button>
             </div>
 
-            {/* User Section */}
-            <div className="flex items-center gap-4">
-              <div className="hidden md:block text-right">
-                <p className="text-sm font-medium text-gray-900">{user?.name}</p>
-                <p className="text-xs text-gray-500">
+            {/* User */}
+            <div className="flex items-center gap-3">
+              <div className="hidden md:flex flex-col items-end mr-1">
+                <p className="text-sm font-semibold text-gray-800">{user?.name}</p>
+                <p className="text-[11px] text-gray-400 font-medium">
                   {isAdmin() ? 'Administrador' : 'Operario'}
                 </p>
               </div>
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white text-sm font-semibold">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white text-sm font-bold shadow-lg shadow-blue-500/25">
                 {user?.name?.charAt(0)?.toUpperCase() || 'U'}
               </div>
               <button
                 onClick={onLogout}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-gray-200 hover:border-red-200"
+                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all border border-transparent hover:border-red-200"
                 title="Cerrar sesión"
               >
                 <LogOut className="w-4 h-4" />
-                <span className="hidden lg:inline">Cerrar sesión</span>
+                <span className="hidden lg:inline">Salir</span>
               </button>
             </div>
           </div>
         </div>
       </nav>
 
-      {/* Hero Section */}
-      <section className="pt-32 pb-20 px-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-100/80 border border-blue-200/50 mb-6">
-              <Sparkles className="w-4 h-4 text-blue-600" />
-              <span className="text-sm font-medium text-blue-700">Plataforma de IA Empresarial</span>
-            </div>
+      {/* ═══ Hero Banner ═══ */}
+      <section className="pt-16">
+        <div className={`relative overflow-hidden bg-gradient-to-br ${slide.bgGradient} gradient-animate transition-all duration-700`} style={{ minHeight: '480px' }}>
+          {/* Particles */}
+          <FloatingParticles colorClass={slide.particles} />
 
-            <h2 className="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 bg-clip-text text-transparent leading-tight">
-              Inteligencia Artificial para<br />Decisiones Empresariales
-            </h2>
-
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-10 leading-relaxed">
-              Potencia tu negocio con nuestra suite completa de herramientas de análisis predictivo,
-              detección de fraude y business intelligence impulsadas por IA de última generación.
-            </p>
-
-            <div className="flex items-center justify-center gap-4">
-              <button
-                onClick={() => onNavigateToService('anomalias-transaccionales')}
-                className="px-8 py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 transition-all flex items-center gap-2 group"
-              >
-                Explorar Servicios
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </button>
-              <button className="px-8 py-4 bg-white border-2 border-gray-200 text-gray-700 rounded-xl font-semibold hover:border-gray-300 hover:bg-gray-50 transition-all">
-                Ver Demo
-              </button>
+          {/* Decorative orbiting elements */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden>
+            <div className="relative w-[300px] h-[300px] opacity-10">
+              <div className="absolute inset-0" style={{ animation: 'orbit 20s linear infinite' }}>
+                <div className={`w-3 h-3 rounded-full bg-gradient-to-r ${slide.accent}`} />
+              </div>
+              <div className="absolute inset-0" style={{ animation: 'orbit 25s linear infinite reverse' }}>
+                <div className={`w-2 h-2 rounded-full bg-gradient-to-r ${slide.accent}`} />
+              </div>
             </div>
           </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto">
-            <div className="text-center">
-              <div className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent mb-2">
-                99.8%
+          {/* Large background glow */}
+          <div
+            className={`absolute -top-32 -right-32 w-[500px] h-[500px] rounded-full bg-gradient-to-br ${slide.accent} opacity-10 blur-3xl`}
+            style={{ animation: 'pulseGlow 6s ease-in-out infinite' }}
+            aria-hidden
+          />
+          <div
+            className={`absolute -bottom-20 -left-20 w-[400px] h-[400px] rounded-full bg-gradient-to-tr ${slide.accent} opacity-5 blur-3xl`}
+            aria-hidden
+          />
+
+          {/* Content */}
+          <div className="relative z-10 max-w-7xl mx-auto px-6 py-20 flex items-center" style={{ minHeight: '480px' }}>
+            <div className="flex-1 max-w-2xl">
+              {/* Badge */}
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/15 mb-8 banner-text-enter" key={`badge-${currentSlide}`}>
+                <Sparkles className="w-3.5 h-3.5 text-white/80" />
+                <span className="text-xs font-semibold text-white/80 tracking-wide uppercase">Plataforma IA Empresarial</span>
               </div>
-              <div className="text-sm text-gray-600">Precisión de Detección</div>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-purple-800 bg-clip-text text-transparent mb-2">
-                &lt;100ms
+
+              {/* Title */}
+              <h2
+                className="text-4xl md:text-5xl lg:text-[3.4rem] font-bold text-white leading-[1.15] mb-6 banner-text-enter whitespace-pre-line"
+                key={`title-${currentSlide}`}
+                style={{ animationDelay: '0.1s' }}
+              >
+                {slide.title}
+              </h2>
+
+              {/* Subtitle */}
+              <p
+                className="text-lg text-white/60 leading-relaxed mb-10 max-w-xl banner-text-enter"
+                key={`sub-${currentSlide}`}
+                style={{ animationDelay: '0.2s' }}
+              >
+                {slide.subtitle}
+              </p>
+
+              {/* CTA */}
+              <div
+                className="flex items-center gap-4 banner-text-enter"
+                key={`cta-${currentSlide}`}
+                style={{ animationDelay: '0.3s' }}
+              >
+                <button
+                  onClick={() => {
+                    const el = document.getElementById('models-section');
+                    el?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className={`px-7 py-3.5 bg-gradient-to-r ${slide.accent} text-slate-900 rounded-xl font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 group text-sm`}
+                >
+                  Explorar Modelos
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </button>
               </div>
-              <div className="text-sm text-gray-600">Tiempo de Respuesta</div>
             </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold bg-gradient-to-r from-green-600 to-green-800 bg-clip-text text-transparent mb-2">
-                24/7
+
+            {/* Right decorative icon */}
+            <div className="hidden lg:flex flex-1 items-center justify-center">
+              <div className="relative">
+                <div className={`w-48 h-48 rounded-3xl bg-gradient-to-br ${slide.accent} opacity-15 blur-2xl absolute inset-0`} style={{ animation: 'pulseGlow 4s ease-in-out infinite' }} />
+                <div className="relative w-40 h-40 rounded-3xl bg-white/5 backdrop-blur-md border border-white/10 flex items-center justify-center">
+                  <SlideIcon className="w-20 h-20 text-white/30" strokeWidth={1} />
+                </div>
+                {/* Floating mini-cards */}
+                <div className="absolute -top-8 -right-8 w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-sm border border-white/10 flex items-center justify-center" style={{ animation: 'floatParticle 6s ease-in-out infinite alternate' }}>
+                  <BarChart3 className="w-7 h-7 text-white/40" />
+                </div>
+                <div className="absolute -bottom-6 -left-10 w-14 h-14 rounded-xl bg-white/10 backdrop-blur-sm border border-white/10 flex items-center justify-center" style={{ animation: 'floatParticle 8s ease-in-out 2s infinite alternate' }}>
+                  <Cpu className="w-6 h-6 text-white/40" />
+                </div>
               </div>
-              <div className="text-sm text-gray-600">Monitoreo Activo</div>
             </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold bg-gradient-to-r from-orange-600 to-orange-800 bg-clip-text text-transparent mb-2">
-                6+
-              </div>
-              <div className="text-sm text-gray-600">Módulos IA</div>
+          </div>
+
+          {/* Banner controls */}
+          <div className="absolute bottom-6 left-0 right-0 z-20 flex items-center justify-center gap-4">
+            <button onClick={prevSlide} className="w-9 h-9 rounded-full bg-white/10 backdrop-blur-sm border border-white/15 flex items-center justify-center text-white/70 hover:bg-white/20 hover:text-white transition-all">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-2">
+              {bannerSlides.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => goToSlide(i)}
+                  className={`h-2 rounded-full transition-all duration-500 ${i === currentSlide
+                    ? `w-8 bg-gradient-to-r ${slide.accent}`
+                    : 'w-2 bg-white/30 hover:bg-white/50'
+                    }`}
+                />
+              ))}
             </div>
+
+            <button onClick={nextSlide} className="w-9 h-9 rounded-full bg-white/10 backdrop-blur-sm border border-white/15 flex items-center justify-center text-white/70 hover:bg-white/20 hover:text-white transition-all">
+              <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </section>
 
-      {/* Services Grid */}
-      <section className="py-20 px-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h3 className="text-3xl font-bold text-gray-900 mb-4">
-              Suite Completa de Servicios
-            </h3>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Accede a nuestras herramientas empresariales de inteligencia artificial
-              diseñadas para transformar tus operaciones
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {services.map((service) => {
-              const Icon = service.icon;
-              const colorClasses = {
-                blue: 'from-blue-500 to-blue-700',
-                purple: 'from-purple-500 to-purple-700',
-                green: 'from-green-500 to-green-700',
-                orange: 'from-orange-500 to-orange-700',
-                red: 'from-red-500 to-red-700',
-                indigo: 'from-indigo-500 to-indigo-700'
-              }[service.color];
-
+      {/* ═══ Stats Bar ═══ */}
+      <section className="relative -mt-8 z-10 px-6">
+        <div className="max-w-5xl mx-auto">
+          <div className="bg-white rounded-2xl shadow-xl shadow-gray-200/50 border border-gray-100 px-8 py-6 grid grid-cols-2 md:grid-cols-4 gap-6">
+            {[
+              { value: '4', label: 'Modelos IA', icon: Brain, color: 'text-blue-600' },
+              { value: 'ML/DL', label: 'Tecnología', icon: Cpu, color: 'text-purple-600' },
+              { value: '24/7', label: 'Monitoreo', icon: Zap, color: 'text-emerald-600' },
+              { value: 'Auto', label: 'Reentrenamiento', icon: BarChart3, color: 'text-amber-600' },
+            ].map((stat, i) => {
+              const Icon = stat.icon;
               return (
-                <div
-                  key={service.id}
-                  className="group relative rounded-2xl p-8 backdrop-blur-xl bg-white/80 border border-gray-200/50 shadow-lg hover:shadow-2xl transition-all duration-300 cursor-pointer"
-                  onClick={() => onNavigateToService(service.id)}
-                >
-                  <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${colorClasses} flex items-center justify-center mb-6 shadow-lg group-hover:scale-110 transition-transform`}>
-                    <Icon className="w-7 h-7 text-white" />
+                <div key={i} className="flex items-center gap-3">
+                  <div className={`w-11 h-11 rounded-xl bg-gray-50 flex items-center justify-center ${stat.color}`}>
+                    <Icon className="w-5 h-5" />
                   </div>
-
-                  <h4 className="text-xl font-bold text-gray-900 mb-3">
-                    {service.title}
-                  </h4>
-
-                  <p className="text-gray-600 mb-6 leading-relaxed">
-                    {service.description}
-                  </p>
-
-                  <button
-                    className="flex items-center gap-2 font-semibold text-sm text-blue-600 group-hover:gap-3 transition-all"
-                  >
-                    Acceder Ahora
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                  </button>
+                  <div>
+                    <div className="text-lg font-bold text-gray-900">{stat.value}</div>
+                    <div className="text-xs text-gray-400 font-medium">{stat.label}</div>
+                  </div>
                 </div>
               );
             })}
@@ -276,48 +453,100 @@ export function HomePage({ onNavigateToService, onLogout }: HomePageProps) {
         </div>
       </section>
 
-      {/* Features Section */}
-      <section className="py-20 px-6 bg-gradient-to-br from-blue-50 to-white">
+      {/* ═══ Models Section ═══ */}
+      <section id="models-section" className="py-20 px-6">
         <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="text-center p-8">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-500/30">
-                <Shield className="w-8 h-8 text-white" />
-              </div>
-              <h4 className="text-xl font-bold text-gray-900 mb-3">Seguridad de Nivel Bancario</h4>
-              <p className="text-gray-600">
-                Protección de datos con encriptación de grado militar y cumplimiento total de normativas internacionales
-              </p>
+          {/* Section header */}
+          <div className="text-center mb-14">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-50 border border-blue-100 mb-4">
+              <Cpu className="w-3.5 h-3.5 text-blue-600" />
+              <span className="text-xs font-semibold text-blue-600 tracking-wide uppercase">Modelos Disponibles</span>
             </div>
+            <h3 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+              Suite de Modelos Predictivos
+            </h3>
+            <p className="text-gray-500 max-w-2xl mx-auto leading-relaxed">
+              Cuatro modelos de Machine Learning especializados en el análisis de riesgo financiero, cada uno diseñado para resolver problemas específicos del sector bancario.
+            </p>
+          </div>
 
-            <div className="text-center p-8">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center mx-auto mb-6 shadow-lg shadow-purple-500/30">
-                <Brain className="w-8 h-8 text-white" />
-              </div>
-              <h4 className="text-xl font-bold text-gray-900 mb-3">IA de Última Generación</h4>
-              <p className="text-gray-600">
-                Modelos de machine learning avanzados entrenados con millones de puntos de datos para máxima precisión
-              </p>
-            </div>
+          {/* Model cards grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {models.map((model) => {
+              const Icon = model.icon;
+              const isHovered = hoveredCard === model.id;
+              return (
+                <div
+                  key={model.id}
+                  className={`group relative rounded-2xl p-7 bg-white border border-gray-200/70 cursor-pointer card-hover-lift ${model.shadowColor} ${isHovered ? 'shadow-2xl' : 'shadow-lg shadow-gray-100'}`}
+                  onClick={() => onNavigateToService(model.id)}
+                  onMouseEnter={() => setHoveredCard(model.id)}
+                  onMouseLeave={() => setHoveredCard(null)}
+                >
+                  {/* Gradient stripe on top */}
+                  <div className={`absolute top-0 left-0 right-0 h-1 rounded-t-2xl bg-gradient-to-r ${model.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
 
-            <div className="text-center p-8">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-green-500 to-green-700 flex items-center justify-center mx-auto mb-6 shadow-lg shadow-green-500/30">
-                <Activity className="w-8 h-8 text-white" />
-              </div>
-              <h4 className="text-xl font-bold text-gray-900 mb-3">Tiempo Real 24/7</h4>
-              <p className="text-gray-600">
-                Procesamiento y análisis instantáneo con monitoreo continuo y alertas automáticas
-              </p>
-            </div>
+                  <div className="flex items-start gap-5">
+                    {/* Icon */}
+                    <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${model.gradient} flex items-center justify-center shadow-lg ${model.shadowColor} flex-shrink-0 group-hover:scale-110 transition-transform duration-300`}>
+                      <Icon className="w-7 h-7 text-white" />
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-xl font-bold text-gray-900 mb-1.5 group-hover:text-gray-800">
+                        {model.title}
+                      </h4>
+                      <p className="text-sm text-gray-500 leading-relaxed mb-4">
+                        {model.description}
+                      </p>
+
+                      {/* Tech badge */}
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-gray-50 border border-gray-100">
+                          <Cpu className="w-3 h-3 text-gray-400" />
+                          <span className="text-[11px] font-semibold text-gray-500 tracking-wide">{model.techStack}</span>
+                        </div>
+                      </div>
+
+                      {/* Features */}
+                      <div className="flex flex-wrap gap-2">
+                        {model.features.map((f, i) => (
+                          <span
+                            key={i}
+                            className="text-[11px] font-medium text-gray-400 bg-gray-50 px-2.5 py-1 rounded-md border border-gray-100"
+                          >
+                            {f}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Arrow */}
+                  <div className="absolute bottom-7 right-7 w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-300 group-hover:bg-gradient-to-r group-hover:from-blue-500 group-hover:to-indigo-500 group-hover:text-white transition-all duration-300 group-hover:shadow-lg group-hover:shadow-blue-500/25">
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 py-12 px-6">
-        <div className="max-w-7xl mx-auto text-center text-gray-500 text-sm">
-          <p className="mb-2">© 2026 BankMind. Todos los derechos reservados.</p>
-          <p>Plataforma de Inteligencia Artificial Empresarial de Nueva Generación</p>
+      {/* ═══ Footer ═══ */}
+      <footer className="bg-white border-t border-gray-100 py-10 px-6">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <img src={bankMindLogo} alt="BankMind" className="w-8 h-8 object-contain opacity-60" />
+            <div>
+              <p className="text-sm font-semibold text-gray-400">BankMind</p>
+              <p className="text-xs text-gray-300">Inteligencia Artificial Empresarial</p>
+            </div>
+          </div>
+          <p className="text-xs text-gray-300">
+            © 2026 BankMind · Plataforma de IA para el Sector Financiero
+          </p>
         </div>
       </footer>
     </div>

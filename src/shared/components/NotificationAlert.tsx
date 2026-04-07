@@ -1,5 +1,4 @@
-import React from 'react';
-import { Bell, CheckCircle, CircleX } from 'lucide-react';
+import { Bell, CheckCircle, CircleX } from "lucide-react";
 
 interface NotificationAlertProps {
   monto: number;
@@ -8,7 +7,12 @@ interface NotificationAlertProps {
   onClose: () => void;
 }
 
-export function NotificationAlert({ monto, onConfirm, onReject, onClose }: NotificationAlertProps) {
+export function NotificationAlert({
+  monto,
+  onConfirm,
+  onReject,
+  onClose,
+}: NotificationAlertProps) {
   return (
     <div className="fixed top-4 right-4 bg-white rounded-lg shadow-2xl border-2 border-red-500 max-w-sm w-full z-50 animate-in slide-in-from-top-5">
       <div className="p-5">
@@ -21,9 +25,9 @@ export function NotificationAlert({ monto, onConfirm, onReject, onClose }: Notif
               Alerta de Transacción Sospechosa
             </h4>
             <p className="text-gray-700 mb-3">
-              ¿Reconoces esta transacción de{' '}
+              ¿Reconoces esta transacción de{" "}
               <span className="font-bold text-red-600">
-                S/ {monto.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                S/ {monto.toLocaleString("es-PE", { minimumFractionDigits: 2 })}
               </span>
               ?
             </p>
@@ -35,7 +39,7 @@ export function NotificationAlert({ monto, onConfirm, onReject, onClose }: Notif
             <CircleX className="w-5 h-5" />
           </button>
         </div>
-        
+
         <div className="flex gap-3">
           <button
             onClick={onConfirm}

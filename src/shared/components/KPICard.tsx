@@ -1,5 +1,5 @@
 import { LucideIcon } from "lucide-react";
-import { Card, CardContent } from "./ui/card";
+import { Card, CardContent } from "./ui-atm/card";
 
 interface KPICardProps {
   title: string;

@@ -67,29 +67,7 @@ function StatCard({
   );
 }
 
-// Tooltip personalizado para la gráfica
-function ChartTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 shadow-xl">
-      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-        {label}
-      </p>
-      {payload.map((entry: any) => (
-        <div key={entry.name} className="flex items-center gap-2 text-sm">
-          <span
-            className="inline-block h-2 w-2 rounded-full"
-            style={{ backgroundColor: entry.color }}
-          />
-          <span className="text-slate-400">{entry.name}:</span>
-          <span className="font-semibold text-slate-100">
-            S/ {Number(entry.value).toLocaleString("es-PE")}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
+
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -237,6 +215,12 @@ export function DataLoadingView() {
           loading={chartLoading}
           error={chartError}
           refetch={refetchChart}
+          appliedDesde={appliedDesde}
+          appliedHasta={appliedHasta}
+          onApplyDates={(desde, hasta) => {
+            setAppliedDesde(desde);
+            setAppliedHasta(hasta);
+          }}
         />
       </div>
 

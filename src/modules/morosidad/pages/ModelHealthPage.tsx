@@ -489,19 +489,26 @@ function HistoryTab({ histories }: { histories: TrainingHistoryEntry[] }) {
 // TAB 4: PREDICCIÓN VS REALIDAD
 // ═══════════════════════════════════════════
 
-function ValidationTab({ validationLogs }: { validationLogs: ValidationLog[] }) {
+function ValidationTab({ validationLogs, daysActive }: { validationLogs: ValidationLog[], daysActive?: number }) {
     if (validationLogs.length === 0) {
         return (
-            <div className="text-center py-16 text-slate-400">
+            <div className="relative text-center py-16 bg-white rounded-xl border border-zinc-200 shadow-sm text-slate-400">
+                {daysActive !== undefined && (
+                    <div className="absolute top-4 right-4 text-left">
+                        <span className="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-semibold border border-emerald-100 shadow-sm">
+                            Modelo activo: {daysActive} días
+                        </span>
+                    </div>
+                )}
                 <TrendingUp className="w-12 h-12 mx-auto mb-4 text-slate-600" />
-                <p className="text-lg">Sin validaciones mensuales</p>
-                <p className="text-sm mt-1">La validación se ejecuta el 1ro de cada mes automáticamente</p>
+                <p className="text-lg font-medium text-gray-500">Sin validaciones históricas</p>
+                <p className="text-sm mt-1">La validación se ejecuta progresivamente tras el despliegue del modelo</p>
             </div>
         );
     }
 
     const chartData = validationLogs.map(v => ({
-        mes: new Date(v.monitoringDate).toLocaleDateString('es-PE', { month: 'short', year: '2-digit' }),
+        fecha: new Date(v.monitoringDate).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }),
         'Tasa Real': +(v.actualDefaultRate * 100).toFixed(2),
         'Tasa Predicha': +(v.predictedDefaultRate * 100).toFixed(2),
         aucReal: v.aucRocReal,
@@ -512,15 +519,22 @@ function ValidationTab({ validationLogs }: { validationLogs: ValidationLog[] }) 
         <div className="space-y-6">
             {/* Gráfica de tasas */}
             <div className="bg-white rounded-xl p-6 border border-zinc-200 shadow-sm">
-                <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-emerald-600" />
-                    Tendencia Mensual — Predicción vs Realidad
-                </h3>
+                <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                        <TrendingUp className="w-5 h-5 text-emerald-600" />
+                        Tendencia Histórica — Predicción vs Realidad
+                    </h3>
+                    {daysActive !== undefined && (
+                        <span className="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-semibold border border-emerald-100">
+                            Modelo activo: {daysActive} días
+                        </span>
+                    )}
+                </div>
                 <div className="h-72">
                     <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                            <XAxis dataKey="mes" stroke="#64748b" tick={{ fill: '#64748b' }} />
+                            <XAxis dataKey="fecha" stroke="#64748b" tick={{ fill: '#64748b' }} />
                             <YAxis stroke="#64748b" tick={{ fill: '#64748b' }} tickFormatter={(v) => `${v}%`} />
                             <Tooltip
                                 contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', borderRadius: '8px' }}
@@ -540,13 +554,13 @@ function ValidationTab({ validationLogs }: { validationLogs: ValidationLog[] }) 
             {/* Tabla de métricas reales */}
             <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
                 <div className="p-4 border-b border-zinc-100 bg-zinc-50">
-                    <h3 className="text-lg font-semibold text-gray-900">Métricas Reales por Mes</h3>
+                    <h3 className="text-lg font-semibold text-gray-900">Métricas Reales Históricas</h3>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="text-gray-500 bg-zinc-50 border-b border-zinc-200 uppercase text-xs">
-                                <th className="text-left py-3 px-4">Mes</th>
+                                <th className="text-left py-3 px-4">Fecha</th>
                                 <th className="text-right py-3 px-4">AUC Real</th>
                                 <th className="text-right py-3 px-4">KS Real</th>
                                 <th className="text-right py-3 px-4">Tasa Predicha</th>
@@ -559,7 +573,7 @@ function ValidationTab({ validationLogs }: { validationLogs: ValidationLog[] }) 
                                 const diff = Math.abs(v.predictedDefaultRate - v.actualDefaultRate) * 100;
                                 return (
                                     <tr key={i} className="hover:bg-zinc-50 transition-colors">
-                                        <td className="py-3 px-4 text-gray-900 font-medium">{chartData[i].mes}</td>
+                                        <td className="py-3 px-4 text-gray-900 font-medium">{chartData[i].fecha}</td>
                                         <td className="py-3 px-4 text-right font-mono text-blue-600 font-semibold">{v.aucRocReal?.toFixed(4) ?? '—'}</td>
                                         <td className="py-3 px-4 text-right font-mono text-purple-600 font-semibold">{v.ksReal?.toFixed(4) ?? '—'}</td>
                                         <td className="py-3 px-4 text-right font-mono text-gray-700">{(v.predictedDefaultRate * 100).toFixed(2)}%</td>
@@ -1068,7 +1082,7 @@ export default function ModelHealthPage() {
                         <HistoryTab histories={histories} />
                     )}
                     {activeTab === 'validation' && (
-                        <ValidationTab validationLogs={validationLogs} />
+                        <ValidationTab validationLogs={validationLogs} daysActive={production?.daysActive} />
                     )}
                     {activeTab === 'policy' && (
                         <PolicyTab activePolicy={monitoringPolicyActive} allPolicies={monitoringPolicies} onRefresh={fetchAll} />

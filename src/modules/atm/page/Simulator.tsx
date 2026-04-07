@@ -13,7 +13,7 @@ import {
 import { useWeather } from "../hooks/useWeatherQueries";
 import { useSimulation } from "../hooks/useAtmQueries";
 import { KPICard } from "../components/KPICard";
-import { ComparisonChart, ConfidenceIntervalChart } from "../components/Charts";
+import { ComparisonChart, ConfidenceIntervalChart, ConfidenceLinesChart } from "../components/Charts";
 import { toast } from "sonner";
 import styles from "../styles/Simulator.module.css";
 import { EmptyStateSimulator } from "../components/EmptyStateSimulator";
@@ -128,8 +128,8 @@ export function Simulator() {
   const risk = riskConfig[riskLevel];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30">
-      <div className={`space-y-6 p-6 lg:p-8 max-w-7xl mx-auto pb-16 ${styles.fadeIn}`}>
+    <div className="space-y-6 animate-in fade-in duration-500 pb-10">
+      <div className={`space-y-6 p-4 sm:p-6 lg:px-8 w-full mx-auto 2xl:max-w-[1500px] pb-16 ${styles.fadeIn}`}>
         {/* Header */}
         <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
           <div>
@@ -254,7 +254,7 @@ export function Simulator() {
         ) : (
           <div className={`space-y-6 ${styles.resultsSection}`}>
             {/* KPI Cards */}
-            <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <section className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-4 sm:gap-6">
               <KPICard
                 title="Escenario Pesimista"
                 value={`$${totalPessimistic.toLocaleString()}`}
@@ -296,8 +296,8 @@ export function Simulator() {
               </div>
             </section>
 
-            {/* Charts Section - Improved spacing with xl breakpoint */}
-            <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            {/* Charts Section - Improved spacing with xl/2xl breakpoint for sidebar */}
+            <section className="grid grid-cols-1 2xl:grid-cols-2 gap-6 lg:gap-8 min-h-[400px]">
               <ChartContainer 
                 title="Predicción vs Histórico por ATM"
                 subtitle="Comparativa de retiros reales vs proyectados"
@@ -312,6 +312,14 @@ export function Simulator() {
                 className={styles.chartContainerAlt}
               >
                 <ConfidenceIntervalChart data={chartData} />
+              </ChartContainer>
+
+              <ChartContainer 
+                title="Análisis de Límites de Predicción"
+                subtitle="Valores máximos y mínimos con líneas continuas"
+                className={`2xl:col-span-2 min-h-0 ${styles.chartContainerAlt}`}
+              >
+                <ConfidenceLinesChart data={chartData} />
               </ChartContainer>
             </section>
 

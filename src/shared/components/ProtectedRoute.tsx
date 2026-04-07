@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAuth } from '../hook/useAuth';
+import { useAuth } from '../contexts/AuthContext';
 import { ServiceType } from '../types/index';
 
 interface ProtectedRouteProps {
