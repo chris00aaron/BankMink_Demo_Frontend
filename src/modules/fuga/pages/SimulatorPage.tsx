@@ -108,7 +108,12 @@ const SimulatorPage = () => {
             toast.success("Escenario simulado con éxito");
         } catch (error) {
             console.error(error);
-            toast.error("Error al ejecutar simulación: " + (error as any).message);
+            const msg = (error as any).message ?? '';
+            if (msg.includes('No se encontraron clientes')) {
+                toast.warning(`Sin clientes para "${selectedSegment.name}": ningún cliente cumple las reglas del segmento en la base de datos actual.`);
+            } else {
+                toast.error("Error al ejecutar simulación: " + msg);
+            }
         } finally {
             setLoading(false);
         }

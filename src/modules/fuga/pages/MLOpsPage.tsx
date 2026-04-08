@@ -182,10 +182,12 @@ const MLOpsPage: React.FC = () => {
         setIsEvaluating(true);
         try {
             const result = await ChurnService.triggerEvaluation();
+            await fetchMonitorStatus();
+            // Recargar gráfico de evolución siempre — la evaluación genera un nuevo registro
+            await fetchChartData();
             if (result.autoTrainingTriggered) {
                 await fetchMetrics();
             }
-            await fetchMonitorStatus();
         } catch (err) {
             console.error('Error evaluating performance:', err);
             setMonitorStatus({ status: 'error', message: 'Error al ejecutar la evaluación. Verifique que la API Python esté disponible.' });
@@ -1043,20 +1045,21 @@ const MLOpsPage: React.FC = () => {
                             <LineChart data={trainingEvolution} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
                                 <XAxis
-                                    dataKey="date"
                                     stroke="#94A3B8"
                                     tick={{ fontSize: 11 }}
-                                    tickFormatter={(val: string) => val.slice(5)}
+                                    tickFormatter={(idx: number) => trainingEvolution[idx]?.date?.slice(0, 5) ?? ''}
+                                    interval="preserveStartEnd"
                                 />
                                 <YAxis
                                     stroke="#94A3B8"
                                     tick={{ fontSize: 11 }}
-                                    domain={[0, 100]}
+                                    domain={([dataMin]: number[]) => [Math.max(0, Math.floor(dataMin - 3)), 100]}
                                     tickFormatter={(v: number) => `${v}%`}
                                 />
                                 <Tooltip
                                     contentStyle={{ borderRadius: '10px', border: '1px solid #E2E8F0', fontSize: 12 }}
                                     formatter={(value: number, name: string) => [`${value?.toFixed(1)}%`, name]}
+                                    labelFormatter={(idx: number) => trainingEvolution[idx]?.date ?? ''}
                                     labelStyle={{ fontWeight: 600, color: '#0F172A', marginBottom: 4 }}
                                 />
                                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 12 }} />
