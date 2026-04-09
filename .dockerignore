@@ -1,0 +1,12 @@
+node_modules
+dist
+.vscode
+.git
+.gitignore
+CREDENCIALES.md
+README.md
+*.log
+.env*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
