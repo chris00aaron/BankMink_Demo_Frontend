@@ -15,8 +15,8 @@ COPY package.json package-lock.json* ./
 RUN npm update -g npm && npm ci
 
 # ARG para inyectar la URL de la API durante la compilación
-ARG VITE_API_BASE_URL
-ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ARG VITE_API_BASE_URL=http://localhost:8080/api
+ARG VITE_API_TIMEOUT=30000
 
 # Copiamos el resto del código
 COPY . .
