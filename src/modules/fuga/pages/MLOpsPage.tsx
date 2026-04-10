@@ -1053,12 +1053,12 @@ const MLOpsPage: React.FC = () => {
                                 <YAxis
                                     stroke="#94A3B8"
                                     tick={{ fontSize: 11 }}
-                                    domain={([dataMin]: number[]) => [Math.max(0, Math.floor(dataMin - 3)), 100]}
+                                    domain={([dataMin]: any) => [Math.max(0, Math.floor(dataMin - 3)), 100]}
                                     tickFormatter={(v: number) => `${v}%`}
                                 />
                                 <Tooltip
                                     contentStyle={{ borderRadius: '10px', border: '1px solid #E2E8F0', fontSize: 12 }}
-                                    formatter={(value: number, name: string) => [`${value?.toFixed(1)}%`, name]}
+                                    formatter={(value: any, name: string) => [`${value?.toFixed(1)}%`, name]}
                                     labelFormatter={(idx: number) => trainingEvolution[idx]?.date ?? ''}
                                     labelStyle={{ fontWeight: 600, color: '#0F172A', marginBottom: 4 }}
                                 />
@@ -1121,7 +1121,7 @@ const MLOpsPage: React.FC = () => {
                                     <YAxis stroke="#94A3B8" tick={{ fontSize: 11 }} allowDecimals={false} />
                                     <Tooltip
                                         contentStyle={{ borderRadius: '10px', border: '1px solid #E2E8F0', fontSize: 12 }}
-                                        formatter={(value: number) => [value, 'Predicciones']}
+                                        formatter={(value: any) => [value, 'Predicciones']}
                                         labelFormatter={(label) => `Rango: ${label}`}
                                     />
                                     <Bar dataKey="count" name="Predicciones" radius={[4, 4, 0, 0]}>
@@ -1213,7 +1213,7 @@ const MLOpsPage: React.FC = () => {
                     <div>
                         <p className="text-xs text-slate-400 uppercase tracking-wide mb-1">Features</p>
                         <p className="font-semibold">
-                            {modelInfo?.feature_count > 0 ? `${modelInfo.feature_count} variables` : '14 variables'}
+                            {(modelInfo?.feature_count ?? 0) > 0 ? `${modelInfo?.feature_count} variables` : '14 variables'}
                         </p>
                     </div>
                     <div>

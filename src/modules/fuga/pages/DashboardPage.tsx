@@ -126,7 +126,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateToCustomer }) =
 
     // ── Filter state (multi-select via Set) ─────────────────────────────
     const [filterCountries, setFilterCountries] = useState<Set<string>>(new Set());
-    const [filterRisks, setFilterRisks] = useState<Set<string>>(new Set());
+    const [filterRisks, setFilterRisks] = useState<Set<string>>(new Set(['bajo']));
     const [filterSegments, setFilterSegments] = useState<Set<SegmentValue>>(new Set());
 
     const toggleCountry = (v: string) =>
