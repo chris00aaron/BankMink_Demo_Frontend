@@ -116,7 +116,8 @@ export function ChangePasswordScreen({ onPasswordChanged }: ChangePasswordScreen
                 headers['Authorization'] = `Bearer ${tempToken}`;
             }
 
-            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || '/api'}/auth/change-password`, {
+            const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:13003/api';
+            const response = await fetch(`${baseUrl}/auth/change-password`, {
                 method: 'POST',
                 headers,
                 credentials: 'include',

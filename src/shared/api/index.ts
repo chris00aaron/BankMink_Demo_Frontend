@@ -7,7 +7,7 @@
  */
 
 // Cliente API
-export { apiClient, setAuthToken, getAuthToken, hasAuthToken } from "./client";
+export { apiClient, apiRequest, setAuthToken, getAuthToken, hasAuthToken } from "./client";
 
 // Errores
 export {

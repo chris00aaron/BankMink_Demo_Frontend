@@ -3,7 +3,7 @@ import axios from 'axios';
 import { setTokens, clearTokens, getAccessToken, AUTH_EVENTS } from '../services/apiClient';
 
 // URL base de la API
-const API_BASE_URL = 'http://localhost:8080/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:13003/api';
 
 export type UserRole =
   | 'admin'

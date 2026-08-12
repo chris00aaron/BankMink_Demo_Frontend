@@ -25,8 +25,7 @@ import {
 import type { ErrorResponse } from "./types";
 
 // Configuración base
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:13003/api";
 const API_TIMEOUT = Number(import.meta.env.VITE_API_TIMEOUT) || 30000;
 
 /**
@@ -110,7 +109,8 @@ function createApiClient(): AxiosInstance {
       switch (status) {
         case 401:
           // Limpiar token y redirigir a login si es necesario
-          localStorage.removeItem("auth_token");
+          localStorage.removeItem("bankmind-token");
+          localStorage.removeItem("bankmind-refresh-token");
           throw new UnauthorizedError(message);
 
         case 403:
@@ -143,11 +143,27 @@ function createApiClient(): AxiosInstance {
 export const apiClient = createApiClient();
 
 /**
+ * Helper de compatibilidad para realizar solicitudes utilizando el cliente Axios centralizado
+ */
+export async function apiRequest<T>(
+  endpoint: string,
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
+  body?: unknown
+): Promise<T> {
+  const response = await apiClient.request<T>({
+    url: endpoint,
+    method,
+    data: body,
+  });
+  return response.data;
+}
+
+/**
  * Helper para establecer el token de autenticación
  */
 export function setAuthToken(token: string | null): void {
   if (token) {
-    localStorage.getItem('bankmind-token');
+    localStorage.setItem('bankmind-token', token);
   } else {
     localStorage.removeItem('bankmind-token');
   }

@@ -564,7 +564,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateToCustomer }) =
                                 </div>
                                 <h3 className="text-lg font-medium text-slate-900">No se encontraron clientes</h3>
                                 <p className="text-slate-500 max-w-sm mx-auto mt-2">
-                                    No hay datos provenientes del backend. Verifica que la base de datos esté poblada y el servicio Java esté corriendo en el puerto 8080.
+                                    No hay datos provenientes del backend. Verifica que la base de datos esté poblada y el servicio Java esté corriendo en el puerto 13003.
                                 </p>
                             </div>
                         ) : totalElements === 0 && debouncedSearch ? (

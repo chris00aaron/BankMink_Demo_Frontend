@@ -1,52 +1,52 @@
 # ============================================================
-# BankMind Frontend — React + Vite
-# Multi-stage build · Node.js 20 & Nginx
+# BankMind Frontend — React + Vite + TailwindCSS
+# Multi-stage build · Node 22 + Nginx
 # ============================================================
 
-# ── Stage 1: Build ───────────────────────────────────────────
-FROM node:20-alpine AS builder
+# ── Stage 1: Dependencies ────────────────────────────────────
+FROM node:22-alpine AS deps
 
 WORKDIR /app
 
-# Copiamos archivos de dependencias
-COPY package.json package-lock.json* ./
+# Copiar manifiestos de dependencias
+COPY package.json package-lock.json ./
 
-# Instalamos dependencias limpiamente
-RUN npm update -g npm && npm ci
+# Instalar dependencias de forma reproducible
+RUN npm ci
 
-# ARG para inyectar la URL de la API durante la compilación
-ARG VITE_API_BASE_URL=http://localhost:8080/api
-ARG VITE_API_TIMEOUT=30000
+# ── Stage 2: Build ───────────────────────────────────────────
+FROM node:22-alpine AS build
 
-# Copiamos el resto del código
+WORKDIR /app
+
+# Copiar node_modules del stage anterior
+COPY --from=deps /app/node_modules ./node_modules
+
+# Copiar todo el código fuente
 COPY . .
 
-# Compilamos la aplicación de React directamente con vite para omitir errores de tipado (tsc)
-RUN echo "Construyendo frontend apuntando a: $VITE_API_BASE_URL" && \
-    npx vite build
+# Variables de entorno de Vite (build-time)
+ARG VITE_API_BASE_URL="http://localhost:13003/api"
+ARG VITE_API_TIMEOUT=100000
 
-# ── Stage 2: Runtime ─────────────────────────────────────────
-FROM nginx:alpine
+# Construir la aplicación (Usamos vite build directamente para omitir la validación estricta de tsc)
+RUN npx vite build
+
+# ── Stage 3: Runtime (Nginx) ─────────────────────────────────
+FROM nginx:1.27-alpine
 
 LABEL maintainer="BankMind Team"
-LABEL description="Frontend interactivivo en React servido mediante Nginx"
+LABEL description="BankMind Frontend — SPA React servida con Nginx"
 
-# Copiamos los estáticos generados al public folder de nginx
-COPY --from=builder /app/dist /usr/share/nginx/html
+# Copiar el build estático
+COPY --from=build /app/dist /usr/share/nginx/html
 
-# Sobrescribimos la configuración de Nginx para soportar React Router
-RUN printf 'server { \n\
-    listen 80; \n\
-    location / { \n\
-        root /usr/share/nginx/html; \n\
-        index index.html index.htm; \n\
-        try_files $uri $uri/ /index.html; \n\
-    } \n\
-}' > /etc/nginx/conf.d/default.conf
+# Copiar configuración de Nginx personalizada
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-    CMD wget -qO- http://localhost:80/ || exit 1
+HEALTHCHECK --interval=15s --timeout=5s --retries=3 \
+    CMD wget --spider -q http://localhost:80/ || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]
